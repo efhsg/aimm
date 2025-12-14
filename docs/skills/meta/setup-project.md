@@ -207,7 +207,7 @@ services:
 Create `docker/yii/Dockerfile`:
 
 ```dockerfile
-FROM php:8.2-fpm
+FROM php:8.5-fpm
 
 ARG PHP_FPM_PORT=9000
 ARG TIMEZONE=Europe/Amsterdam
@@ -491,7 +491,7 @@ Create `yii/composer.json`:
   "description": "Equity intelligence pipeline",
   "type": "project",
   "require": {
-    "php": ">=8.2",
+    "php": ">=8.5",
     "yiisoft/yii2": "~2.0.49",
     "opis/json-schema": "^2.3",
     "symfony/process": "^6.4",

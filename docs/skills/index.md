@@ -66,6 +66,7 @@ Project setup and infrastructure. Run once to bootstrap, not during pipeline exe
 |-------|-------------|
 | [setup-project](meta/setup-project.md) | Bootstrap Yii2/Python project from scratch. Directory structure, dependencies, configuration. |
 | [setup-git-remote](meta/setup-git-remote.md) | Configure Git `origin` remote and (optionally) push initial branch. |
+| [upgrade-php-version](meta/upgrade-php-version.md) | Upgrade PHP version used by the Yii2 runtime (Docker + Composer constraints) and validate the stack. |
 | [create-migration](meta/create-migration.md) | Create Yii2 database migrations. Tables for collection logs, rate limiting, job queue. |
 | [review-and-improve-skill](meta/review-and-improve-skill.md) | Review an existing skill doc and rewrite it with tighter contracts and actionable DoD/tests. |
 | [add-docs-readme](meta/add-docs-readme.md) | Add or update `docs/README.md` to describe documentation entry points and contribution rules. |

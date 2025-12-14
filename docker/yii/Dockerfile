@@ -1,4 +1,4 @@
-FROM php:8.2-fpm
+FROM php:8.5-fpm
 
 ARG PHP_FPM_PORT=9000
 ARG TIMEZONE=Europe/Amsterdam
@@ -23,7 +23,6 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 RUN pecl install xdebug \
     && docker-php-ext-enable xdebug \
     && { \
-      echo "zend_extension=xdebug.so"; \
       echo "xdebug.mode=off"; \
       echo "xdebug.start_with_request=trigger"; \
       echo "xdebug.discover_client_host=1"; \

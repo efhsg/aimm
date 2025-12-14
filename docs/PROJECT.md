@@ -21,7 +21,7 @@ A three-phase pipeline that generates institutional-grade equity research PDF re
 
 ### Technology Stack
 
-- **Orchestration**: Yii 2 Framework (PHP 8.2+)
+- **Orchestration**: Yii 2 Framework (PHP 8.5+)
 - **PDF Rendering**: Python 3.11+ with ReportLab + matplotlib
 - **Schema Validation**: JSON Schema draft-07 via opis/json-schema
 - **Process Management**: Symfony Process component
@@ -625,7 +625,7 @@ return [
 ```json
 {
   "require": {
-    "php": ">=8.2",
+    "php": ">=8.5",
     "yiisoft/yii2": "~2.0.49",
     "opis/json-schema": "^2.3",
     "symfony/process": "^6.4",
