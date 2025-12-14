@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+if [[ -z "${MYSQL_DATABASE_TEST:-}" ]]; then
+  echo "error: MYSQL_DATABASE_TEST is required (set DB_DATABASE_TEST in .env)" >&2
+  exit 1
+fi
+
+mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<SQL
+CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE_TEST}\`;
+GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';
+GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE_TEST}\`.* TO '${MYSQL_USER}'@'%';
+FLUSH PRIVILEGES;
+SQL
+
+if [[ -n "${MYSQL_ADMIN_USER:-}" ]]; then
+  if [[ -z "${MYSQL_ADMIN_PASSWORD:-}" ]]; then
+    echo "error: MYSQL_ADMIN_PASSWORD is required when MYSQL_ADMIN_USER is set (set DB_ADMIN_PASSWORD in .env)" >&2
+    exit 1
+  fi
+
+  mysql -u root -p"${MYSQL_ROOT_PASSWORD}" <<SQL
+CREATE USER IF NOT EXISTS '${MYSQL_ADMIN_USER}'@'%' IDENTIFIED BY '${MYSQL_ADMIN_PASSWORD}';
+GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_ADMIN_USER}'@'%' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE_TEST}\`.* TO '${MYSQL_ADMIN_USER}'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+SQL
+fi

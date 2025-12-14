@@ -1,0 +1,12 @@
+/yii/vendor/
+/yii/runtime/
+/data/
+.env
+/.claude/
+/.idea/
+/.vscode/
+/yii/.phpstorm_helpers/
+*.log
+.DS_Store
+__pycache__/
+*.pyc
