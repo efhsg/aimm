@@ -1,6 +1,6 @@
-# AIMM (AI MoneyMonkey)
+# AIMM
 
-AI MoneyMonkey is a Docker-based development environment for generating financial reports. It combines a Yii2 (PHP) application, a Python renderer for PDFs, and a MySQL database.
+AIMM is a Docker-based development environment for generating financial reports. It combines a Yii2 (PHP) application, a Python renderer for PDFs, and a MySQL database.
 
 ## What’s in this repo
 
@@ -32,7 +32,7 @@ Connection settings:
 
 - Host: `127.0.0.1`
 - Port: `DB_PORT` (default `3308`)
-- Database: `DB_DATABASE` (default `moneymonkey`)
+- Database: `DB_DATABASE` (default `aimm`)
 
 ## Docs and workflow
 

@@ -1,4 +1,4 @@
-# MoneyMonkey Skills Index
+# AIMM Skills Index
 
 Skills are atomic, executable capabilities with defined inputs, outputs, and completion criteria.
 
@@ -11,8 +11,6 @@ docs/
     ├── index.md          # This file (skill registry)
     ├── meta/             # Bootstrap/infrastructure (run once)
     ├── collection/       # Phase 1 skills
-    ├── analysis/         # Phase 2 skills
-    ├── rendering/        # Phase 3 skills
     └── shared/           # Cross-phase runtime skills
 ```
 
@@ -38,39 +36,18 @@ Phase 1: Gathering financial data from sources.
 | [validate-collection-gate](collection/validate-collection-gate.md) | Validate an IndustryDataPack after collection. Gate between Phase 1 and Phase 2. |
 | [enforce-rate-limit](collection/enforce-rate-limit.md) | Manage request pacing per domain to avoid blocks and respect source policies. |
 
-## Analysis Skills
-
-Phase 2: Computing metrics and generating ratings.
-
-| Skill | Description |
-|-------|-------------|
-| calculate-peer-average | Calculate average metrics across peer companies. *(not yet written)* |
-| calculate-valuation-gap | Compute percentage gap between focal and peer average. *(not yet written)* |
-| determine-rating | Apply rating rules to produce BUY/HOLD/SELL. *(not yet written)* |
-| validate-analysis-gate | Validate ReportDTO before rendering. *(not yet written)* |
-
-## Rendering Skills
-
-Phase 3: Generating PDF reports.
-
-| Skill | Description |
-|-------|-------------|
-| render-pdf | Invoke Python renderer with ReportDTO. *(not yet written)* |
-| generate-chart | Create matplotlib chart from data. *(not yet written)* |
-
 ## Meta Skills
 
-Project setup and infrastructure. Run once to bootstrap, not during pipeline execution.
+Repeatable infrastructure tasks.
 
 | Skill | Description |
 |-------|-------------|
-| [setup-project](meta/setup-project.md) | Bootstrap Yii2/Python project from scratch. Directory structure, dependencies, configuration. |
-| [setup-git-remote](meta/setup-git-remote.md) | Configure Git `origin` remote and (optionally) push initial branch. |
 | [upgrade-php-version](meta/upgrade-php-version.md) | Upgrade PHP version used by the Yii2 runtime (Docker + Composer constraints) and validate the stack. |
 | [create-migration](meta/create-migration.md) | Create Yii2 database migrations. Tables for collection logs, rate limiting, job queue. |
 | [review-and-improve-skill](meta/review-and-improve-skill.md) | Review an existing skill doc and rewrite it with tighter contracts and actionable DoD/tests. |
-| [add-docs-readme](meta/add-docs-readme.md) | Add or update `docs/README.md` to describe documentation entry points and contribution rules. |
-| [add-root-readme](meta/add-root-readme.md) | Add or update the repository root `README.md` to describe the application and local dev setup. |
+| [review-design-doc](meta/review-design-doc.md) | Perform a structured, critical review of a design document against stated principles, architectural taxonomy, type-safety, and security constraints. |
+
+> **Archived:** One-shot bootstrap docs moved to `docs/bootstrap/`.
 
 ## Shared Skills
 

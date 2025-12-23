@@ -1,5 +1,5 @@
 {
-  "name": "moneymonkey/equity-research",
+  "name": "aimm/equity-research",
   "description": "Equity intelligence pipeline",
   "type": "project",
   "repositories": [
@@ -23,7 +23,7 @@
   },
   "autoload": {
     "psr-4": {
-      "MoneyMonkey\\": "src/"
+      "app\\": "src/"
     }
   },
   "config": {

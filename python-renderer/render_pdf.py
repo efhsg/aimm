@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MoneyMonkey PDF renderer (stub).
+AIMM PDF renderer (stub).
 
 Usage:
   python render_pdf.py <report-dto.json> <output.pdf>
@@ -33,7 +33,7 @@ def main() -> int:
 
     c = canvas.Canvas(str(output_path), pagesize=letter)
     text = c.beginText(72, 720)
-    text.textLine("MoneyMonkey renderer stub")
+    text.textLine("AIMM renderer stub")
     text.textLine(f"DTO: {dto_path.name}")
     text.textLine("")
 

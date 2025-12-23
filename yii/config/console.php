@@ -8,11 +8,11 @@ $db = require __DIR__ . '/db.php';
 $container = require __DIR__ . '/container.php';
 
 return [
-    'id' => 'moneymonkey-console',
+    'id' => 'aimm-console',
     'basePath' => dirname(__DIR__),
-    'controllerNamespace' => 'MoneyMonkey\\Commands',
+    'controllerNamespace' => 'app\\commands',
     'aliases' => [
-        '@MoneyMonkey' => dirname(__DIR__) . '/src',
+        '@app' => dirname(__DIR__) . '/src',
     ],
     'components' => [
         'db' => $db,

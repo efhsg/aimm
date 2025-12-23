@@ -1,6 +1,6 @@
 ---
 name: setup-project
-description: "Bootstrap the MoneyMonkey Yii2 + Python development environment using Docker Compose v2 (PHP-FPM, Nginx, MySQL, Python). Scaffolds Docker/Yii/Python files and provides verification commands. Non-goal: feature work."
+description: "Bootstrap the AIMM Yii2 + Python development environment using Docker Compose v2 (PHP-FPM, Nginx, MySQL, Python). Scaffolds Docker/Yii/Python files and provides verification commands. Non-goal: feature work."
 area: meta
 depends_on:
   - docs/RULES.md
@@ -8,7 +8,7 @@ depends_on:
 
 # SetupProject
 
-Bootstrap the MoneyMonkey development environment in the repository root using Docker Compose.
+Bootstrap the AIMM development environment in the repository root using Docker Compose.
 
 This skill creates a minimal Yii2 (console + web) scaffold, a Python renderer container, and a MySQL database, wired
 together through Nginx + PHP-FPM.
@@ -394,10 +394,10 @@ PHP_FPM_PORT=9000
 # Database (dev only)
 DB_HOST=aimm_mysql
 DB_ROOT_PASSWORD=root_secret
-DB_DATABASE=moneymonkey
-DB_DATABASE_TEST=moneymonkey_test
-DB_USER=moneymonkey
-DB_PASSWORD=moneymonkey_secret
+DB_DATABASE=aimm
+DB_DATABASE_TEST=aimm_test
+DB_USER=aimm
+DB_PASSWORD=aimm_secret
 
 # Yii web (dev only)
 COOKIE_VALIDATION_KEY=dev-only-change-me
@@ -429,7 +429,7 @@ Create `python-renderer/render_pdf.py`:
 ```python
 #!/usr/bin/env python3
 """
-MoneyMonkey PDF renderer (stub).
+AIMM PDF renderer (stub).
 
 Usage:
   python render_pdf.py <report-dto.json> <output.pdf>
@@ -462,7 +462,7 @@ def main() -> int:
 
     c = canvas.Canvas(str(output_path), pagesize=letter)
     text = c.beginText(72, 720)
-    text.textLine("MoneyMonkey renderer stub")
+    text.textLine("AIMM renderer stub")
     text.textLine(f"DTO: {dto_path.name}")
     text.textLine("")
 
@@ -487,7 +487,7 @@ Create `yii/composer.json`:
 
 ```json
 {
-  "name": "moneymonkey/equity-research",
+  "name": "aimm/equity-research",
   "description": "Equity intelligence pipeline",
   "type": "project",
   "require": {
@@ -505,7 +505,7 @@ Create `yii/composer.json`:
   },
   "autoload": {
     "psr-4": {
-      "MoneyMonkey\\": "src/"
+      "app\\": "src/"
     }
   },
   "config": {
@@ -565,11 +565,11 @@ $db = require __DIR__ . '/db.php';
 $container = require __DIR__ . '/container.php';
 
 return [
-    'id' => 'moneymonkey-console',
+    'id' => 'aimm-console',
     'basePath' => dirname(__DIR__),
-    'controllerNamespace' => 'MoneyMonkey\\Commands',
+    'controllerNamespace' => 'app\\commands',
     'aliases' => [
-        '@MoneyMonkey' => dirname(__DIR__) . '/src',
+        '@app' => dirname(__DIR__) . '/src',
     ],
     'components' => [
         'db' => $db,
@@ -604,12 +604,12 @@ $db = require __DIR__ . '/db.php';
 $container = require __DIR__ . '/container.php';
 
 return [
-    'id' => 'moneymonkey-web',
+    'id' => 'aimm-web',
     'basePath' => dirname(__DIR__),
-    'controllerNamespace' => 'MoneyMonkey\\Controllers',
+    'controllerNamespace' => 'app\\controllers',
     'defaultRoute' => 'health/index',
     'aliases' => [
-        '@MoneyMonkey' => dirname(__DIR__) . '/src',
+        '@app' => dirname(__DIR__) . '/src',
     ],
     'components' => [
         'request' => [
@@ -642,12 +642,12 @@ Create `yii/config/db.php`:
 use yii\db\Connection;
 
 $host = getenv('DB_HOST') ?: 'aimm_mysql';
-$database = getenv('DB_DATABASE') ?: 'moneymonkey';
+$database = getenv('DB_DATABASE') ?: 'aimm';
 
 return [
     'class' => Connection::class,
     'dsn' => sprintf('mysql:host=%s;dbname=%s', $host, $database),
-    'username' => getenv('DB_USER') ?: 'moneymonkey',
+    'username' => getenv('DB_USER') ?: 'aimm',
     'password' => getenv('DB_PASSWORD') ?: '',
     'charset' => 'utf8mb4',
     'tablePrefix' => 'aimm_',
@@ -684,7 +684,7 @@ Create `yii/src/Controllers/HealthController.php`:
 ```php
 <?php
 
-namespace MoneyMonkey\Controllers;
+namespace app\controllers;
 
 use Yii;
 use yii\web\Controller;
@@ -709,7 +709,7 @@ Create `yii/src/Enums/CollectionMethod.php`:
 ```php
 <?php
 
-namespace MoneyMonkey\Enums;
+namespace app\enums;
 
 enum CollectionMethod: string
 {
@@ -726,7 +726,7 @@ Create `yii/src/Enums/Severity.php`:
 ```php
 <?php
 
-namespace MoneyMonkey\Enums;
+namespace app\enums;
 
 enum Severity: string
 {
@@ -741,7 +741,7 @@ Create `yii/src/Enums/Rating.php`:
 ```php
 <?php
 
-namespace MoneyMonkey\Enums;
+namespace app\enums;
 
 enum Rating: string
 {
@@ -758,7 +758,7 @@ Create `yii/src/Commands/TestController.php`:
 ```php
 <?php
 
-namespace MoneyMonkey\Commands;
+namespace app\commands;
 
 use Throwable;
 use Yii;
@@ -769,7 +769,7 @@ final class TestController extends Controller
 {
     public function actionIndex(): int
     {
-        $this->stdout("MoneyMonkey is ready.\n");
+        $this->stdout("AIMM is ready.\n");
         $this->stdout('PHP: ' . PHP_VERSION . "\n");
         return ExitCode::OK;
     }
@@ -859,7 +859,7 @@ Optional web check:
 
 - [ ] `docker compose up -d --build` completes without errors
 - [ ] `docker compose ps` shows all services running and `aimm_mysql` is healthy
-- [ ] `docker compose exec -T aimm_yii php yii test/index` prints `MoneyMonkey is ready.`
+- [ ] `docker compose exec -T aimm_yii php yii test/index` prints `AIMM is ready.`
 - [ ] `docker compose exec -T aimm_yii php yii test/db` prints `DB OK: 1`
 - [ ] `docker compose exec -T aimm_python python -c "import reportlab, matplotlib, PIL; print('Dependencies OK')"`
   prints `Dependencies OK`

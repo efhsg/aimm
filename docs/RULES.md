@@ -1,4 +1,4 @@
-# MoneyMonkey Rules
+# AIMM Rules
 
 Global guardrails for all development. These apply to every task, every prompt, every commit.
 

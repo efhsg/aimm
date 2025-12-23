@@ -8,12 +8,12 @@ $db = require __DIR__ . '/db.php';
 $container = require __DIR__ . '/container.php';
 
 return [
-    'id' => 'moneymonkey-web',
+    'id' => 'aimm-web',
     'basePath' => dirname(__DIR__),
-    'controllerNamespace' => 'MoneyMonkey\\Controllers',
+    'controllerNamespace' => 'app\\controllers',
     'defaultRoute' => 'health/index',
     'aliases' => [
-        '@MoneyMonkey' => dirname(__DIR__) . '/src',
+        '@app' => dirname(__DIR__) . '/src',
     ],
     'components' => [
         'request' => [

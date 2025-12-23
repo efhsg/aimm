@@ -1,6 +1,6 @@
 ---
 name: create-migration
-description: Create Yii2 database migrations for MoneyMonkey modules. Use when adding new tables or modifying schema. Follows Yii2 migration conventions with proper naming and rollback support. Do NOT use for runtime data (datapacks are JSON files, not database records).
+description: Create Yii2 database migrations for AIMM modules. Use when adding new tables or modifying schema. Follows Yii2 migration conventions with proper naming and rollback support. Do NOT use for runtime data (datapacks are JSON files, not database records).
 ---
 
 # CreateMigration
@@ -9,7 +9,7 @@ Generate Yii2 database migrations with proper structure and rollback.
 
 ## When to Use
 
-MoneyMonkey primarily uses JSON files for datapacks and reports. Database migrations are needed for:
+AIMM primarily uses JSON files for datapacks and reports. Database migrations are needed for:
 
 - **Collection module:** Source attempt logs, rate limit state, collection job queue
 - **Analysis module:** Report metadata, cached calculations
@@ -222,11 +222,10 @@ $this->decimal(10, 2)                  // Money/precise decimals
 'components' => [
     'db' => [
         'class' => 'yii\db\Connection',
-        'dsn' => 'mysql:host=localhost;dbname=moneymonkey',
-        'username' => 'root',
-        'password' => '',
-        'charset' => 'utf8mb4',
-        'tablePrefix' => 'mm_',
+        'dsn' => 'mysql:host=localhost;dbname=aimm',
+        'username' => 'aimm',
+        'password' => 'aimm_secret',
+        'tablePrefix' => 'aimm_',
     ],
     // ... other components
 ],

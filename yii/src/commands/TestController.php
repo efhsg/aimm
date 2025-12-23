@@ -1,6 +1,6 @@
 <?php
 
-namespace MoneyMonkey\Commands;
+namespace app\commands;
 
 use Throwable;
 use Yii;
@@ -11,7 +11,7 @@ final class TestController extends Controller
 {
     public function actionIndex(): int
     {
-        $this->stdout("MoneyMonkey is ready.\n");
+        $this->stdout("AIMM is ready.\n");
         $this->stdout('PHP: ' . PHP_VERSION . "\n");
         return ExitCode::OK;
     }

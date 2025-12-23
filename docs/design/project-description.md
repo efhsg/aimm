@@ -21,7 +21,7 @@ A three-phase pipeline that generates institutional-grade equity research PDF re
 
 ### Technology Stack
 
-- **Orchestration**: Yii 2 Framework (PHP 8.5+)
+- **Orchestration**: Yii 2 Framework (PHP 8.2+)
 - **PDF Rendering**: Python 3.11+ with ReportLab + matplotlib
 - **Schema Validation**: JSON Schema draft-07 via opis/json-schema
 - **Process Management**: Symfony Process component
@@ -147,7 +147,12 @@ Follows a strict taxonomy to prevent "catch-all" folders:
 **Dropped types**: `services/` (catch-all), `helpers/` (hidden coupling), `components/` (Yii2 framework location, not architecture type).
 
 ```
-yii/
+equity-research/
+├── PROJECT.md                          # This file
+├── README.md                           # Quick start guide
+├── composer.json                       # PHP dependencies
+├── yii                                 # Yii console entry point
+│
 ├── config/
 │   ├── console.php                     # Yii console config
 │   ├── params.php                      # Application parameters
@@ -260,6 +265,13 @@ yii/
 │               ├── report-dto.json
 │               └── report.pdf
 │
+├── python-renderer/                    # Python PDF generation
+│   ├── requirements.txt
+│   ├── render_pdf.py                   # Main entry point
+│   ├── charts.py                       # Chart generation
+│   ├── layout.py                       # Page layout
+│   └── styles.py                       # Visual styles
+│
 └── tests/
     ├── unit/
     │   ├── handlers/
@@ -279,13 +291,6 @@ yii/
     └── fixtures/
         ├── valid-datapack.json
         └── valid-report-dto.json
-
-python-renderer/                        # Python PDF generation
-├── requirements.txt
-├── render_pdf.py                       # Main entry point
-├── charts.py                           # Chart generation
-├── layout.py                           # Page layout
-└── styles.py                           # Visual styles
 ```
 
 ### Folder Decision Guide
@@ -336,17 +341,17 @@ For now, the flat structure is appropriate given the project scope.
 ```
 INPUT                           PROCESS                         OUTPUT
 ─────                           ───────                         ──────
-industry config      ──►   CollectIndustryHandler       ──►   IndustryDataPack
+industry config      ──►   DataCollectionService        ──►   IndustryDataPack
 (JSON file)                      │                              (JSON file)
                                  │
                     ┌────────────┴────────────┐
                     ▼                         ▼
-            CollectMacroHandler       CollectCompanyHandler (×N)
+            MacroDataCollector        CompanyDataCollector (×N)
                     │                         │
                     │              ┌──────────┼──────────┐
                     │              ▼          ▼          ▼
                     │      Valuation   Financials   Quarter
-                    │      Metrics     History     Metadata
+                    │      Collector   Collector   Collector
                     │              │          │          │
                     └──────────────┴──────────┴──────────┘
                                       │
@@ -364,13 +369,12 @@ industry config      ──►   CollectIndustryHandler       ──►   Indust
 ```
 INPUT                           PROCESS                         OUTPUT
 ─────                           ───────                         ──────
-IndustryDataPack     ──►   AnalyzeReportHandler         ──►   ReportDTO
+IndustryDataPack     ──►   AnalysisService              ──►   ReportDTO
 focal_ticker                     │                              (JSON file)
 peer_tickers[]                   │
                     ┌────────────┼────────────┐
                     ▼            ▼            ▼
-          CalculateGaps   DetermineRating   ReportDto
-             Handler         Handler        Transformer
+             GapCalculator  RatingDeterminer  ReportDtoBuilder
                     │            │            │
                     └────────────┴────────────┘
                                  │
@@ -388,13 +392,13 @@ peer_tickers[]                   │
 ```
 INPUT                           PROCESS                         OUTPUT
 ─────                           ───────                         ──────
-ReportDTO            ──►   RenderPdfHandler             ──►   report.pdf
+ReportDTO            ──►   PdfRenderService             ──►   report.pdf
 (JSON file)                      │
                                  │
                     ┌────────────┴────────────┐
                     ▼                         ▼
-            PythonRenderer           Python subprocess
-               Client                        │
+            Symfony Process           Python subprocess
+                                             │
                               ┌──────────────┼──────────────┐
                               ▼              ▼              ▼
                           ReportLab     matplotlib      layout
@@ -625,7 +629,7 @@ return [
 ```json
 {
   "require": {
-    "php": ">=8.5",
+    "php": ">=8.2",
     "yiisoft/yii2": "~2.0.49",
     "opis/json-schema": "^2.3",
     "symfony/process": "^6.4",
@@ -646,6 +650,32 @@ reportlab>=4.0
 matplotlib>=3.8
 pillow>=10.0
 ```
+
+---
+
+## Coding Standards
+
+### PHP
+
+- **No** `declare(strict_types=1)` (project preference)
+- PSR-12 formatting
+- Explicit imports (no `use` aliases unless necessary)
+- Type hints on all method parameters and return types
+- Services resolved via `\Yii::$container->get(ClassName::class)`
+- No business logic in controllers; delegate to services
+
+### JSON Schema
+
+- Draft-07 for compatibility
+- `additionalProperties: false` on all objects
+- Explicit `required` arrays
+- Typed datapoints (not generic `value: any`)
+
+### Python
+
+- PEP 8 formatting
+- Type hints
+- No business logic; pure rendering from JSON input
 
 ---
 
@@ -683,8 +713,8 @@ class GateResult
 
 ### Unit Tests
 
-- `CalculateGapsHandler`: Test gap calculation with various input combinations
-- `DetermineRatingHandler`: Test all rating rule paths
+- `GapCalculator`: Test gap calculation with various input combinations
+- `RatingDeterminer`: Test all rating rule paths
 - `SchemaValidator`: Test schema loading and validation
 - `DataPointMoney`: Test FX conversion logic
 
@@ -713,7 +743,7 @@ class GateResult
 
 1. Add to `industry-datapack.schema.json` under `companyData.valuation`
 2. Add to `report-dto.schema.json` under `peer_valuation`
-3. Update `CalculateGapsHandler` if metric affects valuation gap
+3. Update `GapCalculator` if metric affects valuation gap
 4. Update `CollectionGateValidator` if metric is required
 5. Update `AnalysisGateValidator` to recompute if needed
 
@@ -744,49 +774,49 @@ class GateResult
 ## Next Steps
 
 ### Phase 0: Project Setup
-- [ ] Set up project skeleton (composer.json, directories, yii entry point)
-- [ ] Configure Yii2 console application (config/console.php, params.php, container.php)
-- [ ] Implement enums (Rating, Fundamentals, Risk, CollectionMethod, etc.)
-- [ ] Implement exceptions (CollectionException, ValidationException, etc.)
+1. [ ] Set up project skeleton (composer.json, directories, yii entry point)
+2. [ ] Configure Yii2 console application (config/console.php, params.php, container.php)
+3. [ ] Implement enums (Rating, Fundamentals, Risk, CollectionMethod, etc.)
+4. [ ] Implement exceptions (CollectionException, ValidationException, etc.)
 
 ### Phase 1: Data Collection Infrastructure
-- [ ] Implement DTO datapoints (DataPointMoney, DataPointRatio, etc.)
-- [ ] Implement DTO structures (IndustryDataPack, CompanyData, MacroData)
-- [ ] Implement DataPointFactory
-- [ ] Implement SchemaValidator
-- [ ] Implement queries (IndustryConfigQuery, DataPackQuery)
-- [ ] Implement clients (WebSearchClient, WebFetchClient)
-- [ ] Implement adapters (YahooFinanceAdapter, SearchResultAdapter)
+5. [ ] Implement DTO datapoints (DataPointMoney, DataPointRatio, etc.)
+6. [ ] Implement DTO structures (IndustryDataPack, CompanyData, MacroData)
+7. [ ] Implement DataPointFactory
+8. [ ] Implement SchemaValidator
+9. [ ] Implement queries (IndustryConfigQuery, DataPackQuery)
+10. [ ] Implement clients (WebSearchClient, WebFetchClient)
+11. [ ] Implement adapters (YahooFinanceAdapter, SearchResultAdapter)
 
 ### Phase 1: Data Collection Logic
-- [ ] Implement CollectMacroHandler
-- [ ] Implement CollectCompanyHandler
-- [ ] Implement CollectIndustryHandler (orchestrates the above)
-- [ ] Implement DataPackTransformer
-- [ ] Implement CollectionGateValidator
-- [ ] Implement CollectController
-- [ ] Test Phase 1 end-to-end
+12. [ ] Implement CollectMacroHandler
+13. [ ] Implement CollectCompanyHandler
+14. [ ] Implement CollectIndustryHandler (orchestrates the above)
+15. [ ] Implement DataPackTransformer
+16. [ ] Implement CollectionGateValidator
+17. [ ] Implement CollectController
+18. [ ] Test Phase 1 end-to-end
 
 ### Phase 2: Analysis
-- [ ] Implement PeerAverageTransformer
-- [ ] Implement CalculateGapsHandler
-- [ ] Implement DetermineRatingHandler
-- [ ] Implement ReportDtoTransformer
-- [ ] Implement ReportDtoFactory
-- [ ] Implement AnalyzeReportHandler (orchestrates the above)
-- [ ] Implement AnalysisGateValidator
-- [ ] Implement AnalyzeController
-- [ ] Test Phase 2 end-to-end
+19. [ ] Implement PeerAverageTransformer
+20. [ ] Implement CalculateGapsHandler
+21. [ ] Implement DetermineRatingHandler
+22. [ ] Implement ReportDtoTransformer
+23. [ ] Implement ReportDtoFactory
+24. [ ] Implement AnalyzeReportHandler (orchestrates the above)
+25. [ ] Implement AnalysisGateValidator
+26. [ ] Implement AnalyzeController
+27. [ ] Test Phase 2 end-to-end
 
 ### Phase 3: Rendering
-- [ ] Implement Python renderer (render_pdf.py, charts.py, layout.py)
-- [ ] Implement PythonRendererClient
-- [ ] Implement RenderPdfHandler
-- [ ] Implement RenderController
-- [ ] Test Phase 3 end-to-end
+28. [ ] Implement Python renderer (render_pdf.py, charts.py, layout.py)
+29. [ ] Implement PythonRendererClient
+30. [ ] Implement RenderPdfHandler
+31. [ ] Implement RenderController
+32. [ ] Test Phase 3 end-to-end
 
 ### Phase 4: Integration
-- [ ] Implement PipelineController (full run)
-- [ ] Implement queue jobs (optional: CollectIndustryJob, etc.)
-- [ ] End-to-end integration tests
-- [ ] Documentation review
+33. [ ] Implement PipelineController (full run)
+34. [ ] Implement queue jobs (optional: CollectIndustryJob, etc.)
+35. [ ] End-to-end integration tests
+36. [ ] Documentation review
