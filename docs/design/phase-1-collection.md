@@ -243,6 +243,8 @@ final readonly class DataPointMoney
         public ?array $derivedFrom = null,
         public ?string $formula = null,
         public ?FxConversion $fxConversion = null,
+        public ?string $cacheSource = null,
+        public ?int $cacheAgeDays = null,
     ) {}
 
     /**
@@ -280,6 +282,8 @@ final readonly class DataPointMoney
             'derived_from' => $this->derivedFrom,
             'formula' => $this->formula,
             'fx_conversion' => $this->fxConversion?->toArray(),
+            'cache_source' => $this->cacheSource,
+            'cache_age_days' => $this->cacheAgeDays,
         ];
     }
 }
@@ -289,6 +293,7 @@ final readonly class DataPointMoney
 - Stores monetary values with currency and scale
 - Provides base value conversion
 - Tracks FX conversion if currency was converted
+- Tracks cache provenance when data is from cache
 
 #### 2.5.2 DataPointRatio
 
@@ -316,6 +321,8 @@ final readonly class DataPointRatio
         public ?array $attemptedSources = null,
         public ?array $derivedFrom = null,
         public ?string $formula = null,
+        public ?string $cacheSource = null,
+        public ?int $cacheAgeDays = null,
     ) {}
 
     public function toArray(): array
@@ -331,6 +338,8 @@ final readonly class DataPointRatio
             'attempted_sources' => $this->attemptedSources,
             'derived_from' => $this->derivedFrom,
             'formula' => $this->formula,
+            'cache_source' => $this->cacheSource,
+            'cache_age_days' => $this->cacheAgeDays,
         ];
     }
 }
@@ -339,6 +348,7 @@ final readonly class DataPointRatio
 **Responsibilities:**
 - Stores dimensionless ratio values (e.g., 12.5 for 12.5x)
 - Supports derived datapoints with formula tracking
+- Supports cache provenance
 - Immutable value object
 
 #### 2.5.3 DataPointPercent
@@ -367,6 +377,8 @@ final readonly class DataPointPercent
         public ?array $attemptedSources = null,
         public ?array $derivedFrom = null,
         public ?string $formula = null,
+        public ?string $cacheSource = null,
+        public ?int $cacheAgeDays = null,
     ) {}
 
     /**
@@ -393,6 +405,8 @@ final readonly class DataPointPercent
             'attempted_sources' => $this->attemptedSources,
             'derived_from' => $this->derivedFrom,
             'formula' => $this->formula,
+            'cache_source' => $this->cacheSource,
+            'cache_age_days' => $this->cacheAgeDays,
         ];
     }
 }
@@ -401,7 +415,7 @@ final readonly class DataPointPercent
 **Responsibilities:**
 - Stores percentage values (4.5 for 4.5%, not 0.045)
 - Provides decimal conversion helper
-- Full provenance tracking
+- Full provenance tracking including cache
 
 #### 2.5.4 SourceLocator
 
@@ -541,6 +555,28 @@ final readonly class FetchRequest
 }
 ```
 
+#### AllowedDomainPolicy (SSRF + Redirect Safety)
+
+Domain policy is enforced at fetch time (not just at validation time) to prevent SSRF and accidental egress to unapproved hosts via redirects.
+
+```php
+namespace app\clients;
+
+interface AllowedDomainPolicyInterface
+{
+    /**
+     * @throws NetworkException when URL is not allowed (scheme/host/IP/redirect policy)
+     */
+    public function assertAllowed(string $url): void;
+}
+```
+
+**Minimum enforcement rules (must be implemented):**
+- Scheme must be `http` or `https`
+- Host must be in `Yii::$app->params['allowedSourceDomains']` (exact match)
+- Resolved IP must not be private/link-local/loopback (SSRF protection)
+- If redirects are enabled, the final URL must also pass this policy
+
 #### FetchResult DTO
 
 ```php
@@ -613,12 +649,16 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
         private RateLimiterInterface $rateLimiter,
         private UserAgentProviderInterface $userAgentProvider,
         private BlockDetectorInterface $blockDetector,
+        private AllowedDomainPolicyInterface $allowedDomainPolicy,
         private AlertDispatcher $alertDispatcher,
         private Logger $logger,
     ) {}
 
     public function fetch(FetchRequest $request): FetchResult
     {
+        // Enforce allowlist/SSRF policy before any network call.
+        $this->allowedDomainPolicy->assertAllowed($request->url);
+
         $domain = parse_url($request->url, PHP_URL_HOST);
         if (!is_string($domain) || $domain === '') {
             throw new NetworkException(
@@ -659,7 +699,7 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
                 ]);
 
                 $statusCode = $response->getStatusCode();
-                $this->rateLimiter->recordRequest($domain);
+                $this->rateLimiter->recordAttempt($domain);
 
                 if ($statusCode === 429) {
                     $retryUntil = $this->parseRetryAfter($response->getHeaderLine('Retry-After'))
@@ -674,7 +714,8 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
                 }
 
                 if ($statusCode === 401 || $statusCode === 403) {
-                    // Use exponential backoff based on consecutive 403 count
+                    // Use exponential backoff based on consecutive block count.
+                    // IMPORTANT: do NOT reset consecutive blocks until a real success.
                     $consecutiveBlocks = $this->rateLimiter->getConsecutiveBlockCount($domain);
                     $backoffIndex = min($consecutiveBlocks, count(self::BLOCK_BACKOFF_SECONDS) - 1);
                     $backoffSeconds = self::BLOCK_BACKOFF_SECONDS[$backoffIndex];
@@ -699,7 +740,7 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
                     continue;
                 }
 
-                return new FetchResult(
+                $fetchResult = new FetchResult(
                     content: (string)$response->getBody(),
                     contentType: $response->getHeader('Content-Type')[0] ?? 'text/html',
                     statusCode: $statusCode,
@@ -708,6 +749,60 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
                     retrievedAt: new DateTimeImmutable(),
                     headers: $response->getHeaders(),
                 );
+
+                // Enforce allowlist/SSRF policy on the final URL (redirect target).
+                $this->allowedDomainPolicy->assertAllowed($fetchResult->finalUrl);
+
+                // Detect soft blocks (CAPTCHA, JS challenges) on 200 responses
+                $blockReason = $this->blockDetector->detect($fetchResult);
+
+                if ($blockReason !== BlockReason::None) {
+                    $this->logger->log(
+                        [
+                            'message' => 'Soft block detected',
+                            'domain' => $domain,
+                            'reason' => $blockReason->value,
+                            'recoverable' => $this->blockDetector->isRecoverable($blockReason),
+                        ],
+                        Logger::LEVEL_WARNING,
+                        'collection'
+                    );
+
+                    if ($blockReason === BlockReason::Captcha || $blockReason === BlockReason::RateLimitPage) {
+                        // Treat as rate limit - apply exponential backoff
+                        $consecutiveBlocks = $this->rateLimiter->getConsecutiveBlockCount($domain);
+                        $backoffIndex = min($consecutiveBlocks, count(self::BLOCK_BACKOFF_SECONDS) - 1);
+                        $backoffSeconds = self::BLOCK_BACKOFF_SECONDS[$backoffIndex];
+
+                        $retryUntil = new DateTimeImmutable("+{$backoffSeconds} seconds");
+                        $this->rateLimiter->recordBlock($domain, $retryUntil);
+
+                        $this->alertDispatcher->alertBlocked($domain, $effectiveUrl, $retryUntil);
+
+                        throw new BlockedException(
+                            "Soft block ({$blockReason->value}) by {$domain}",
+                            $domain,
+                            $effectiveUrl,
+                            $retryUntil
+                        );
+                    }
+
+                    if (!$this->blockDetector->isRecoverable($blockReason)) {
+                        $this->alertDispatcher->alertBlocked($domain, $effectiveUrl, null);
+
+                        throw new BlockedException(
+                            "Non-recoverable block ({$blockReason->value}) by {$domain}",
+                            $domain,
+                            $effectiveUrl,
+                            null  // No retry time for non-recoverable blocks
+                        );
+                    }
+                }
+
+                // Only reset block counters after a real success (not blocked, not rate-limited, not soft-blocked).
+                $this->rateLimiter->recordSuccess($domain);
+
+                return $fetchResult;
             } catch (ConnectException | RequestException $e) {
                 if ($attempt < ($maxAttempts - 1)) {
                     $this->backoff($attempt);
@@ -798,9 +893,17 @@ interface RateLimiterInterface
     public function wait(string $domain): void;
 
     /**
-     * Record a successful request (resets consecutive block count)
+     * Record that an HTTP request was attempted (does not reset block counts).
      */
-    public function recordRequest(string $domain): void;
+    public function recordAttempt(string $domain): void;
+
+    /**
+     * Record a successful request (resets consecutive block count).
+     *
+     * Success means: request completed AND did not result in a hard block (401/403)
+     * and did not trigger a soft-block detector (CAPTCHA / JS challenge / rate-limit page).
+     */
+    public function recordSuccess(string $domain): void;
 
     /**
      * Record a block (401/403) with exponential backoff tracking
@@ -879,10 +982,13 @@ final class FileRateLimiter implements RateLimiterInterface
         }
     }
 
-    public function recordRequest(string $domain): void
+    public function recordAttempt(string $domain): void
     {
         $this->lastRequestTime[$domain] = microtime(true) * 1000;
+    }
 
+    public function recordSuccess(string $domain): void
+    {
         // Reset consecutive block count on successful request
         if (isset($this->consecutiveBlocks[$domain])) {
             $this->consecutiveBlocks[$domain] = 0;
@@ -915,16 +1021,38 @@ final class FileRateLimiter implements RateLimiterInterface
             return;
         }
 
-        $data = json_decode(file_get_contents($file), true);
-        if ($data === null) {
+        // Use shared lock during read to prevent race conditions
+        $handle = fopen($file, 'r');
+        if ($handle === false) {
             return;
         }
 
-        foreach ($data['blockedUntil'] ?? [] as $domain => $timestamp) {
-            $this->blockedUntil[$domain] = new DateTimeImmutable($timestamp);
-        }
+        try {
+            // Wait for shared lock (blocks if another process has exclusive lock)
+            if (!flock($handle, LOCK_SH)) {
+                return;
+            }
 
-        $this->consecutiveBlocks = $data['consecutiveBlocks'] ?? [];
+            $content = stream_get_contents($handle);
+            flock($handle, LOCK_UN);  // Release lock immediately after read
+
+            if ($content === false || $content === '') {
+                return;
+            }
+
+            $data = json_decode($content, true);
+            if ($data === null) {
+                return;
+            }
+
+            foreach ($data['blockedUntil'] ?? [] as $domain => $timestamp) {
+                $this->blockedUntil[$domain] = new DateTimeImmutable($timestamp);
+            }
+
+            $this->consecutiveBlocks = $data['consecutiveBlocks'] ?? [];
+        } finally {
+            fclose($handle);
+        }
     }
 
     private function saveState(): void
@@ -933,6 +1061,7 @@ final class FileRateLimiter implements RateLimiterInterface
             mkdir($this->storagePath, 0755, true);
         }
 
+        $file = "{$this->storagePath}/ratelimit.json";
         $data = [
             'blockedUntil' => array_map(
                 fn($dt) => $dt->format(DateTimeImmutable::ATOM),
@@ -941,11 +1070,22 @@ final class FileRateLimiter implements RateLimiterInterface
             'consecutiveBlocks' => $this->consecutiveBlocks,
         ];
 
-        file_put_contents(
-            "{$this->storagePath}/ratelimit.json",
-            json_encode($data, JSON_PRETTY_PRINT),
-            LOCK_EX
-        );
+        $json = json_encode($data, JSON_PRETTY_PRINT);
+
+        // Use atomic write with proper permissions
+        $tmpFile = "{$file}.tmp." . getmypid();
+        if (file_put_contents($tmpFile, $json, LOCK_EX) === false) {
+            @unlink($tmpFile);
+            return;
+        }
+
+        // Set secure permissions before moving into place
+        chmod($tmpFile, 0600);
+
+        // Atomic rename ensures readers always see complete file
+        if (!rename($tmpFile, $file)) {
+            @unlink($tmpFile);
+        }
     }
 }
 ```
@@ -953,8 +1093,24 @@ final class FileRateLimiter implements RateLimiterInterface
 **Responsibilities:**
 - Implement per-domain request pacing
 - Track consecutive block counts for exponential backoff
-- Persist block state across requests
+- Persist block state across requests with proper file locking
 - Reset block count on successful requests
+- Use LOCK_SH for reads and atomic writes to prevent race conditions
+
+> **⚠️ Production Guidance: FileRateLimiter vs SourceBlockRepository**
+>
+> This codebase provides two rate limiter implementations:
+>
+> | Implementation | Use Case | Concurrency Safety |
+> |----------------|----------|-------------------|
+> | `FileRateLimiter` | Local development, single-process CLI | File locking (LOCK_SH/atomic rename) — **not safe for concurrent processes** |
+> | `SourceBlockRepository` (§6.3.5) | Production, cron jobs, parallel workers | Database transactions — **safe for concurrent processes** |
+>
+> **Recommendation:**
+> - **Development:** Use `FileRateLimiter` (simpler setup, no database required)
+> - **Production:** Use `DatabaseRateLimiter` backed by `SourceBlockRepository` (see production override in Appendix C.5)
+>
+> The file-based implementation is susceptible to race conditions when multiple collection processes run concurrently (e.g., parallel cron jobs for different industries). In production, always use the database-backed implementation to ensure rate limit state is consistent across all processes.
 
 ### 3.1.2 BlockDetector
 
@@ -1302,7 +1458,14 @@ final readonly class Extraction
         public ?string $scale = null,
         public ?DateTimeImmutable $asOf = null,
         public SourceLocator $locator,
+        public ?string $cacheSource = null,
+        public ?int $cacheAgeDays = null,
     ) {}
+
+    public function isFromCache(): bool
+    {
+        return $this->cacheSource !== null;
+    }
 }
 ```
 
@@ -1846,7 +2009,7 @@ final class BlockedSourceRegistry
 
 As a last resort, fall back to the most recent datapack (bounded by max age) and mark provenance with a `cache://...` locator.
 
-**Note:** When emitting DataPoints from cached extractions, the handler should use a synthetic `FetchResult` whose `finalUrl` is the `cache://...` URI so `source_url` correctly reflects the cache provenance.
+**Note:** Cached datapoints must preserve provenance. In this design, `DataPointFactory::fromCache()` sets `source_url` to the `cache://...` URI and carries the cached JSON path in `source_locator`, so a synthetic `FetchResult` is not required.
 
 ```php
 namespace app\adapters;
@@ -1944,6 +2107,8 @@ final class CachedDataAdapter implements SourceAdapterInterface
                     "cache://{$this->industryId}/{$latestPack->datapackId}/companies/{$ticker}/valuation/{$metric}",
                     "Cached from datapack {$latestPack->datapackId} ({$age} days old)"
                 ),
+                cacheSource: "cache://{$this->industryId}/{$latestPack->datapackId}",
+                cacheAgeDays: $age,
             );
         }
 
@@ -2002,8 +2167,29 @@ final class DataPointFactory
      */
     public function fromExtraction(
         Extraction $extraction,
-        FetchResult $fetchResult
+        ?FetchResult $fetchResult = null
     ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber {
+        // Handle cached extractions without FetchResult
+	        if ($extraction->isFromCache()) {
+	            return $this->fromCache(
+	                unit: $extraction->unit,
+	                value: $extraction->rawValue,
+	                originalAsOf: $extraction->asOf ?? new DateTimeImmutable(),
+	                cacheSource: $extraction->cacheSource,
+	                cacheAgeDays: $extraction->cacheAgeDays ?? 0,
+	                sourceLocator: $extraction->locator,
+	                currency: $extraction->currency,
+	                scale: $extraction->scale,
+	            );
+	        }
+
+        // Standard web fetch path requires FetchResult
+        if ($fetchResult === null) {
+            throw new \InvalidArgumentException(
+                'FetchResult is required for non-cache extractions'
+            );
+        }
+
         $asOf = $extraction->asOf ?? new DateTimeImmutable($fetchResult->retrievedAt->format('Y-m-d'));
 
         return match ($extraction->unit) {
@@ -2148,6 +2334,68 @@ final class DataPointFactory
             ),
         };
     }
+
+    /**
+     * Create DataPoint from cached data with proper cache provenance
+     */
+	    public function fromCache(
+	        string $unit,
+	        float|int|null $value,
+	        DateTimeImmutable $originalAsOf,
+	        string $cacheSource,
+	        int $cacheAgeDays,
+	        ?SourceLocator $sourceLocator = null,
+	        ?string $currency = null,
+	        ?string $scale = null
+	    ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber {
+	        $now = new DateTimeImmutable();
+
+        return match ($unit) {
+	            'currency' => new DataPointMoney(
+	                value: $value,
+	                currency: $currency ?? 'USD',
+	                scale: $scale ?? 'units',
+	                asOf: $originalAsOf,
+	                sourceUrl: $cacheSource,
+	                retrievedAt: $now,
+	                method: CollectionMethod::Cache,
+	                sourceLocator: $sourceLocator,
+	                cacheSource: $cacheSource,
+	                cacheAgeDays: $cacheAgeDays,
+	            ),
+	            'ratio' => new DataPointRatio(
+	                value: $value,
+	                asOf: $originalAsOf,
+	                sourceUrl: $cacheSource,
+	                retrievedAt: $now,
+	                method: CollectionMethod::Cache,
+	                sourceLocator: $sourceLocator,
+	                cacheSource: $cacheSource,
+	                cacheAgeDays: $cacheAgeDays,
+	            ),
+	            'percent' => new DataPointPercent(
+	                value: $value,
+	                asOf: $originalAsOf,
+	                sourceUrl: $cacheSource,
+	                retrievedAt: $now,
+	                method: CollectionMethod::Cache,
+	                sourceLocator: $sourceLocator,
+	                cacheSource: $cacheSource,
+	                cacheAgeDays: $cacheAgeDays,
+	            ),
+	            default => new DataPointNumber(
+	                value: $value,
+	                unit: $unit,
+	                asOf: $originalAsOf,
+	                sourceUrl: $cacheSource,
+	                retrievedAt: $now,
+	                method: CollectionMethod::Cache,
+	                sourceLocator: $sourceLocator,
+	                cacheSource: $cacheSource,
+	                cacheAgeDays: $cacheAgeDays,
+	            ),
+	        };
+	    }
 }
 ```
 
@@ -2155,6 +2403,7 @@ final class DataPointFactory
 - Create typed DataPoints from extractions
 - Create not-found DataPoints with attempted sources
 - Create derived DataPoints with formula tracking
+- Create cached DataPoints with cache provenance
 - Ensure all provenance fields populated
 
 **Method Signatures:**
@@ -2163,10 +2412,68 @@ final class DataPointFactory
 | `fromExtraction` | `fromExtraction(Extraction $extraction, FetchResult $fetchResult): DataPointMoney\|DataPointRatio\|...` |
 | `notFound` | `notFound(string $unit, array $attemptedSources, ?string $currency = null): DataPointMoney\|...` |
 | `derived` | `derived(string $unit, float $value, array $derivedFrom, string $formula, ?string $currency = null): ...` |
+| `fromCache` | `fromCache(string $unit, float\|int\|null $value, DateTimeImmutable $originalAsOf, string $cacheSource, int $cacheAgeDays, ...): ...` |
 
 ---
 
 ## 4. Orchestration Handlers
+
+### 4.0 CollectDatapointHandler
+
+Collects a **single** datapoint key (`valuation.market_cap`, `macro.commodity_benchmark`, etc.) by iterating prioritized sources, enforcing rate limits, and returning a fully-provenanced typed DataPoint (or a typed `not_found` DataPoint with `attempted_sources`).
+
+**Namespace:** `app\handlers\collection`
+
+```php
+namespace app\handlers\collection;
+
+use app\dto\CollectDatapointRequest;
+use app\dto\CollectDatapointResult;
+
+interface CollectDatapointInterface
+{
+    public function collect(CollectDatapointRequest $request): CollectDatapointResult;
+}
+```
+
+```php
+namespace app\dto;
+
+use DateTimeImmutable;
+use app\enums\Severity;
+use app\dto\datapoints\DataPointMoney;
+use app\dto\datapoints\DataPointRatio;
+use app\dto\datapoints\DataPointPercent;
+use app\dto\datapoints\DataPointNumber;
+
+final readonly class CollectDatapointRequest
+{
+    /**
+     * @param SourceCandidate[] $sourceCandidates Priority-ordered
+     */
+    public function __construct(
+        public string $datapointKey,
+        public array $sourceCandidates,
+        public string $adapterId,
+        public Severity $severity,
+        public ?string $ticker = null,
+        public ?DateTimeImmutable $asOfMin = null,
+    ) {}
+}
+
+final readonly class CollectDatapointResult
+{
+    /**
+     * @param SourceAttempt[] $sourceAttempts
+     */
+    public function __construct(
+        public string $datapointKey,
+        public DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber $datapoint,
+        public array $sourceAttempts,
+        public bool $found,
+    ) {}
+}
+```
 
 ### 4.1 CollectCompanyHandler
 
@@ -2253,25 +2560,22 @@ use app\dto\ValuationData;
 use app\dto\FinancialsData;
 use app\dto\QuartersData;
 use app\dto\SourceAttempt;
-use app\enums\CollectionStatus;
-use app\enums\Severity;
-use app\factories\DataPointFactory;
-use app\factories\SourceCandidateFactory;
-use app\clients\WebFetchClientInterface;
-use app\clients\FetchRequest;
-use app\adapters\SourceAdapterInterface;
-use app\dto\AdaptRequest;
-use yii\log\Logger;
+	use app\enums\CollectionStatus;
+	use app\enums\Severity;
+	use app\factories\DataPointFactory;
+	use app\factories\SourceCandidateFactory;
+	use app\handlers\collection\CollectDatapointInterface;
+	use app\dto\CollectDatapointRequest;
+	use yii\log\Logger;
 
-final class CollectCompanyHandler implements CollectCompanyInterface
-{
-    public function __construct(
-        private WebFetchClientInterface $webFetchClient,
-        private SourceAdapterInterface $sourceAdapter,
-        private SourceCandidateFactory $sourceCandidateFactory,
-        private DataPointFactory $dataPointFactory,
-        private Logger $logger,
-    ) {}
+	final class CollectCompanyHandler implements CollectCompanyInterface
+	{
+	    public function __construct(
+	        private CollectDatapointInterface $datapointCollector,
+	        private SourceCandidateFactory $sourceCandidateFactory,
+	        private DataPointFactory $dataPointFactory,
+	        private Logger $logger,
+	    ) {}
 
     public function collect(CollectCompanyRequest $request): CollectCompanyResult
     {
@@ -2374,79 +2678,60 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         );
     }
 
-    private function collectValuationMetrics(
-        CollectCompanyRequest $request,
-        array $sources,
-        array &$allAttempts,
-        float $deadline
-    ): ValuationData {
-        $metrics = [];
+	    private function collectValuationMetrics(
+	        CollectCompanyRequest $request,
+	        array $sources,
+	        array &$allAttempts,
+	        float $deadline
+	    ): ValuationData {
+	        $metrics = [];
+	        $metricSpec = [
+	            // Money
+	            'market_cap' => ['unit' => 'currency', 'currency' => $request->config->listingCurrency],
+	            'free_cash_flow_ttm' => ['unit' => 'currency', 'currency' => $request->config->reportingCurrency],
+	
+	            // Ratios
+	            'fwd_pe' => ['unit' => 'ratio'],
+	            'trailing_pe' => ['unit' => 'ratio'],
+	            'ev_ebitda' => ['unit' => 'ratio'],
+	            'net_debt_ebitda' => ['unit' => 'ratio'],
+	            'price_to_book' => ['unit' => 'ratio'],
+	
+	            // Percents
+	            'fcf_yield' => ['unit' => 'percent'],
+	            'div_yield' => ['unit' => 'percent'],
+	        ];
 
         // Define all keys needed
         $requiredKeys = $request->requirements->requiredValuationMetrics;
         $optionalKeys = $request->requirements->optionalValuationMetrics;
         $allMetrics = array_merge($requiredKeys, $optionalKeys);
 
-        // Map to datapoint keys (e.g., "valuation.market_cap")
-        $datapointKeys = array_map(fn($m) => "valuation.{$m}", $allMetrics);
+	        // Delegate per-metric collection to CollectDatapointHandler so:
+	        // - source fallback sequencing is consistent
+	        // - attempted_sources is always recorded for not_found
+	        // - blocks/rate-limits are handled centrally
+	        // - provenance rules are enforced uniformly
+	        foreach ($allMetrics as $metric) {
+	            if ($this->isTimedOut($deadline)) {
+	                break;
+	            }
 
-        // Batch Fetch Strategy: Fetch source ONCE, then extract all metrics.
-        // We use the first candidate for 'valuation' (e.g., Yahoo Finance).
-        $candidates = $sources['valuation'] ?? [];
+	            $severity = in_array($metric, $requiredKeys, true)
+	                ? Severity::Required
+	                : Severity::Optional;
 
-        if (empty($candidates)) {
-            throw new CollectionException(
-                "No source candidates available for valuation",
-                $request->ticker
-            );
-        }
+	            $result = $this->datapointCollector->collect(new CollectDatapointRequest(
+	                ticker: $request->ticker,
+	                datapointKey: "valuation.{$metric}",
+	                sourceCandidates: $sources['valuation'] ?? [],
+	                adapterId: 'chain',
+	                severity: $severity,
+	            ));
 
-        $targetUrl = $candidates[0]->url;
-        
-        $fetchResult = null;
-        try {
-            // 1. Fetch
-            $fetchResult = $this->webFetchClient->fetch(
-                new FetchRequest(
-                    url: $targetUrl,
-                    timeoutSeconds: 10
-                )
-            );
-            // In a real implementation, success would be recorded in $allAttempts here
-        } catch (\Exception $e) {
-            $this->logger->log(
-                ['message' => 'Failed to fetch valuation source', 'url' => $targetUrl, 'error' => $e->getMessage()],
-                Logger::LEVEL_WARNING,
-                'collection'
-            );
-        }
-
-        // 2. Adapt (if fetch succeeded)
-        $adaptResult = null;
-        if ($fetchResult) {
-            $adaptResult = $this->sourceAdapter->adapt(
-                new AdaptRequest(
-                    fetchResult: $fetchResult,
-                    datapointKeys: $datapointKeys,
-                    ticker: $request->ticker
-                )
-            );
-        }
-
-        // 3. Map Results
-        foreach ($allMetrics as $metric) {
-            $key = "valuation.{$metric}";
-            $extraction = $adaptResult?->getExtraction($key);
-
-            if ($extraction && $fetchResult) {
-                $metrics[$metric] = $this->dataPointFactory->fromExtraction($extraction, $fetchResult);
-            } else {
-                $metrics[$metric] = $this->dataPointFactory->notFound(
-                    unit: 'unknown', // Unit would ideally be resolved from schema
-                    attemptedSources: [$targetUrl]
-                );
-            }
-        }
+	            $metrics[$metric] = $result->datapoint;
+	            $allAttempts = array_merge($allAttempts, $result->sourceAttempts);
+	        }
 
         // Derived: fcf_yield = (free_cash_flow_ttm / market_cap) * 100
         $fcfYield = null;
@@ -3049,6 +3334,7 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
 
     public function __construct(
         private SchemaValidatorInterface $schemaValidator,
+        private SemanticValidatorInterface $semanticValidator,
         private int $macroStalenessThresholdDays = 10,
     ) {}
 
@@ -3070,23 +3356,28 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
             );
         }
 
-        // 2. Company completeness
+        // 2. Semantic validation (ranges, cross-field consistency, temporal sanity, source URL policy)
+        $semanticResult = $this->semanticValidator->validate($dataPack);
+        $errors = array_merge($errors, $semanticResult->errors);
+        $warnings = array_merge($warnings, $semanticResult->warnings);
+
+        // 3. Company completeness
         $companyErrors = $this->validateCompanyCompleteness($dataPack, $config);
         $errors = array_merge($errors, $companyErrors);
 
-        // 3. Required datapoints
+        // 4. Required datapoints
         $requiredErrors = $this->validateRequiredDatapoints($dataPack, $config);
         $errors = array_merge($errors, $requiredErrors);
 
-        // 4. Provenance validation
+        // 5. Provenance validation
         $provenanceErrors = $this->validateProvenance($dataPack);
         $errors = array_merge($errors, $provenanceErrors);
 
-        // 5. Macro freshness
+        // 6. Macro freshness
         $macroErrors = $this->validateMacroFreshness($dataPack);
         $errors = array_merge($errors, $macroErrors);
 
-        // 6. Warnings
+        // 7. Warnings
         $warnings = array_merge($warnings, $this->checkWarnings($dataPack, $config));
 
         return new GateResult(
@@ -4036,14 +4327,18 @@ final class DataPackRepository
         $dir = $this->getIntermediateDir($industryId, $datapackId);
 
         if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-            // Non-fatal if we can't create intermediate dir, but log worthy.
-            // For now, we'll just return to avoid crashing the main flow.
-            return;
+            // Data quality over speed: if we can't persist intermediates, the final datapack will be incomplete.
+            throw new \RuntimeException("Failed to create intermediate dir: {$dir}");
         }
 
         $path = "{$dir}/{$company->ticker}.json";
         $json = json_encode($company->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        file_put_contents($path, $json, LOCK_EX);
+        if ($json === false) {
+            throw new \RuntimeException('Failed to encode company intermediate JSON: ' . json_last_error_msg());
+        }
+        if (file_put_contents($path, $json, LOCK_EX) === false) {
+            throw new \RuntimeException("Failed to write company intermediate JSON: {$path}");
+        }
     }
 
     /**
@@ -4296,7 +4591,7 @@ final class DataPackAssembler
             $content = file_get_contents($file->getPathname());
 
             if ($content === false) {
-                continue;
+                throw new \RuntimeException("Failed to read intermediate file: {$file->getPathname()}");
             }
 
             yield $ticker => $content;
@@ -4350,6 +4645,1198 @@ final class DataPackAssembler
             return round($bytes / 1024 / 1024, 1) . 'M';
         }
         return round($bytes / 1024, 1) . 'K';
+    }
+}
+```
+
+### 6.3 Database Schema
+
+Phase 1 uses a hybrid storage approach: JSON files for full datapack content, database for indexing and operational metadata.
+
+#### 6.3.1 Entity Relationship Diagram
+
+```
+┌─────────────────────┐       ┌─────────────────────┐
+│   industry_config   │       │   collection_run    │
+├─────────────────────┤       ├─────────────────────┤
+│ id (PK)             │       │ id (PK)             │
+│ industry_id (UQ)    │◄──────│ industry_id (FK)    │
+│ name                │       │ datapack_id (UQ)    │
+│ config_yaml         │       │ status              │
+│ created_at          │       │ started_at          │
+│ updated_at          │       │ completed_at        │
+└─────────────────────┘       │ companies_total     │
+                              │ companies_success   │
+                              │ companies_failed    │
+                              │ gate_passed         │
+                              │ error_summary       │
+                              │ file_path           │
+                              │ file_size_bytes     │
+                              └─────────────────────┘
+                                        │
+                                        ▼
+                              ┌─────────────────────┐
+                              │  collection_error   │
+                              ├─────────────────────┤
+                              │ id (PK)             │
+                              │ collection_run_id   │
+                              │ error_code          │
+                              │ error_message       │
+                              │ error_path          │
+                              │ ticker              │
+                              │ created_at          │
+                              └─────────────────────┘
+
+┌─────────────────────┐
+│   source_block      │
+├─────────────────────┤
+│ id (PK)             │
+│ domain              │
+│ blocked_at          │
+│ blocked_until       │
+│ consecutive_count   │
+│ last_error          │
+└─────────────────────┘
+```
+
+#### 6.3.2 Migrations
+
+**Migration: m241220_000001_create_industry_config_table**
+
+```php
+<?php
+
+use yii\db\Migration;
+
+class m241220_000001_create_industry_config_table extends Migration
+{
+    public function safeUp(): bool
+    {
+        $this->createTable('{{%industry_config}}', [
+            'id' => $this->primaryKey(),
+            'industry_id' => $this->string(64)->notNull()->unique(),
+            'name' => $this->string(255)->notNull(),
+            'config_yaml' => $this->text()->notNull(),
+            'is_active' => $this->boolean()->notNull()->defaultValue(true),
+            'created_at' => $this->timestamp()->notNull()->defaultExpression('CURRENT_TIMESTAMP'),
+            'updated_at' => $this->timestamp()->notNull()->defaultExpression('CURRENT_TIMESTAMP'),
+        ]);
+
+        $this->createIndex(
+            'idx-industry_config-is_active',
+            '{{%industry_config}}',
+            'is_active'
+        );
+
+        return true;
+    }
+
+    public function safeDown(): bool
+    {
+        $this->dropTable('{{%industry_config}}');
+        return true;
+    }
+}
+```
+
+**Migration: m241220_000002_create_collection_run_table**
+
+```php
+<?php
+
+use yii\db\Migration;
+
+class m241220_000002_create_collection_run_table extends Migration
+{
+    public function safeUp(): bool
+    {
+        $this->createTable('{{%collection_run}}', [
+            'id' => $this->primaryKey(),
+            'industry_id' => $this->string(64)->notNull(),
+            'datapack_id' => $this->string(36)->notNull()->unique(),
+            'status' => $this->string(20)->notNull()->defaultValue('pending'),
+            'started_at' => $this->timestamp()->notNull()->defaultExpression('CURRENT_TIMESTAMP'),
+            'completed_at' => $this->timestamp()->null(),
+            'companies_total' => $this->integer()->notNull()->defaultValue(0),
+            'companies_success' => $this->integer()->notNull()->defaultValue(0),
+            'companies_failed' => $this->integer()->notNull()->defaultValue(0),
+            'gate_passed' => $this->boolean()->null(),
+            'error_count' => $this->integer()->notNull()->defaultValue(0),
+            'warning_count' => $this->integer()->notNull()->defaultValue(0),
+            'file_path' => $this->string(512)->null(),
+            'file_size_bytes' => $this->bigInteger()->null(),
+            'duration_seconds' => $this->integer()->null(),
+        ]);
+
+        $this->createIndex(
+            'idx-collection_run-industry_id',
+            '{{%collection_run}}',
+            'industry_id'
+        );
+
+        $this->createIndex(
+            'idx-collection_run-status',
+            '{{%collection_run}}',
+            'status'
+        );
+
+        $this->createIndex(
+            'idx-collection_run-started_at',
+            '{{%collection_run}}',
+            'started_at'
+        );
+
+        $this->addForeignKey(
+            'fk-collection_run-industry_id',
+            '{{%collection_run}}',
+            'industry_id',
+            '{{%industry_config}}',
+            'industry_id',
+            'CASCADE',
+            'CASCADE'
+        );
+
+        return true;
+    }
+
+    public function safeDown(): bool
+    {
+        $this->dropForeignKey('fk-collection_run-industry_id', '{{%collection_run}}');
+        $this->dropTable('{{%collection_run}}');
+        return true;
+    }
+}
+```
+
+**Migration: m241220_000003_create_collection_error_table**
+
+```php
+<?php
+
+use yii\db\Migration;
+
+class m241220_000003_create_collection_error_table extends Migration
+{
+    public function safeUp(): bool
+    {
+        $this->createTable('{{%collection_error}}', [
+            'id' => $this->primaryKey(),
+            'collection_run_id' => $this->integer()->notNull(),
+            'severity' => $this->string(20)->notNull()->defaultValue('error'),
+            'error_code' => $this->string(64)->notNull(),
+            'error_message' => $this->text()->notNull(),
+            'error_path' => $this->string(255)->null(),
+            'ticker' => $this->string(20)->null(),
+            'created_at' => $this->timestamp()->notNull()->defaultExpression('CURRENT_TIMESTAMP'),
+        ]);
+
+        $this->createIndex(
+            'idx-collection_error-collection_run_id',
+            '{{%collection_error}}',
+            'collection_run_id'
+        );
+
+        $this->createIndex(
+            'idx-collection_error-error_code',
+            '{{%collection_error}}',
+            'error_code'
+        );
+
+        $this->createIndex(
+            'idx-collection_error-ticker',
+            '{{%collection_error}}',
+            'ticker'
+        );
+
+        $this->addForeignKey(
+            'fk-collection_error-collection_run_id',
+            '{{%collection_error}}',
+            'collection_run_id',
+            '{{%collection_run}}',
+            'id',
+            'CASCADE',
+            'CASCADE'
+        );
+
+        return true;
+    }
+
+    public function safeDown(): bool
+    {
+        $this->dropForeignKey('fk-collection_error-collection_run_id', '{{%collection_error}}');
+        $this->dropTable('{{%collection_error}}');
+        return true;
+    }
+}
+```
+
+**Migration: m241220_000004_create_source_block_table**
+
+```php
+<?php
+
+use yii\db\Migration;
+
+class m241220_000004_create_source_block_table extends Migration
+{
+    public function safeUp(): bool
+    {
+        $this->createTable('{{%source_block}}', [
+            'id' => $this->primaryKey(),
+            'domain' => $this->string(255)->notNull()->unique(),
+            'blocked_at' => $this->timestamp()->notNull()->defaultExpression('CURRENT_TIMESTAMP'),
+            'blocked_until' => $this->timestamp()->notNull(),
+            'consecutive_count' => $this->integer()->notNull()->defaultValue(1),
+            'last_status_code' => $this->integer()->null(),
+            'last_error' => $this->text()->null(),
+        ]);
+
+        $this->createIndex(
+            'idx-source_block-blocked_until',
+            '{{%source_block}}',
+            'blocked_until'
+        );
+
+        return true;
+    }
+
+    public function safeDown(): bool
+    {
+        $this->dropTable('{{%source_block}}');
+        return true;
+    }
+}
+```
+
+#### 6.3.3 ActiveRecord Models
+
+**Namespace:** `app\models`
+
+##### IndustryConfig
+
+```php
+namespace app\models;
+
+use yii\db\ActiveRecord;
+use yii\behaviors\TimestampBehavior;
+use yii\db\Expression;
+
+/**
+ * @property int $id
+ * @property string $industry_id
+ * @property string $name
+ * @property string $config_yaml
+ * @property bool $is_active
+ * @property string $created_at
+ * @property string $updated_at
+ *
+ * @property CollectionRun[] $collectionRuns
+ */
+final class IndustryConfig extends ActiveRecord
+{
+    public static function tableName(): string
+    {
+        return '{{%industry_config}}';
+    }
+
+    public function behaviors(): array
+    {
+        return [
+            [
+                'class' => TimestampBehavior::class,
+                'value' => new Expression('NOW()'),
+            ],
+        ];
+    }
+
+    public function rules(): array
+    {
+        return [
+            [['industry_id', 'name', 'config_yaml'], 'required'],
+            [['industry_id'], 'string', 'max' => 64],
+            [['industry_id'], 'unique'],
+            [['name'], 'string', 'max' => 255],
+            [['config_yaml'], 'string'],
+            [['is_active'], 'boolean'],
+            [['is_active'], 'default', 'value' => true],
+        ];
+    }
+
+    public function getCollectionRuns(): \yii\db\ActiveQuery
+    {
+        return $this->hasMany(CollectionRun::class, ['industry_id' => 'industry_id'])
+            ->orderBy(['started_at' => SORT_DESC]);
+    }
+
+    public function getLatestSuccessfulRun(): ?CollectionRun
+    {
+        return $this->getCollectionRuns()
+            ->complete()
+            ->gatePassed()
+            ->one();
+    }
+
+    public static function find(): IndustryConfigQuery
+    {
+        return new IndustryConfigQuery(static::class);
+    }
+}
+```
+
+##### IndustryConfigQuery
+
+```php
+namespace app\models\query;
+
+use yii\db\ActiveQuery;
+use app\models\IndustryConfig;
+
+final class IndustryConfigQuery extends ActiveQuery
+{
+    public function active(): self
+    {
+        return $this->andWhere(['is_active' => true]);
+    }
+
+    public function inactive(): self
+    {
+        return $this->andWhere(['is_active' => false]);
+    }
+
+    public function byIndustryId(string $industryId): self
+    {
+        return $this->andWhere(['industry_id' => $industryId]);
+    }
+
+    /**
+     * @return IndustryConfig[]|array
+     */
+    public function all($db = null): array
+    {
+        return parent::all($db);
+    }
+
+    public function one($db = null): ?IndustryConfig
+    {
+        return parent::one($db);
+    }
+}
+```
+
+##### CollectionRun
+
+```php
+namespace app\models;
+
+use yii\db\ActiveRecord;
+use yii\behaviors\TimestampBehavior;
+use yii\db\Expression;
+
+/**
+ * @property int $id
+ * @property string $industry_id
+ * @property string $datapack_id
+ * @property string $status
+ * @property string $started_at
+ * @property string|null $completed_at
+ * @property int $companies_total
+ * @property int $companies_success
+ * @property int $companies_failed
+ * @property bool|null $gate_passed
+ * @property int $error_count
+ * @property int $warning_count
+ * @property string|null $file_path
+ * @property int|null $file_size_bytes
+ * @property int|null $duration_seconds
+ *
+ * @property IndustryConfig $industryConfig
+ * @property CollectionError[] $errors
+ * @property CollectionError[] $warnings
+ */
+final class CollectionRun extends ActiveRecord
+{
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_RUNNING = 'running';
+    public const STATUS_COMPLETE = 'complete';
+    public const STATUS_FAILED = 'failed';
+
+    public static function tableName(): string
+    {
+        return '{{%collection_run}}';
+    }
+
+    public function rules(): array
+    {
+        return [
+            [['industry_id', 'datapack_id'], 'required'],
+            [['industry_id'], 'string', 'max' => 64],
+            [['datapack_id'], 'string', 'max' => 36],
+            [['datapack_id'], 'unique'],
+            [['status'], 'string', 'max' => 20],
+            [['status'], 'default', 'value' => self::STATUS_PENDING],
+            [['status'], 'in', 'range' => [
+                self::STATUS_PENDING,
+                self::STATUS_RUNNING,
+                self::STATUS_COMPLETE,
+                self::STATUS_FAILED,
+            ]],
+            [['companies_total', 'companies_success', 'companies_failed'], 'integer', 'min' => 0],
+            [['error_count', 'warning_count'], 'integer', 'min' => 0],
+            [['gate_passed'], 'boolean'],
+            [['file_path'], 'string', 'max' => 512],
+            [['file_size_bytes', 'duration_seconds'], 'integer', 'min' => 0],
+            [['industry_id'], 'exist', 'targetClass' => IndustryConfig::class, 'targetAttribute' => 'industry_id'],
+        ];
+    }
+
+    public function getIndustryConfig(): \yii\db\ActiveQuery
+    {
+        return $this->hasOne(IndustryConfig::class, ['industry_id' => 'industry_id']);
+    }
+
+    public function getCollectionErrors(): \yii\db\ActiveQuery
+    {
+        return $this->hasMany(CollectionError::class, ['collection_run_id' => 'id']);
+    }
+
+    public function getErrors(): \yii\db\ActiveQuery
+    {
+        return $this->getCollectionErrors()->andWhere(['severity' => 'error']);
+    }
+
+    public function getWarnings(): \yii\db\ActiveQuery
+    {
+        return $this->getCollectionErrors()->andWhere(['severity' => 'warning']);
+    }
+
+    public function markRunning(): bool
+    {
+        $this->status = self::STATUS_RUNNING;
+        $this->started_at = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        return $this->save(false, ['status', 'started_at']);
+    }
+
+    public function markComplete(bool $gatePassed): bool
+    {
+        $this->status = self::STATUS_COMPLETE;
+        $this->completed_at = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $this->gate_passed = $gatePassed;
+        $this->duration_seconds = strtotime($this->completed_at) - strtotime($this->started_at);
+        return $this->save(false, ['status', 'completed_at', 'gate_passed', 'duration_seconds']);
+    }
+
+    public function markFailed(): bool
+    {
+        $this->status = self::STATUS_FAILED;
+        $this->completed_at = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $this->duration_seconds = strtotime($this->completed_at) - strtotime($this->started_at);
+        return $this->save(false, ['status', 'completed_at', 'duration_seconds']);
+    }
+
+    public static function find(): CollectionRunQuery
+    {
+        return new CollectionRunQuery(static::class);
+    }
+}
+```
+
+##### CollectionRunQuery
+
+```php
+namespace app\models\query;
+
+use yii\db\ActiveQuery;
+use app\models\CollectionRun;
+use DateTimeImmutable;
+
+final class CollectionRunQuery extends ActiveQuery
+{
+    public function pending(): self
+    {
+        return $this->andWhere(['status' => CollectionRun::STATUS_PENDING]);
+    }
+
+    public function running(): self
+    {
+        return $this->andWhere(['status' => CollectionRun::STATUS_RUNNING]);
+    }
+
+    public function complete(): self
+    {
+        return $this->andWhere(['status' => CollectionRun::STATUS_COMPLETE]);
+    }
+
+    public function failed(): self
+    {
+        return $this->andWhere(['status' => CollectionRun::STATUS_FAILED]);
+    }
+
+    public function gatePassed(): self
+    {
+        return $this->andWhere(['gate_passed' => true]);
+    }
+
+    public function gateFailed(): self
+    {
+        return $this->andWhere(['gate_passed' => false]);
+    }
+
+    public function forIndustry(string $industryId): self
+    {
+        return $this->andWhere(['industry_id' => $industryId]);
+    }
+
+    public function byDatapackId(string $datapackId): self
+    {
+        return $this->andWhere(['datapack_id' => $datapackId]);
+    }
+
+    public function since(DateTimeImmutable $since): self
+    {
+        return $this->andWhere(['>=', 'started_at', $since->format('Y-m-d H:i:s')]);
+    }
+
+    public function before(DateTimeImmutable $before): self
+    {
+        return $this->andWhere(['<', 'started_at', $before->format('Y-m-d H:i:s')]);
+    }
+
+    public function latest(): self
+    {
+        return $this->orderBy(['started_at' => SORT_DESC]);
+    }
+
+    public function oldest(): self
+    {
+        return $this->orderBy(['started_at' => SORT_ASC]);
+    }
+
+    public function withErrors(): self
+    {
+        return $this->andWhere(['>', 'error_count', 0]);
+    }
+
+    public function withWarnings(): self
+    {
+        return $this->andWhere(['>', 'warning_count', 0]);
+    }
+
+    /**
+     * @return CollectionRun[]|array
+     */
+    public function all($db = null): array
+    {
+        return parent::all($db);
+    }
+
+    public function one($db = null): ?CollectionRun
+    {
+        return parent::one($db);
+    }
+}
+```
+
+##### CollectionError
+
+```php
+namespace app\models;
+
+use yii\db\ActiveRecord;
+
+/**
+ * @property int $id
+ * @property int $collection_run_id
+ * @property string $severity
+ * @property string $error_code
+ * @property string $error_message
+ * @property string|null $error_path
+ * @property string|null $ticker
+ * @property string $created_at
+ *
+ * @property CollectionRun $collectionRun
+ */
+final class CollectionError extends ActiveRecord
+{
+    public const SEVERITY_ERROR = 'error';
+    public const SEVERITY_WARNING = 'warning';
+
+    public static function tableName(): string
+    {
+        return '{{%collection_error}}';
+    }
+
+    public function rules(): array
+    {
+        return [
+            [['collection_run_id', 'error_code', 'error_message'], 'required'],
+            [['collection_run_id'], 'integer'],
+            [['severity'], 'string', 'max' => 20],
+            [['severity'], 'default', 'value' => self::SEVERITY_ERROR],
+            [['severity'], 'in', 'range' => [self::SEVERITY_ERROR, self::SEVERITY_WARNING]],
+            [['error_code'], 'string', 'max' => 64],
+            [['error_message'], 'string'],
+            [['error_path'], 'string', 'max' => 255],
+            [['ticker'], 'string', 'max' => 20],
+            [['collection_run_id'], 'exist', 'targetClass' => CollectionRun::class, 'targetAttribute' => 'id'],
+        ];
+    }
+
+    public function getCollectionRun(): \yii\db\ActiveQuery
+    {
+        return $this->hasOne(CollectionRun::class, ['id' => 'collection_run_id']);
+    }
+
+    public static function createFromGateError(
+        int $collectionRunId,
+        \app\dto\GateError $error
+    ): self {
+        $model = new self();
+        $model->collection_run_id = $collectionRunId;
+        $model->severity = self::SEVERITY_ERROR;
+        $model->error_code = $error->code;
+        $model->error_message = $error->message;
+        $model->error_path = $error->path;
+        $model->ticker = self::extractTicker($error->path);
+        return $model;
+    }
+
+    public static function createFromGateWarning(
+        int $collectionRunId,
+        \app\dto\GateWarning $warning
+    ): self {
+        $model = new self();
+        $model->collection_run_id = $collectionRunId;
+        $model->severity = self::SEVERITY_WARNING;
+        $model->error_code = $warning->code;
+        $model->error_message = $warning->message;
+        $model->error_path = $warning->path;
+        $model->ticker = self::extractTicker($warning->path);
+        return $model;
+    }
+
+    private static function extractTicker(?string $path): ?string
+    {
+        if ($path === null) {
+            return null;
+        }
+
+        if (preg_match('/companies\.([A-Z0-9.]+)\./', $path, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    public static function find(): CollectionErrorQuery
+    {
+        return new CollectionErrorQuery(static::class);
+    }
+}
+```
+
+##### CollectionErrorQuery
+
+```php
+namespace app\models\query;
+
+use yii\db\ActiveQuery;
+use app\models\CollectionError;
+
+final class CollectionErrorQuery extends ActiveQuery
+{
+    public function errors(): self
+    {
+        return $this->andWhere(['severity' => CollectionError::SEVERITY_ERROR]);
+    }
+
+    public function warnings(): self
+    {
+        return $this->andWhere(['severity' => CollectionError::SEVERITY_WARNING]);
+    }
+
+    public function forRun(int $collectionRunId): self
+    {
+        return $this->andWhere(['collection_run_id' => $collectionRunId]);
+    }
+
+    public function forTicker(string $ticker): self
+    {
+        return $this->andWhere(['ticker' => $ticker]);
+    }
+
+    public function byCode(string $errorCode): self
+    {
+        return $this->andWhere(['error_code' => $errorCode]);
+    }
+
+    public function byCodePrefix(string $prefix): self
+    {
+        return $this->andWhere(['like', 'error_code', $prefix . '%', false]);
+    }
+
+    public function inPath(string $pathPattern): self
+    {
+        return $this->andWhere(['like', 'error_path', $pathPattern]);
+    }
+
+    public function latest(): self
+    {
+        return $this->orderBy(['created_at' => SORT_DESC]);
+    }
+
+    /**
+     * @return CollectionError[]|array
+     */
+    public function all($db = null): array
+    {
+        return parent::all($db);
+    }
+
+    public function one($db = null): ?CollectionError
+    {
+        return parent::one($db);
+    }
+}
+```
+
+##### SourceBlock
+
+```php
+namespace app\models;
+
+use yii\db\ActiveRecord;
+use DateTimeImmutable;
+
+/**
+ * @property int $id
+ * @property string $domain
+ * @property string $blocked_at
+ * @property string $blocked_until
+ * @property int $consecutive_count
+ * @property int|null $last_status_code
+ * @property string|null $last_error
+ */
+final class SourceBlock extends ActiveRecord
+{
+    public static function tableName(): string
+    {
+        return '{{%source_block}}';
+    }
+
+    public function rules(): array
+    {
+        return [
+            [['domain', 'blocked_until'], 'required'],
+            [['domain'], 'string', 'max' => 255],
+            [['domain'], 'unique'],
+            [['consecutive_count'], 'integer', 'min' => 0],
+            [['consecutive_count'], 'default', 'value' => 1],
+            [['last_status_code'], 'integer'],
+            [['last_error'], 'string'],
+        ];
+    }
+
+    public function isCurrentlyBlocked(): bool
+    {
+        $now = new DateTimeImmutable();
+        $blockedUntil = new DateTimeImmutable($this->blocked_until);
+        return $blockedUntil > $now;
+    }
+
+    public function getBlockedUntilDateTime(): DateTimeImmutable
+    {
+        return new DateTimeImmutable($this->blocked_until);
+    }
+
+    public static function findByDomain(string $domain): ?self
+    {
+        return self::findOne(['domain' => $domain]);
+    }
+
+    public static function isBlocked(string $domain): bool
+    {
+        $block = self::findByDomain($domain);
+        return $block !== null && $block->isCurrentlyBlocked();
+    }
+
+    public static function recordBlock(
+        string $domain,
+        DateTimeImmutable $blockedUntil,
+        ?int $statusCode = null,
+        ?string $error = null
+    ): self {
+        $block = self::findByDomain($domain);
+        $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        if ($block === null) {
+            $block = new self();
+            $block->domain = $domain;
+            $block->consecutive_count = 1;
+        } else {
+            $block->consecutive_count++;
+        }
+
+        $block->blocked_at = $now;
+        $block->blocked_until = $blockedUntil->format('Y-m-d H:i:s');
+        $block->last_status_code = $statusCode;
+        $block->last_error = $error;
+        $block->save();
+
+        return $block;
+    }
+
+    public static function clearBlock(string $domain): void
+    {
+        $block = self::findByDomain($domain);
+        if ($block !== null) {
+            $block->consecutive_count = 0;
+            $block->save(false, ['consecutive_count']);
+        }
+    }
+
+    public static function cleanupExpired(): int
+    {
+        $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        return self::deleteAll(
+            'blocked_until < :now AND consecutive_count = 0',
+            [':now' => $now]
+        );
+    }
+
+    public static function find(): SourceBlockQuery
+    {
+        return new SourceBlockQuery(static::class);
+    }
+}
+```
+
+##### SourceBlockQuery
+
+```php
+namespace app\models\query;
+
+use yii\db\ActiveQuery;
+use app\models\SourceBlock;
+use DateTimeImmutable;
+
+final class SourceBlockQuery extends ActiveQuery
+{
+    public function blocked(): self
+    {
+        $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+        return $this->andWhere(['>', 'blocked_until', $now]);
+    }
+
+    public function expired(): self
+    {
+        $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+        return $this->andWhere(['<=', 'blocked_until', $now]);
+    }
+
+    public function byDomain(string $domain): self
+    {
+        return $this->andWhere(['domain' => $domain]);
+    }
+
+    public function domainLike(string $pattern): self
+    {
+        return $this->andWhere(['like', 'domain', $pattern]);
+    }
+
+    public function withConsecutiveBlocks(int $minCount = 1): self
+    {
+        return $this->andWhere(['>=', 'consecutive_count', $minCount]);
+    }
+
+    public function byStatusCode(int $statusCode): self
+    {
+        return $this->andWhere(['last_status_code' => $statusCode]);
+    }
+
+    public function recentlyBlocked(): self
+    {
+        return $this->orderBy(['blocked_at' => SORT_DESC]);
+    }
+
+    public function expiresFirst(): self
+    {
+        return $this->orderBy(['blocked_until' => SORT_ASC]);
+    }
+
+    /**
+     * @return SourceBlock[]|array
+     */
+    public function all($db = null): array
+    {
+        return parent::all($db);
+    }
+
+    public function one($db = null): ?SourceBlock
+    {
+        return parent::one($db);
+    }
+}
+```
+
+#### 6.3.4 CollectionRunRepository
+
+**Namespace:** `app\queries`
+
+```php
+namespace app\queries;
+
+use app\dto\GateResult;
+use app\dto\CollectionLog;
+use yii\db\Connection;
+use DateTimeImmutable;
+
+final class CollectionRunRepository
+{
+    public function __construct(
+        private Connection $db,
+    ) {}
+
+    public function create(string $industryId, string $datapackId): int
+    {
+        $this->db->createCommand()->insert('{{%collection_run}}', [
+            'industry_id' => $industryId,
+            'datapack_id' => $datapackId,
+            'status' => 'running',
+            'started_at' => (new DateTimeImmutable())->format('Y-m-d H:i:s'),
+        ])->execute();
+
+        return (int) $this->db->getLastInsertID();
+    }
+
+    public function updateProgress(
+        int $runId,
+        int $companiesTotal,
+        int $companiesSuccess,
+        int $companiesFailed
+    ): void {
+        $this->db->createCommand()->update(
+            '{{%collection_run}}',
+            [
+                'companies_total' => $companiesTotal,
+                'companies_success' => $companiesSuccess,
+                'companies_failed' => $companiesFailed,
+            ],
+            ['id' => $runId]
+        )->execute();
+    }
+
+    public function complete(
+        int $runId,
+        string $status,
+        bool $gatePassed,
+        int $errorCount,
+        int $warningCount,
+        string $filePath,
+        int $fileSizeBytes,
+        int $durationSeconds
+    ): void {
+        $this->db->createCommand()->update(
+            '{{%collection_run}}',
+            [
+                'status' => $status,
+                'completed_at' => (new DateTimeImmutable())->format('Y-m-d H:i:s'),
+                'gate_passed' => $gatePassed ? 1 : 0,
+                'error_count' => $errorCount,
+                'warning_count' => $warningCount,
+                'file_path' => $filePath,
+                'file_size_bytes' => $fileSizeBytes,
+                'duration_seconds' => $durationSeconds,
+            ],
+            ['id' => $runId]
+        )->execute();
+    }
+
+    public function recordErrors(int $runId, GateResult $gateResult): void
+    {
+        foreach ($gateResult->errors as $error) {
+            $this->db->createCommand()->insert('{{%collection_error}}', [
+                'collection_run_id' => $runId,
+                'severity' => 'error',
+                'error_code' => $error->code,
+                'error_message' => $error->message,
+                'error_path' => $error->path,
+                'ticker' => $this->extractTicker($error->path),
+            ])->execute();
+        }
+
+        foreach ($gateResult->warnings as $warning) {
+            $this->db->createCommand()->insert('{{%collection_error}}', [
+                'collection_run_id' => $runId,
+                'severity' => 'warning',
+                'error_code' => $warning->code,
+                'error_message' => $warning->message,
+                'error_path' => $warning->path,
+                'ticker' => $this->extractTicker($warning->path),
+            ])->execute();
+        }
+    }
+
+    public function findByDatapackId(string $datapackId): ?array
+    {
+        return $this->db->createCommand(
+            'SELECT * FROM {{%collection_run}} WHERE datapack_id = :id'
+        )->bindValue(':id', $datapackId)->queryOne() ?: null;
+    }
+
+    public function listByIndustry(string $industryId, int $limit = 20): array
+    {
+        return $this->db->createCommand(
+            'SELECT * FROM {{%collection_run}}
+             WHERE industry_id = :industry_id
+             ORDER BY started_at DESC
+             LIMIT :limit'
+        )
+            ->bindValue(':industry_id', $industryId)
+            ->bindValue(':limit', $limit)
+            ->queryAll();
+    }
+
+    public function getLatestSuccessful(string $industryId): ?array
+    {
+        return $this->db->createCommand(
+            'SELECT * FROM {{%collection_run}}
+             WHERE industry_id = :industry_id
+               AND status = :status
+               AND gate_passed = 1
+             ORDER BY completed_at DESC
+             LIMIT 1'
+        )
+            ->bindValue(':industry_id', $industryId)
+            ->bindValue(':status', 'complete')
+            ->queryOne() ?: null;
+    }
+
+    private function extractTicker(?string $path): ?string
+    {
+        if ($path === null) {
+            return null;
+        }
+
+        if (preg_match('/companies\.([A-Z0-9.]+)\./', $path, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+}
+```
+
+#### 6.3.5 SourceBlockRepository
+
+Replaces file-based rate limit state with database storage for proper concurrency.
+
+**Namespace:** `app\queries`
+
+```php
+namespace app\queries;
+
+use yii\db\Connection;
+use DateTimeImmutable;
+
+final class SourceBlockRepository
+{
+    public function __construct(
+        private Connection $db,
+    ) {}
+
+    public function isBlocked(string $domain): bool
+    {
+        $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        $row = $this->db->createCommand(
+            'SELECT id FROM {{%source_block}}
+             WHERE domain = :domain AND blocked_until > :now
+             LIMIT 1'
+        )
+            ->bindValue(':domain', $domain)
+            ->bindValue(':now', $now)
+            ->queryOne();
+
+        return $row !== false;
+    }
+
+    public function getBlockedUntil(string $domain): ?DateTimeImmutable
+    {
+        $row = $this->db->createCommand(
+            'SELECT blocked_until FROM {{%source_block}} WHERE domain = :domain'
+        )->bindValue(':domain', $domain)->queryOne();
+
+        if ($row === false) {
+            return null;
+        }
+
+        return new DateTimeImmutable($row['blocked_until']);
+    }
+
+    public function recordBlock(
+        string $domain,
+        DateTimeImmutable $blockedUntil,
+        ?int $statusCode = null,
+        ?string $error = null
+    ): void {
+        $existing = $this->db->createCommand(
+            'SELECT id, consecutive_count FROM {{%source_block}} WHERE domain = :domain'
+        )->bindValue(':domain', $domain)->queryOne();
+
+        $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        if ($existing === false) {
+            $this->db->createCommand()->insert('{{%source_block}}', [
+                'domain' => $domain,
+                'blocked_at' => $now,
+                'blocked_until' => $blockedUntil->format('Y-m-d H:i:s'),
+                'consecutive_count' => 1,
+                'last_status_code' => $statusCode,
+                'last_error' => $error,
+            ])->execute();
+        } else {
+            $this->db->createCommand()->update(
+                '{{%source_block}}',
+                [
+                    'blocked_at' => $now,
+                    'blocked_until' => $blockedUntil->format('Y-m-d H:i:s'),
+                    'consecutive_count' => $existing['consecutive_count'] + 1,
+                    'last_status_code' => $statusCode,
+                    'last_error' => $error,
+                ],
+                ['id' => $existing['id']]
+            )->execute();
+        }
+    }
+
+    public function getConsecutiveCount(string $domain): int
+    {
+        $row = $this->db->createCommand(
+            'SELECT consecutive_count FROM {{%source_block}} WHERE domain = :domain'
+        )->bindValue(':domain', $domain)->queryOne();
+
+        return $row !== false ? (int) $row['consecutive_count'] : 0;
+    }
+
+    public function clearBlock(string $domain): void
+    {
+        $this->db->createCommand()->update(
+            '{{%source_block}}',
+            ['consecutive_count' => 0],
+            ['domain' => $domain]
+        )->execute();
+    }
+
+    public function cleanupExpired(): int
+    {
+        $now = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        return $this->db->createCommand()->delete(
+            '{{%source_block}}',
+            'blocked_until < :now AND consecutive_count = 0',
+            [':now' => $now]
+        )->execute();
     }
 }
 ```
@@ -5095,6 +6582,8 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
+│  LAYER -1: Database (Migrations)                                 │
+├─────────────────────────────────────────────────────────────────┤
 │  LAYER 0: Foundation (Enums, Exceptions, Base DTOs)             │
 ├─────────────────────────────────────────────────────────────────┤
 │  LAYER 1: Value Objects (DataPoints, SourceLocator)             │
@@ -5109,7 +6598,128 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 10.2 Layer 0: Foundation
+### 10.2 Layer -1: Database
+
+#### Task -1.1: Create Industry Config Migration
+
+**Files:** `migrations/m241220_000001_create_industry_config_table.php`
+
+**Dependencies:** None
+
+**SQL:**
+```sql
+CREATE TABLE industry_config (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    industry_id VARCHAR(64) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    config_yaml TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Task -1.2: Create Collection Run Migration
+
+**Files:** `migrations/m241220_000002_create_collection_run_table.php`
+
+**Dependencies:** Task -1.1
+
+**SQL:**
+```sql
+CREATE TABLE collection_run (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    industry_id VARCHAR(64) NOT NULL,
+    datapack_id VARCHAR(36) NOT NULL UNIQUE,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL,
+    companies_total INT NOT NULL DEFAULT 0,
+    companies_success INT NOT NULL DEFAULT 0,
+    companies_failed INT NOT NULL DEFAULT 0,
+    gate_passed BOOLEAN NULL,
+    error_count INT NOT NULL DEFAULT 0,
+    warning_count INT NOT NULL DEFAULT 0,
+    file_path VARCHAR(512) NULL,
+    file_size_bytes BIGINT NULL,
+    duration_seconds INT NULL,
+    FOREIGN KEY (industry_id) REFERENCES industry_config(industry_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+```
+
+#### Task -1.3: Create Collection Error Migration
+
+**Files:** `migrations/m241220_000003_create_collection_error_table.php`
+
+**Dependencies:** Task -1.2
+
+**SQL:**
+```sql
+CREATE TABLE collection_error (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    collection_run_id INT NOT NULL,
+    severity VARCHAR(20) NOT NULL DEFAULT 'error',
+    error_code VARCHAR(64) NOT NULL,
+    error_message TEXT NOT NULL,
+    error_path VARCHAR(255) NULL,
+    ticker VARCHAR(20) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (collection_run_id) REFERENCES collection_run(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+```
+
+#### Task -1.4: Create Source Block Migration
+
+**Files:** `migrations/m241220_000004_create_source_block_table.php`
+
+**Dependencies:** None
+
+**SQL:**
+```sql
+CREATE TABLE source_block (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    domain VARCHAR(255) NOT NULL UNIQUE,
+    blocked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    blocked_until TIMESTAMP NOT NULL,
+    consecutive_count INT NOT NULL DEFAULT 1,
+    last_status_code INT NULL,
+    last_error TEXT NULL
+);
+```
+
+#### Task -1.5: Run Migrations
+
+**Command:** `./yii migrate --interactive=0`
+
+**Dependencies:** Tasks -1.1 through -1.4
+
+#### Task -1.6: Create ActiveRecord Models
+
+**Files:**
+- `models/IndustryConfig.php`
+- `models/CollectionRun.php`
+- `models/CollectionError.php`
+- `models/SourceBlock.php`
+
+**Dependencies:** Tasks -1.1 through -1.5
+
+**Notes:** Models include validation rules, relations, behaviors (TimestampBehavior), and helper methods.
+
+#### Task -1.7: Create ActiveQuery Classes
+
+**Files:**
+- `models/query/IndustryConfigQuery.php`
+- `models/query/CollectionRunQuery.php`
+- `models/query/CollectionErrorQuery.php`
+- `models/query/SourceBlockQuery.php`
+
+**Dependencies:** Task -1.6
+
+**Notes:** Fluent query builders with chainable scope methods for each model.
+
+### 10.3 Layer 0: Foundation
 
 #### Task 0.1: Create Enums
 
@@ -5142,7 +6752,7 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 
 **Dependencies:** None
 
-### 10.3 Layer 1: Value Objects
+### 10.4 Layer 1: Value Objects
 
 #### Task 1.1: Create SourceLocator
 
@@ -5180,7 +6790,7 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 
 **Dependencies:** Task 0.1, Task 1.1
 
-### 10.4 Layer 2: Infrastructure
+### 10.5 Layer 2: Infrastructure
 
 #### Task 2.1: Create FetchResult DTO
 
@@ -5200,9 +6810,12 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 
 **Files:**
 - `src/Clients/RateLimiterInterface.php`
-- `src/Clients/FileRateLimiter.php`
+- `src/Clients/FileRateLimiter.php` (development)
+- `src/Clients/DatabaseRateLimiter.php` (production)
 
-**Dependencies:** None
+**Dependencies:** None (FileRateLimiter), Task 5.8 (DatabaseRateLimiter)
+
+**Notes:** See §3.1.1 for guidance on when to use each implementation. `FileRateLimiter` for single-process development; `DatabaseRateLimiter` with `SourceBlockRepository` for production concurrency.
 
 #### Task 2.4: Implement GuzzleWebFetchClient
 
@@ -5276,7 +6889,7 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 
 **Notes:** Last-resort fallback using previous datapack (max 7 days old). Marks provenance as `cache://`.
 
-### 10.5 Layer 3: Validators
+### 10.6 Layer 3: Validators
 
 #### Task 3.1: Create JSON Schemas
 
@@ -5322,7 +6935,7 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 
 **Notes:** Range validation, cross-field consistency (FCF yield vs calculated), temporal sanity checks. Integrated into CollectionGateValidator.
 
-### 10.6 Layer 4: Handlers
+### 10.7 Layer 4: Handlers
 
 #### Task 4.1: Create Compound DTOs
 
@@ -5386,7 +6999,7 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 
 **Notes:** Streaming JSON assembly from intermediate files. Memory threshold checks with GC trigger. Generator-based iteration to minimize peak memory.
 
-### 10.7 Layer 5: Storage & CLI
+### 10.8 Layer 5: Storage & CLI
 
 #### Task 5.1: Create DataPackRepository
 
@@ -5433,9 +7046,35 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 
 **Notes:** Event-driven alerting. `alertBlocked()` for 403 errors, `alertGateFailed()` for validation failures. Configured via `params['alerts']`.
 
-### 10.8 Verification Checklist
+#### Task 5.7: Create CollectionRunRepository
+
+**Files:** `src/Queries/CollectionRunRepository.php`
+
+**Dependencies:** Task -1.2, Task -1.3
+
+**Notes:** Tracks collection runs in database. Records errors/warnings. Enables querying collection history.
+
+#### Task 5.8: Create SourceBlockRepository
+
+**Files:** `src/Queries/SourceBlockRepository.php`
+
+**Dependencies:** Task -1.4
+
+**Notes:** Replaces file-based rate limit state. Provides proper concurrency via database transactions.
+
+### 10.9 Verification Checklist
 
 Before marking Phase 1 complete:
+
+**Database:**
+- [ ] All migrations created and applied
+- [ ] All ActiveRecord models created with validation rules
+- [ ] All ActiveQuery classes created with fluent scopes
+- [ ] Model relations working (IndustryConfig → CollectionRun → CollectionError)
+- [ ] Query chaining verified (e.g., `CollectionRun::find()->forIndustry($id)->complete()->gatePassed()->all()`)
+- [ ] CollectionRunRepository CRUD operations working
+- [ ] SourceBlockRepository concurrency handling verified
+- [ ] Foreign key constraints tested
 
 **Foundation & Value Objects:**
 - [ ] All enums created and tested
@@ -5475,7 +7114,7 @@ Before marking Phase 1 complete:
 - [ ] End-to-end smoke test passing
 - [ ] Memory usage < 80% of limit for 50-company industry
 
-### 10.9 Risk Mitigation
+### 10.10 Risk Mitigation
 
 | Risk | Mitigation |
 |------|------------|
@@ -5498,6 +7137,7 @@ enum CollectionMethod: string
     case WebFetch = 'web_fetch';
     case WebSearch = 'web_search';
     case Api = 'api';
+    case Cache = 'cache';
     case Derived = 'derived';
     case NotFound = 'not_found';
 }
@@ -5546,17 +7186,45 @@ enum Severity: string
       "additionalProperties": false,
       "required": ["value", "unit", "as_of", "retrieved_at", "method"],
       "properties": {
-        "value": { "type": ["number", "null"] },
-        "unit": { "enum": ["currency", "ratio", "percent", "number"] },
-        "as_of": { "type": "string", "format": "date" },
-        "source_url": {
-          "anyOf": [
-            { "type": "string", "format": "uri" },
+	        "value": { "type": ["number", "null"] },
+	        "unit": { "enum": ["currency", "ratio", "percent", "number"] },
+	        "currency": {
+	          "description": "ISO 4217 currency code (only for unit=currency)",
+	          "anyOf": [
+	            { "type": "string", "pattern": "^[A-Z]{3}$" },
+	            { "type": "null" }
+	          ]
+	        },
+	        "scale": {
+	          "description": "Scale for currency values (only for unit=currency)",
+	          "anyOf": [
+	            { "enum": ["units", "thousands", "millions", "billions", "trillions"] },
+	            { "type": "null" }
+	          ]
+	        },
+	        "as_of": { "type": "string", "format": "date" },
+	        "source_url": {
+	          "anyOf": [
+	            { "type": "string", "format": "uri" },
             { "type": "null" }
           ]
         },
         "retrieved_at": { "type": "string", "format": "date-time" },
-        "method": { "enum": ["web_fetch", "web_search", "api", "derived", "not_found"] },
+        "method": { "enum": ["web_fetch", "web_search", "api", "cache", "derived", "not_found"] },
+        "cache_source": {
+          "description": "URI of the cached datapack (e.g., cache://industry/uuid/path)",
+          "anyOf": [
+            { "type": "string", "pattern": "^cache://" },
+            { "type": "null" }
+          ]
+        },
+        "cache_age_days": {
+          "description": "Age of the cached data in days",
+          "anyOf": [
+            { "type": "integer", "minimum": 0 },
+            { "type": "null" }
+          ]
+        },
         "source_locator": {
           "anyOf": [
             { "$ref": "#/definitions/SourceLocator" },
@@ -5575,18 +7243,33 @@ enum Severity: string
             { "type": "null" }
           ]
         },
-        "formula": {
-          "anyOf": [
-            { "type": "string", "minLength": 1 },
-            { "type": "null" }
-          ]
-        }
-      },
-      "allOf": [
-        {
-          "if": { "properties": { "method": { "const": "web_fetch" } }, "required": ["method"] },
-          "then": { "required": ["source_url", "source_locator"] }
-        },
+	        "formula": {
+	          "anyOf": [
+	            { "type": "string", "minLength": 1 },
+	            { "type": "null" }
+	          ]
+	        },
+	        "fx_conversion": {
+	          "anyOf": [
+	            { "$ref": "#/definitions/FxConversion" },
+	            { "type": "null" }
+	          ]
+	        }
+	      },
+	      "allOf": [
+	        {
+	          "if": { "properties": { "unit": { "const": "currency" } }, "required": ["unit"] },
+	          "then": { "required": ["currency", "scale"] }
+	        },
+	        {
+	          "if": { "properties": { "method": { "const": "web_fetch" } }, "required": ["method"] },
+	          "then": {
+	            "required": ["source_url", "source_locator"],
+	            "properties": {
+	              "source_url": { "type": "string", "pattern": "^https?://" }
+	            }
+	          }
+	        },
         {
           "if": { "properties": { "method": { "const": "not_found" } }, "required": ["method"] },
           "then": {
@@ -5601,6 +7284,17 @@ enum Severity: string
         {
           "if": { "properties": { "method": { "const": "derived" } }, "required": ["method"] },
           "then": { "required": ["derived_from", "formula"], "properties": { "value": { "type": "number" } } }
+        },
+	        {
+	          "if": { "properties": { "method": { "const": "cache" } }, "required": ["method"] },
+	          "then": {
+	            "required": ["cache_source", "cache_age_days", "source_url", "source_locator"],
+	            "description": "Cache method requires cache provenance fields"
+	          }
+	        },
+        {
+          "if": { "properties": { "method": { "const": "api" } }, "required": ["method"] },
+          "then": { "required": ["source_url"] }
         }
       ]
     }
@@ -5614,27 +7308,31 @@ enum Severity: string
 
 Complete dependency injection configuration for all Phase 1 components.
 
-### C.1 Container Configuration File
+### C.1 Container Configuration File (Development)
 
 **File:** `config/container.php`
 
+> **Note:** This configuration uses `FileRateLimiter` which is suitable for **single-process development only**. For production deployments with concurrent workers, see **C.5 Production Rate Limiter Configuration**.
+
 ```php
 <?php
-// config/container.php
+// config/container.php (DEVELOPMENT)
 
 use GuzzleHttp\Client;
 use yii\di\Container;
 use Yii;
 
-// Clients
-use app\clients\GuzzleWebFetchClient;
-use app\clients\FileRateLimiter;
-use app\clients\RateLimiterInterface;
-use app\clients\WebFetchClientInterface;
-use app\clients\UserAgentProviderInterface;
-use app\clients\RandomUserAgentProvider;
-use app\clients\BlockDetector;
-use app\clients\BlockDetectorInterface;
+	// Clients
+	use app\clients\GuzzleWebFetchClient;
+	use app\clients\FileRateLimiter;
+	use app\clients\RateLimiterInterface;
+	use app\clients\WebFetchClientInterface;
+	use app\clients\UserAgentProviderInterface;
+	use app\clients\RandomUserAgentProvider;
+	use app\clients\BlockDetector;
+	use app\clients\BlockDetectorInterface;
+	use app\clients\AllowedDomainPolicy;
+	use app\clients\AllowedDomainPolicyInterface;
 
 // Alerts
 use app\alerts\AlertDispatcher;
@@ -5683,7 +7381,7 @@ return [
     // SINGLETONS (shared instances)
     // =========================================================================
 
-    'singletons' => [
+	    'singletons' => [
         // Rate limiter must be singleton to maintain state across requests
         RateLimiterInterface::class => [
             'class' => FileRateLimiter::class,
@@ -5692,11 +7390,14 @@ return [
             ],
         ],
 
-        // Block detector is stateless, singleton for efficiency
-        BlockDetectorInterface::class => BlockDetector::class,
+	        // Block detector is stateless, singleton for efficiency
+	        BlockDetectorInterface::class => BlockDetector::class,
 
-        // Schema validator caches compiled schemas
-        SchemaValidatorInterface::class => [
+	        // Domain allowlist/SSRF policy shared by fetch + validators
+	        AllowedDomainPolicyInterface::class => AllowedDomainPolicy::class,
+
+	        // Schema validator caches compiled schemas
+	        SchemaValidatorInterface::class => [
             'class' => SchemaValidator::class,
             '__construct()' => [
                 Yii::getAlias('@app/config/schemas'),
@@ -5712,25 +7413,26 @@ return [
         // --- Clients ---
         UserAgentProviderInterface::class => RandomUserAgentProvider::class,
 
-        WebFetchClientInterface::class => function (Container $container) {
+	        WebFetchClientInterface::class => function (Container $container) {
             $params = Yii::$app->params;
             $timeout = $params['httpTimeout'] ?? 30;
             $connectTimeout = $params['httpConnectTimeout'] ?? 10;
 
-            return new GuzzleWebFetchClient(
+	            return new GuzzleWebFetchClient(
                 httpClient: new Client([
                     'timeout' => $timeout,
                     'connect_timeout' => $connectTimeout,
                     'verify' => true,
                     'http_errors' => false,
                 ]),
-                rateLimiter: $container->get(RateLimiterInterface::class),
-                userAgentProvider: $container->get(UserAgentProviderInterface::class),
-                blockDetector: $container->get(BlockDetectorInterface::class),
-                alertDispatcher: $container->get(AlertDispatcher::class),
-                logger: Yii::getLogger(),
-            );
-        },
+	                rateLimiter: $container->get(RateLimiterInterface::class),
+	                userAgentProvider: $container->get(UserAgentProviderInterface::class),
+	                blockDetector: $container->get(BlockDetectorInterface::class),
+	                allowedDomainPolicy: $container->get(AllowedDomainPolicyInterface::class),
+	                alertDispatcher: $container->get(AlertDispatcher::class),
+	                logger: Yii::getLogger(),
+	            );
+	        },
 
         // --- Alerts ---
         AlertDispatcher::class => function (Container $container) {
@@ -5967,7 +7669,114 @@ return [
 ];
 ```
 
-### C.5 Dependency Graph
+### C.5 Production Rate Limiter Configuration
+
+For production environments with concurrent processes (e.g., parallel cron jobs, multiple workers), replace the file-based `RateLimiterInterface` singleton with a database-backed implementation.
+
+**File:** `config/container-production.php` (extends `container.php`)
+
+```php
+<?php
+// config/container-production.php
+// Import and override development config for production use
+
+$baseConfig = require __DIR__ . '/container.php';
+
+// Override rate limiter with database-backed implementation
+$baseConfig['singletons'][RateLimiterInterface::class] = function (Container $container) {
+    return new DatabaseRateLimiter(
+        repository: $container->get(SourceBlockRepository::class),
+        domainDelays: Yii::$app->params['rateLimits'],
+        backoffSeconds: Yii::$app->params['blockBackoffSeconds'],
+    );
+};
+
+// Add SourceBlockRepository if not already defined
+$baseConfig['definitions'][SourceBlockRepository::class] = function (Container $container) {
+    return new SourceBlockRepository(Yii::$app->db);
+};
+
+return $baseConfig;
+```
+
+**DatabaseRateLimiter Implementation:**
+
+```php
+namespace app\clients;
+
+use app\queries\SourceBlockRepository;
+use DateTimeImmutable;
+
+final class DatabaseRateLimiter implements RateLimiterInterface
+{
+    private array $lastRequestTime = [];
+
+    public function __construct(
+        private SourceBlockRepository $repository,
+        private array $domainDelays,
+        private array $backoffSeconds,
+    ) {}
+
+    public function isRateLimited(string $domain): bool
+    {
+        return $this->repository->isBlocked($domain);
+    }
+
+    public function getRetryTime(string $domain): ?DateTimeImmutable
+    {
+        return $this->repository->getBlockedUntil($domain);
+    }
+
+    public function wait(string $domain): void
+    {
+        $delayMs = $this->domainDelays[$domain]['minDelayMs']
+            ?? $this->domainDelays['default']['minDelayMs']
+            ?? 1000;
+
+        $lastTime = $this->lastRequestTime[$domain] ?? 0;
+        $now = microtime(true) * 1000;
+        $elapsed = $now - $lastTime;
+
+        if ($elapsed < $delayMs) {
+            usleep((int)(($delayMs - $elapsed) * 1000));
+        }
+    }
+
+    public function recordAttempt(string $domain): void
+    {
+        $this->lastRequestTime[$domain] = microtime(true) * 1000;
+    }
+
+    public function recordSuccess(string $domain): void
+    {
+        $this->repository->clearBlock($domain);
+    }
+
+    public function recordBlock(string $domain, DateTimeImmutable $retryUntil): void
+    {
+        $this->repository->recordBlock($domain, $retryUntil);
+    }
+
+    public function getConsecutiveBlockCount(string $domain): int
+    {
+        return $this->repository->getConsecutiveCount($domain);
+    }
+
+    public function block(string $domain, DateTimeImmutable $until): void
+    {
+        $this->repository->recordBlock($domain, $until);
+    }
+}
+```
+
+**Switching Environments:**
+
+```php
+// In config/console.php
+'container' => require __DIR__ . (YII_ENV_PROD ? '/container-production.php' : '/container.php'),
+```
+
+### C.6 Dependency Graph
 
 ```
 CollectController

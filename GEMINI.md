@@ -1,6 +1,6 @@
-# AGENTS.md — OpenAI Codex Configuration
+# GEMINI.md — Google Gemini Configuration
 
-This file configures **OpenAI Codex** for this repository.
+This file configures **Google Gemini** for this repository.
 
 ## Prime Directive
 
@@ -26,7 +26,7 @@ Read and follow these rule files:
 - `docs/rules/commits.md` — Commit message format
 - `docs/rules/workflow.md` — Skill-driven development and code review
 
-## Codex-Specific Configuration
+## Gemini-Specific Configuration
 
 ### Skill-Driven Workflow
 
