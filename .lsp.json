@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "php": {
+      "command": "intelephense",
+      "args": ["--stdio"],
+      "fileExtensions": ["php"]
+    }
+  }
+}
