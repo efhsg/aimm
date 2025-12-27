@@ -6615,7 +6615,8 @@ CREATE TABLE industry_config (
     config_yaml TEXT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_industry_config_is_active (is_active)
 );
 ```
 
@@ -6724,21 +6725,21 @@ CREATE TABLE source_block (
 #### Task 0.1: Create Enums
 
 **Files:**
-- `src/Enums/CollectionMethod.php`
-- `src/Enums/CollectionStatus.php`
-- `src/Enums/Severity.php`
+- `src/enums/CollectionMethod.php`
+- `src/enums/CollectionStatus.php`
+- `src/enums/Severity.php`
 
 **Dependencies:** None
 
 #### Task 0.2: Create Exception Classes
 
 **Files:**
-- `src/Exceptions/CollectionException.php`
-- `src/Exceptions/NetworkException.php`
-- `src/Exceptions/RateLimitException.php`
-- `src/Exceptions/BlockedException.php`
-- `src/Exceptions/AdapterException.php`
-- `src/Exceptions/GateFailedException.php`
+- `src/exceptions/CollectionException.php`
+- `src/exceptions/NetworkException.php`
+- `src/exceptions/RateLimitException.php`
+- `src/exceptions/BlockedException.php`
+- `src/exceptions/AdapterException.php`
+- `src/exceptions/GateFailedException.php`
 
 **Dependencies:** None
 

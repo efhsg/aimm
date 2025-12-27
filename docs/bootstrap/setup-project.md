@@ -116,7 +116,7 @@ mkdir -p docker/{init-scripts,python,yii}
 mkdir -p data/db/mysql
 mkdir -p python-renderer
 mkdir -p yii/{config/{industries,schemas},migrations,runtime/{datapacks,reports,logs},tests/{unit,integration,fixtures},web}
-mkdir -p yii/src/{Adapters,Clients,Commands,Controllers,Dto/Datapoints,Enums,Exceptions,Factories,Handlers/{Collection,Analysis,Rendering},Queries,Transformers,Validators}
+mkdir -p yii/src/{Adapters,Clients,Commands,Controllers,Dto/Datapoints,enums,exceptions,Factories,Handlers/{Collection,Analysis,Rendering},Queries,Transformers,Validators}
 ```
 
 ### 3) Create Docker Compose
@@ -242,7 +242,10 @@ RUN pecl install xdebug \
       echo "xdebug.connect_timeout_ms=200"; \
     } > /usr/local/etc/php/conf.d/99-xdebug.ini
 
-RUN echo "max_execution_time=600" > /usr/local/etc/php/conf.d/99-custom.ini
+RUN { \
+      echo "max_execution_time=600"; \
+      echo "register_argc_argv=On"; \
+    } > /usr/local/etc/php/conf.d/99-custom.ini
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -704,7 +707,7 @@ final class HealthController extends Controller
 
 Follow `docs/RULES.md` conventions.
 
-Create `yii/src/Enums/CollectionMethod.php`:
+Create `yii/src/enums/CollectionMethod.php`:
 
 ```php
 <?php
@@ -721,7 +724,7 @@ enum CollectionMethod: string
 }
 ```
 
-Create `yii/src/Enums/Severity.php`:
+Create `yii/src/enums/Severity.php`:
 
 ```php
 <?php
@@ -736,7 +739,7 @@ enum Severity: string
 }
 ```
 
-Create `yii/src/Enums/Rating.php`:
+Create `yii/src/enums/Rating.php`:
 
 ```php
 <?php

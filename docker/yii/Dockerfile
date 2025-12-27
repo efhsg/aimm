@@ -31,7 +31,10 @@ RUN pecl install xdebug \
       echo "xdebug.connect_timeout_ms=200"; \
     } > /usr/local/etc/php/conf.d/99-xdebug.ini
 
-RUN echo "max_execution_time=600" > /usr/local/etc/php/conf.d/99-custom.ini
+RUN { \
+      echo "max_execution_time=600"; \
+      echo "register_argc_argv=On"; \
+    } > /usr/local/etc/php/conf.d/99-custom.ini
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 

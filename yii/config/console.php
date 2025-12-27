@@ -16,6 +16,12 @@ return [
     'aliases' => [
         '@app' => dirname(__DIR__) . '/src',
     ],
+    'controllerMap' => [
+        'migrate' => [
+            'class' => \yii\console\controllers\MigrateController::class,
+            'migrationPath' => dirname(__DIR__) . '/migrations',
+        ],
+    ],
     'components' => [
         'db' => $db,
         'cache' => [
