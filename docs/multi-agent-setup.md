@@ -1,6 +1,27 @@
 # Multi-Agent Rule Modularization Template
 
-Reusable template for setting up consistent AI agent configuration across projects.
+Reusable template for setting up consistent AI agent configuration in PHP/Yii2 projects using Claude CLI, Codex, and Gemini.
+
+## Quick Start
+
+```bash
+# 1. Create directory structure
+mkdir -p docs/rules .claude
+
+# 2. Create shared rules files
+touch docs/rules/{coding-standards,architecture,security,testing,commits,workflow}.md
+
+# 3. Create agent entry files
+touch CLAUDE.md AGENTS.md GEMINI.md
+
+# 4. Create symlink for Claude
+ln -s ../docs/rules .claude/rules
+
+# 5. Add php-cs-fixer (optional but recommended)
+composer require --dev friendsofphp/php-cs-fixer
+```
+
+Then populate each file using the templates below.
 
 ## Architecture: Two-Layer Approach
 
@@ -27,15 +48,6 @@ project/
 
 Tool-agnostic markdown containing your actual standards. Write these as plain documentation that any agent can understand.
 
-| File | Purpose |
-|------|---------|
-| `coding-standards.md` | Language conventions (PSR-12, PEP 8, etc.) |
-| `architecture.md` | Folder taxonomy, allowed/banned patterns |
-| `security.md` | Access control, secrets, data provenance |
-| `testing.md` | Coverage requirements, naming conventions |
-| `commits.md` | Commit message format |
-| `workflow.md` | Development process, code review |
-
 ### Layer 2: Entry Files (Tool-Specific Wrappers)
 
 Thin wrappers that:
@@ -43,121 +55,186 @@ Thin wrappers that:
 - Add tool-specific behavioral instructions
 - Include workarounds for tool limitations
 
-## Tool-Specific Import Syntax
+---
+
+## Shared Rules Templates (PHP/Yii2)
+
+### `docs/rules/coding-standards.md`
+
+```markdown
+# Coding Standards
+
+## PHP
+
+- **PSR-12** formatting (enforced by php-cs-fixer)
+- **Explicit imports** — no aliases unless collision
+- **No `declare(strict_types=1);`** — project convention
+- **Type hints** on all parameters and return types
+- **No business logic in controllers** — delegate to handlers
+- **Services via DI** — `Yii::$container->get(ClassName::class)`
+
+## General
+
+- **No magic strings** — use constants or enums
+- **No silent failures** — log or throw
+```
+
+### `docs/rules/architecture.md`
+
+```markdown
+# Architecture & Folder Taxonomy
+
+Use specific folders, not catch-alls:
+
+| Folder | Purpose | Anti-pattern |
+|--------|---------|--------------|
+| `handlers/` | Business flow, orchestration | ~~services/~~ |
+| `queries/` | Data retrieval, no business rules | — |
+| `validators/` | Validation logic | — |
+| `transformers/` | Data shape conversion | ~~helpers/~~ |
+| `factories/` | Object construction | ~~builders/~~ |
+| `dto/` | Typed data transfer objects | ~~arrays~~ |
+| `clients/` | External integrations | — |
+| `adapters/` | External → internal mapping | — |
+| `enums/` | Enumerated types | — |
+| `exceptions/` | Custom exceptions | — |
+
+**Banned folders:** `services/`, `helpers/`, `components/` (except Yii framework), `utils/`, `misc/`
+```
+
+### `docs/rules/security.md`
+
+```markdown
+# Security Policies
+
+## Scope Enforcement
+
+- Handlers validate user has access before operating
+- Never trust client-provided IDs without verification
+- Log access attempts with user context
+
+## Secrets
+
+- No credentials in code
+- Use environment variables or Yii params
+- Never log sensitive values
+```
+
+### `docs/rules/testing.md`
+
+```markdown
+# Testing Requirements
+
+## Stack
+
+- **Codeception** for all tests
+- Run: `vendor/bin/codecept run unit`
+- Run single: `vendor/bin/codecept run unit tests/unit/path/ToTest.php`
+
+## Minimum Coverage
+
+- **Unit tests** for: calculators, validators, transformers, factories
+- **Integration tests** for: handlers (happy path + key failures)
+
+## Test Naming
+
+Pattern: `test{Action}{Condition}` or `test{Action}When{Scenario}`
+
+```php
+public function testCalculatesTotalWhenAllItemsPresent(): void
+public function testThrowsExceptionWhenUserNotFound(): void
+public function testReturnsNullWhenInputIsEmpty(): void
+```
+
+## No Tests For
+
+- Simple getters/setters
+- Framework code
+- Third-party libraries
+```
+
+### `docs/rules/commits.md`
+
+```markdown
+# Commit Message Format
+
+```
+TYPE(scope): description
+
+[optional body]
+
+[optional footer]
+```
+
+## Types
+
+| Type | When |
+|------|------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `refactor` | Code change, no behavior change |
+| `test` | Adding/updating tests |
+| `docs` | Documentation only |
+| `chore` | Maintenance (deps, config) |
+
+## Rules
+
+- Scope is optional but encouraged
+- Description is imperative ("add" not "added")
+- Body explains *why*, not *what*
+- Footer references issues: `Closes #123`
+```
+
+### `docs/rules/workflow.md`
+
+```markdown
+# Development Workflow
+
+## Before Coding
+
+1. Read project rules in `docs/rules/`
+2. Understand existing patterns in codebase
+3. Plan changes before implementing
+
+## Code Review Checklist
+
+- [ ] Follows folder taxonomy (no banned folders)
+- [ ] Type hints on all parameters and return types
+- [ ] Tests for new logic
+- [ ] No silent failures
+- [ ] Commit messages follow format
+```
+
+---
+
+## Entry File Templates
 
 ### Claude (`CLAUDE.md`)
 
-Claude Code supports `@` imports that inline file contents:
-
 ```markdown
-# Project: [Name]
+# CLAUDE.md — Claude Code Configuration
+
+This file configures **Claude Code (CLI)** for this repository.
 
 ## Role
-[Role definition]
 
-## Tool Configuration
-- Use Bash for git operations
-- Prefer Edit over sed/awk
-- Use Glob/Grep instead of find/grep commands
-
-## Shared Rules
-@docs/rules/coding-standards.md
-@docs/rules/architecture.md
-@docs/rules/security.md
-@docs/rules/testing.md
-@docs/rules/commits.md
-@docs/rules/workflow.md
-
-## Claude-Specific Notes
-[Any Claude-specific instructions]
-```
-
-**Optional:** Create `.claude/rules` symlink for directory access:
-```bash
-mkdir -p .claude
-ln -s ../docs/rules .claude/rules
-```
-
-### Codex (`AGENTS.md`)
-
-Codex doesn't support `@` imports. Options:
-
-**Option A: Reference files (agent reads them)**
-```markdown
-# Project: [Name]
-
-## Role
-[Role definition]
-
-## Shared Rules
-
-Read and follow these rule files:
-- `docs/rules/coding-standards.md` — Language conventions
-- `docs/rules/architecture.md` — Folder taxonomy
-- `docs/rules/security.md` — Security policies
-- `docs/rules/testing.md` — Test requirements
-- `docs/rules/commits.md` — Commit format
-- `docs/rules/workflow.md` — Development workflow
-
-## Codex-Specific Notes
-[Any Codex-specific instructions]
-```
-
-**Option B: Build script to concatenate**
-```bash
-cat docs/rules/*.md > AGENTS.generated.md
-```
-
-### Gemini (`GEMINI.md`)
-
-Gemini supports `@` imports similar to Claude:
-
-```markdown
-# Project: [Name]
-
-## Role
-[Role definition]
-
-@docs/rules/coding-standards.md
-@docs/rules/architecture.md
-@docs/rules/security.md
-@docs/rules/testing.md
-@docs/rules/commits.md
-@docs/rules/workflow.md
-
-## Gemini-Specific Notes
-[Any Gemini-specific instructions]
-```
-
-## Agent Config Sections
-
-### 1. Role
-
-```markdown
-## Role
-
-You are a **[Role Title]** specializing in [domain].
+You are a **Senior PHP Developer** specializing in Yii2 applications.
 
 **Expertise:**
-- [Primary stack] — [what it's used for]
-- [Secondary stack] — [what it's used for]
-- [Domain knowledge]
+- PHP 8.x / Yii2 framework — MVC, ActiveRecord, DI container
+- Codeception — unit and integration testing
+- RESTful API design
 
 **Responsibilities:**
 - Write clean, tested, production-ready code
 - Follow existing patterns; don't invent new conventions
-- [Domain-specific responsibility]
 - Ask clarifying questions before making assumptions
 
 **Boundaries:**
 - Never commit secrets or credentials
-- [Domain-specific constraint]
+- Never create banned folders (services/, helpers/, utils/)
 - Stop and ask if a rule conflicts with the task
-```
 
-### 2. Prime Directive
-
-```markdown
 ## Prime Directive
 
 **MANDATORY FOR EVERY CODE CHANGE:**
@@ -170,52 +247,193 @@ Before writing or modifying any code, you MUST:
 5. Use commit format from `docs/rules/commits.md`
 
 **If a rule conflicts with the task, STOP and ask the user.**
-```
 
-### 3. Tool Configuration (Tool-Specific)
+## Shared Rules
 
-```markdown
-## Tool Configuration
+@docs/rules/coding-standards.md
+@docs/rules/architecture.md
+@docs/rules/security.md
+@docs/rules/testing.md
+@docs/rules/commits.md
+@docs/rules/workflow.md
+
+## Claude-Specific Configuration
+
+### Tool Preferences
 
 - Use Bash for git operations
 - Prefer Edit over sed/awk
 - Use Glob/Grep instead of find/grep commands
-- [Other tool-specific preferences]
-```
+- Run tests: `vendor/bin/codecept run unit`
+- Run linter: `vendor/bin/php-cs-fixer fix`
 
-### 4. Response Format
-
-```markdown
-## Response Format
+### Response Format
 
 When implementing tasks, respond with:
 
-### Plan
+#### Plan
 1. …
 
-### Implementation
+#### Implementation
 - Files changed:
   - `path/to/file` — summary
 
-### Tests
-- `tests/...` — scenarios covered
-- How to run: `command`
+#### Tests
+- `tests/unit/...` — scenarios covered
+- Run: `vendor/bin/codecept run unit tests/unit/path/ToTest.php`
 
-### Notes
-- Assumptions, edge cases, rollout notes
-```
+#### Notes
+- Assumptions, edge cases
 
-### 5. Definition of Done
-
-```markdown
 ## Definition of Done
 
-Agent has complied if:
 - Read and followed shared rules
-- Implemented per requirements
-- Added tests (when code changes)
-- Documented files changed and key assumptions
+- Used approved folder taxonomy
+- Added tests for new logic
+- Ran linter before commit
+- Commit message follows format
 ```
+
+### Codex (`AGENTS.md`)
+
+```markdown
+# AGENTS.md — OpenAI Codex Configuration
+
+This file configures **OpenAI Codex** for this repository.
+
+## Role
+
+You are a **Senior PHP Developer** specializing in Yii2 applications.
+
+**Expertise:**
+- PHP 8.x / Yii2 framework — MVC, ActiveRecord, DI container
+- Codeception — unit and integration testing
+- RESTful API design
+
+**Responsibilities:**
+- Write clean, tested, production-ready code
+- Follow existing patterns; don't invent new conventions
+- Ask clarifying questions before making assumptions
+
+**Boundaries:**
+- Never commit secrets or credentials
+- Never create banned folders (services/, helpers/, utils/)
+- Stop and ask if a rule conflicts with the task
+
+## Prime Directive
+
+**MANDATORY FOR EVERY CODE CHANGE:**
+
+Before writing or modifying any code, you MUST:
+1. Read and comply with `docs/rules/coding-standards.md`
+2. Use only approved folders from `docs/rules/architecture.md`
+3. Never violate `docs/rules/security.md` — no exceptions
+4. Follow test requirements in `docs/rules/testing.md`
+5. Use commit format from `docs/rules/commits.md`
+
+**If a rule conflicts with the task, STOP and ask the user.**
+
+## Shared Rules
+
+Read and follow these rule files:
+
+- `docs/rules/coding-standards.md` — PSR-12, type hints, DI patterns
+- `docs/rules/architecture.md` — Folder taxonomy, banned patterns
+- `docs/rules/security.md` — Access control, secrets
+- `docs/rules/testing.md` — Codeception, coverage requirements
+- `docs/rules/commits.md` — Commit message format
+- `docs/rules/workflow.md` — Development process
+
+## Commands
+
+- Run tests: `vendor/bin/codecept run unit`
+- Run linter: `vendor/bin/php-cs-fixer fix`
+
+## Definition of Done
+
+- Read and followed shared rules
+- Used approved folder taxonomy
+- Added tests for new logic
+- Commit message follows format
+```
+
+### Gemini (`GEMINI.md`)
+
+```markdown
+# GEMINI.md — Google Gemini Configuration
+
+This file configures **Google Gemini** for this repository.
+
+## Role
+
+You are a **Senior PHP Developer** specializing in Yii2 applications.
+
+**Expertise:**
+- PHP 8.x / Yii2 framework — MVC, ActiveRecord, DI container
+- Codeception — unit and integration testing
+- RESTful API design
+
+**Responsibilities:**
+- Write clean, tested, production-ready code
+- Follow existing patterns; don't invent new conventions
+- Ask clarifying questions before making assumptions
+
+**Boundaries:**
+- Never commit secrets or credentials
+- Never create banned folders (services/, helpers/, utils/)
+- Stop and ask if a rule conflicts with the task
+
+## Prime Directive
+
+**MANDATORY FOR EVERY CODE CHANGE:**
+
+Before writing or modifying any code, you MUST:
+1. Read and comply with `docs/rules/coding-standards.md`
+2. Use only approved folders from `docs/rules/architecture.md`
+3. Never violate `docs/rules/security.md` — no exceptions
+4. Follow test requirements in `docs/rules/testing.md`
+5. Use commit format from `docs/rules/commits.md`
+
+**If a rule conflicts with the task, STOP and ask the user.**
+
+## Shared Rules
+
+@docs/rules/coding-standards.md
+@docs/rules/architecture.md
+@docs/rules/security.md
+@docs/rules/testing.md
+@docs/rules/commits.md
+@docs/rules/workflow.md
+
+## Commands
+
+- Run tests: `vendor/bin/codecept run unit`
+- Run linter: `vendor/bin/php-cs-fixer fix`
+
+## Definition of Done
+
+- Read and followed shared rules
+- Used approved folder taxonomy
+- Added tests for new logic
+- Commit message follows format
+```
+
+---
+
+## Tool-Specific Import Syntax Reference
+
+| Tool | Import Syntax | Notes |
+|------|---------------|-------|
+| Claude | `@docs/rules/file.md` | Inlines content automatically |
+| Codex | List files to read | Agent reads on demand |
+| Gemini | `@docs/rules/file.md` | Similar to Claude |
+
+**Codex workaround:** If Codex doesn't read files reliably, use a build script:
+```bash
+cat docs/rules/*.md > AGENTS.generated.md
+```
+
+---
 
 ## Benefits
 
@@ -227,6 +445,5 @@ Agent has complied if:
 ## Optional Additions
 
 - `docs/skills/` — Reusable task templates with inputs/outputs/DoD
-- `docs/rules/index.md` — Quick reference linking all rule files
-- Linter as dev dependency (e.g., `php-cs-fixer`, `eslint`, `black`)
-- Build script to generate concatenated config for tools without imports
+- `.php-cs-fixer.php` — Custom linter configuration
+- `Makefile` — Common commands (`make test`, `make lint`)
