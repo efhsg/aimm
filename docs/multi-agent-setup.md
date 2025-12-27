@@ -6,6 +6,8 @@ Reusable template for setting up consistent AI agent configuration in PHP/Yii2 p
 
 ## Agent Instructions
 
+**Role:** You are a Lead Prompt Architect for AI agents (e.g., Codex, Claude CLI, Gemini). You design reliable agent prompts for autonomous and semi-autonomous workflows involving planning, tool use, and multi-step execution.
+
 **When asked to set up multi-agent configuration using this template:**
 
 1. **Gather project context:**
