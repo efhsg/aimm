@@ -26,6 +26,36 @@ composer require --dev friendsofphp/php-cs-fixer
 
 Then populate each file using the templates below.
 
+## Customization Checklist
+
+After copying the templates, customize these for your project:
+
+### Role Section
+- [ ] Update job title (e.g., "Senior PHP Developer" → "Backend Engineer")
+- [ ] Update expertise to match your stack (add/remove languages, frameworks)
+- [ ] Add domain-specific responsibilities (e.g., "Ensure data provenance")
+- [ ] Add domain-specific boundaries (e.g., "Never fabricate financial data")
+
+### Commands Section
+- [ ] **Docker:** Change `vendor/bin/...` → `docker exec {container} vendor/bin/...`
+- [ ] **Non-Docker:** Keep `vendor/bin/...` as-is
+- [ ] Update container name if using Docker (e.g., `pma_yii`, `app_php`)
+
+### Skills System
+- [ ] Create skill categories relevant to your domain
+- [ ] List actual skills in `docs/skills/index.md`
+- [ ] Update agent files to reference your specific skills
+
+### Slash Commands (Claude only)
+- [ ] Add project-specific slash commands to `.claude/commands/`
+- [ ] Reference them in CLAUDE.md under "Slash Commands" section
+
+### Rules Files
+- [ ] Adjust `coding-standards.md` for your conventions
+- [ ] Update `architecture.md` folder taxonomy if different
+- [ ] Add domain-specific security rules
+- [ ] Adjust test coverage requirements
+
 ## Architecture: Two-Layer Approach
 
 ```
