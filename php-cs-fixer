@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FIXER_BIN="$ROOT_DIR/yii/vendor/bin/php-cs-fixer"
+
+version_ge() {
+  local current="$1"
+  local required="$2"
+  [[ "$(printf '%s\n' "$required" "$current" | sort -V | head -n1)" == "$required" ]]
+}
+
+use_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    if docker ps --format '{{.Names}}' | grep -qx 'aimm_yii'; then
+      local args=("$@")
+      local host_root="$ROOT_DIR"
+      local container_root="/var/www/html"
+      local host_cwd
+      host_cwd="$(pwd -P)"
+      local tmp_path=""
+      local i
+      for i in "${!args[@]}"; do
+        if [[ "${args[$i]}" == /tmp/pcf-tmp*/*.php ]]; then
+          tmp_path="${args[$i]}"
+          break
+        fi
+      done
+
+      if [[ -n "$tmp_path" && -f "$tmp_path" ]]; then
+        local container_path="/tmp/pcf-$(basename "$tmp_path")"
+        if ! docker cp "$tmp_path" "aimm_yii:$container_path" >/dev/null; then
+          echo "Failed to copy temp file into container." >&2
+          exit 1
+        fi
+        for i in "${!args[@]}"; do
+          if [[ "${args[$i]}" == "$tmp_path" ]]; then
+            args[$i]="$container_path"
+          fi
+        done
+        if ! docker exec aimm_yii vendor/bin/php-cs-fixer "${args[@]}"; then
+          exit 1
+        fi
+        if ! docker cp "aimm_yii:$container_path" "$tmp_path" >/dev/null; then
+          echo "Failed to copy formatted temp file back." >&2
+          exit 1
+        fi
+        exit 0
+      fi
+
+      for i in "${!args[@]}"; do
+        if [[ "${args[$i]}" == "$host_root"* ]]; then
+          args[$i]="$container_root${args[$i]#"$host_root"}"
+          continue
+        fi
+
+        if [[ "${args[$i]}" != -* ]]; then
+          if [[ "${args[$i]}" != /* ]]; then
+            local abs_path="$host_cwd/${args[$i]}"
+            if [[ "$abs_path" == "$host_root"* && ( -f "$abs_path" || -d "$abs_path" ) ]]; then
+              args[$i]="$container_root${abs_path#"$host_root"}"
+              continue
+            fi
+          elif [[ "${args[$i]}" == /* && ( -f "${args[$i]}" || -d "${args[$i]}" ) ]]; then
+            if [[ "${args[$i]}" == "$host_root"* ]]; then
+              args[$i]="$container_root${args[$i]#"$host_root"}"
+              continue
+            fi
+          fi
+        fi
+      done
+
+      exec docker exec aimm_yii vendor/bin/php-cs-fixer "${args[@]}"
+    fi
+  fi
+}
+
+if ! command -v php >/dev/null 2>&1; then
+  use_docker "$@"
+  echo "php not found. Start the aimm_yii container or install PHP >= 8.5." >&2
+  exit 1
+fi
+
+PHP_VERSION="$(php -r 'echo PHP_VERSION;')"
+if ! version_ge "$PHP_VERSION" "8.5.0"; then
+  use_docker "$@"
+  echo "PHP $PHP_VERSION is too old. Start the aimm_yii container (PHP 8.5)." >&2
+  exit 1
+fi
+
+if [[ ! -x "$FIXER_BIN" ]]; then
+  echo "php-cs-fixer not found at $FIXER_BIN. Run 'composer install' in $ROOT_DIR/yii." >&2
+  exit 1
+fi
+
+exec "$FIXER_BIN" "$@"
