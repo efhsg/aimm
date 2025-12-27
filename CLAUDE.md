@@ -46,6 +46,15 @@ Before writing or modifying any code, you MUST:
 @docs/rules/commits.md
 @docs/rules/workflow.md
 
+## Skills System
+
+Before implementing, check `docs/skills/index.md` for relevant skills:
+- **Collection skills** — collect-datapoint, collect-company, adapt-source-response
+- **Shared skills** — record-provenance, record-not-found
+- **Meta skills** — create-migration, upgrade-php-version
+
+Follow skill contracts (inputs, outputs, DoD) when they apply.
+
 ## Claude-Specific Configuration
 
 ### Tool Preferences
@@ -53,8 +62,23 @@ Before writing or modifying any code, you MUST:
 - Use Bash for git operations
 - Prefer Edit over sed/awk
 - Use Glob/Grep instead of find/grep commands
-- Run tests: `vendor/bin/codecept run unit`
-- Run linter: `vendor/bin/php-cs-fixer fix`
+
+### Commands (Docker)
+
+```bash
+# Run all unit tests
+docker exec pma_yii vendor/bin/codecept run unit
+
+# Run single test
+docker exec pma_yii vendor/bin/codecept run unit tests/unit/path/ToTest.php
+
+# Run linter
+docker exec pma_yii vendor/bin/php-cs-fixer fix
+```
+
+### Slash Commands
+
+- `/finalize-changes` — Validate changes, run linter and tests, prepare commit
 
 ### Response Format
 
@@ -69,7 +93,7 @@ When implementing tasks, respond with:
 
 #### Tests
 - `tests/unit/...` — scenarios covered
-- Run: `vendor/bin/codecept run unit tests/unit/path/ToTest.php`
+- Run: `docker exec pma_yii vendor/bin/codecept run unit tests/unit/path/ToTest.php`
 
 #### Notes
 - Assumptions, edge cases
@@ -77,6 +101,7 @@ When implementing tasks, respond with:
 ## Definition of Done
 
 - Read and followed shared rules
+- Checked skills index for applicable skills
 - Used approved folder taxonomy
 - Added tests for new logic
 - Ran linter before commit
