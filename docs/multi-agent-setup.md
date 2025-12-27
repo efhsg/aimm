@@ -1,30 +1,135 @@
 # Multi-Agent Rule Modularization Template
 
-Reusable prompt for setting up consistent AI agent configuration across projects.
+Reusable template for setting up consistent AI agent configuration across projects.
 
-## Goal
-
-Restructure project rules into modular files that multiple AI agents (Claude, Codex, Gemini, etc.) can reference consistently.
-
-## Structure
+## Architecture: Two-Layer Approach
 
 ```
-docs/rules/
-├── coding-standards.md   # Language-specific conventions
-├── architecture.md       # Folder taxonomy, allowed/banned patterns
-├── security.md           # Access control, secrets, data provenance
-├── testing.md            # Coverage requirements, naming conventions
-├── commits.md            # Commit message format (conventional commits)
-└── workflow.md           # Development process, code review checklist
-
-CLAUDE.md                 # Claude Code config, references @docs/rules/*
-AGENTS.md                 # OpenAI Codex config, references docs/rules/*
-GEMINI.md                 # Google Gemini config, references docs/rules/*
+project/
+├── docs/
+│   └── rules/                    # SHARED LAYER (tool-agnostic)
+│       ├── coding-standards.md
+│       ├── architecture.md
+│       ├── security.md
+│       ├── testing.md
+│       ├── commits.md
+│       └── workflow.md
+│
+├── CLAUDE.md                     # ENTRY LAYER: Claude wrapper
+├── AGENTS.md                     # ENTRY LAYER: Codex wrapper
+├── GEMINI.md                     # ENTRY LAYER: Gemini wrapper
+│
+└── .claude/
+    └── rules -> ../docs/rules    # Symlink for Claude directory access
 ```
 
-## Agent Config Template
+### Layer 1: Shared Rules (`docs/rules/`)
 
-Each agent config file should include these sections:
+Tool-agnostic markdown containing your actual standards. Write these as plain documentation that any agent can understand.
+
+| File | Purpose |
+|------|---------|
+| `coding-standards.md` | Language conventions (PSR-12, PEP 8, etc.) |
+| `architecture.md` | Folder taxonomy, allowed/banned patterns |
+| `security.md` | Access control, secrets, data provenance |
+| `testing.md` | Coverage requirements, naming conventions |
+| `commits.md` | Commit message format |
+| `workflow.md` | Development process, code review |
+
+### Layer 2: Entry Files (Tool-Specific Wrappers)
+
+Thin wrappers that:
+- Import shared rules using tool-specific syntax
+- Add tool-specific behavioral instructions
+- Include workarounds for tool limitations
+
+## Tool-Specific Import Syntax
+
+### Claude (`CLAUDE.md`)
+
+Claude Code supports `@` imports that inline file contents:
+
+```markdown
+# Project: [Name]
+
+## Role
+[Role definition]
+
+## Tool Configuration
+- Use Bash for git operations
+- Prefer Edit over sed/awk
+- Use Glob/Grep instead of find/grep commands
+
+## Shared Rules
+@docs/rules/coding-standards.md
+@docs/rules/architecture.md
+@docs/rules/security.md
+@docs/rules/testing.md
+@docs/rules/commits.md
+@docs/rules/workflow.md
+
+## Claude-Specific Notes
+[Any Claude-specific instructions]
+```
+
+**Optional:** Create `.claude/rules` symlink for directory access:
+```bash
+mkdir -p .claude
+ln -s ../docs/rules .claude/rules
+```
+
+### Codex (`AGENTS.md`)
+
+Codex doesn't support `@` imports. Options:
+
+**Option A: Reference files (agent reads them)**
+```markdown
+# Project: [Name]
+
+## Role
+[Role definition]
+
+## Shared Rules
+
+Read and follow these rule files:
+- `docs/rules/coding-standards.md` — Language conventions
+- `docs/rules/architecture.md` — Folder taxonomy
+- `docs/rules/security.md` — Security policies
+- `docs/rules/testing.md` — Test requirements
+- `docs/rules/commits.md` — Commit format
+- `docs/rules/workflow.md` — Development workflow
+
+## Codex-Specific Notes
+[Any Codex-specific instructions]
+```
+
+**Option B: Build script to concatenate**
+```bash
+cat docs/rules/*.md > AGENTS.generated.md
+```
+
+### Gemini (`GEMINI.md`)
+
+Gemini supports `@` imports similar to Claude:
+
+```markdown
+# Project: [Name]
+
+## Role
+[Role definition]
+
+@docs/rules/coding-standards.md
+@docs/rules/architecture.md
+@docs/rules/security.md
+@docs/rules/testing.md
+@docs/rules/commits.md
+@docs/rules/workflow.md
+
+## Gemini-Specific Notes
+[Any Gemini-specific instructions]
+```
+
+## Agent Config Sections
 
 ### 1. Role
 
@@ -67,17 +172,15 @@ Before writing or modifying any code, you MUST:
 **If a rule conflicts with the task, STOP and ask the user.**
 ```
 
-### 3. Shared Rules
+### 3. Tool Configuration (Tool-Specific)
 
 ```markdown
-## Shared Rules
+## Tool Configuration
 
-- `docs/rules/coding-standards.md` — Language conventions
-- `docs/rules/architecture.md` — Folder taxonomy and banned patterns
-- `docs/rules/security.md` — Scope enforcement, data provenance, secrets
-- `docs/rules/testing.md` — Coverage requirements and naming conventions
-- `docs/rules/commits.md` — Commit message format
-- `docs/rules/workflow.md` — Development process and code review
+- Use Bash for git operations
+- Prefer Edit over sed/awk
+- Use Glob/Grep instead of find/grep commands
+- [Other tool-specific preferences]
 ```
 
 ### 4. Response Format
@@ -86,9 +189,6 @@ Before writing or modifying any code, you MUST:
 ## Response Format
 
 When implementing tasks, respond with:
-
-### Selected skills
-- `<skill-name>` — `docs/skills/.../file.md` — one-line reason
 
 ### Plan
 1. …
@@ -111,10 +211,9 @@ When implementing tasks, respond with:
 ## Definition of Done
 
 Agent has complied if:
-- Read shared rules + skills index
-- Selected minimal set of skills and named them
-- Implemented per skill contracts
-- Added tests matching skill DoD (when code changes)
+- Read and followed shared rules
+- Implemented per requirements
+- Added tests (when code changes)
 - Documented files changed and key assumptions
 ```
 
@@ -123,10 +222,11 @@ Agent has complied if:
 - **Single source of truth** — Rules defined once in `docs/rules/`
 - **Consistent behavior** — All agents follow the same standards
 - **Easy maintenance** — Update rules in one place
-- **Agent flexibility** — Customize interaction style per agent
+- **Agent flexibility** — Customize tool-specific behavior in wrappers
 
 ## Optional Additions
 
 - `docs/skills/` — Reusable task templates with inputs/outputs/DoD
 - `docs/rules/index.md` — Quick reference linking all rule files
 - Linter as dev dependency (e.g., `php-cs-fixer`, `eslint`, `black`)
+- Build script to generate concatenated config for tools without imports
