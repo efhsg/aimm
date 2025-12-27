@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use yii\caching\FileCache;
 use yii\log\FileTarget;
 
@@ -32,4 +34,3 @@ return [
     'params' => $params,
     'container' => $container,
 ];
-

@@ -67,13 +67,13 @@ Follow skill contracts (inputs, outputs, DoD) when they apply.
 
 ```bash
 # Run all unit tests
-docker exec pma_yii vendor/bin/codecept run unit
+docker exec aimm_yii vendor/bin/codecept run unit
 
 # Run single test
-docker exec pma_yii vendor/bin/codecept run unit tests/unit/path/ToTest.php
+docker exec aimm_yii vendor/bin/codecept run unit tests/unit/path/ToTest.php
 
 # Run linter
-docker exec pma_yii vendor/bin/php-cs-fixer fix
+docker exec aimm_yii vendor/bin/php-cs-fixer fix
 ```
 
 ### Slash Commands
@@ -93,7 +93,7 @@ When implementing tasks, respond with:
 
 #### Tests
 - `tests/unit/...` — scenarios covered
-- Run: `docker exec pma_yii vendor/bin/codecept run unit tests/unit/path/ToTest.php`
+- Run: `docker exec aimm_yii vendor/bin/codecept run unit tests/unit/path/ToTest.php`
 
 #### Notes
 - Assumptions, edge cases

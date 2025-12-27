@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace app\commands;
 
 use Throwable;
@@ -29,4 +31,3 @@ final class TestController extends Controller
         return ExitCode::OK;
     }
 }
-

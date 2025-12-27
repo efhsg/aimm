@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use yii\db\Connection;
 
 $host = getenv('DB_HOST') ?: 'aimm_mysql';
@@ -13,4 +15,3 @@ return [
     'charset' => 'utf8mb4',
     'tablePrefix' => 'aimm_',
 ];
-

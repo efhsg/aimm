@@ -4,12 +4,12 @@
 
 ## Naming Convention
 
-| Context | Name | Example |
-|---------|------|---------|
-| Human-facing / codename | AIMM | "The AIMM report says HOLD" |
+| Context                     | Name     | Example                                            |
+| --------------------------- | -------- | -------------------------------------------------- |
+| Human-facing / codename     | AIMM     | "The AIMM report says HOLD"                        |
 | Repository / package prefix | `aimm-*` | `aimm-collector`, `aimm-analyzer`, `aimm-renderer` |
-| Logs / artifacts | `aimm-*` | `aimm-datapack-2025-12-13.json` |
-| Namespace (PHP) | `app\` | `app\handlers\CollectIndustryHandler` |
+| Logs / artifacts            | `aimm-*` | `aimm-datapack-2025-12-13.json`                    |
+| Namespace (PHP)             | `app\`   | `app\handlers\CollectIndustryHandler`              |
 
 ## Project Overview
 
@@ -27,9 +27,36 @@ A three-phase pipeline that generates institutional-grade equity research PDF re
 - **Process Management**: Symfony Process component
 - **Queue**: yii2-queue (optional, for background processing)
 
+### Terminology (Sector vs Industry)
+
+This repo uses **industry** as the _runnable unit_ of collection, and **sector** as a _classification label_:
+
+- **industry_id**: the machine identifier used as the primary pipeline key (CLI args, file names, artifact folders).  
+  Example: `integrated_oil_gas` → `config/industries/integrated_oil_gas.json`.
+- **Industry**: the peer set + macro requirements defined by a single industry config (the thing Phase 1 collects for).
+- **Sector**: a coarse taxonomy label (e.g., `Energy`) stored inside an industry config for grouping/filtering.
+
+**Important:** In **Phase 1**, collection always starts from an `industry_id`.  
+So “collect company info for a sector” means:
+
+- collect for **one industry** within that sector (typical), or
+- run collection for **multiple industry configs** whose `sector` matches (a thin wrapper command can be added later, but it is not required for the MVP).
+
 ---
 
 ## Architecture
+
+## Why “handlers” (not “services”)
+
+This project avoids a generic `*Service` layer because it tends to become a catch‑all bucket.
+Instead:
+
+- **Commands** orchestrate and validate input (CLI).
+- **Handlers** perform one concrete application action end‑to‑end (collect, analyze, render).
+- **Adapters/clients** talk to external systems (APIs, HTML pages, files).
+- **Schemas/DTOs** define the stable contracts between phases.
+
+Naming rule: prefer specific, action‑oriented names like `IndustryCollectionHandler` and `PdfRenderHandler` over broad `DataService`/`CollectionService` style names.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -74,7 +101,7 @@ A three-phase pipeline that generates institutional-grade equity research PDF re
 │  - All calculations recomputable from DataPack                              │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                        AnalysisService                              │    │
+│  │                        ReportAnalysisHandler                              │    │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │    │
 │  │  │    Gap      │  │   Rating    │  │   Report    │                 │    │
 │  │  │ Calculator  │  │ Determiner  │  │   Builder   │                 │    │
@@ -131,20 +158,20 @@ A three-phase pipeline that generates institutional-grade equity research PDF re
 
 Follows a strict taxonomy to prevent "catch-all" folders:
 
-| Folder | Purpose | Anti-pattern avoided |
-|--------|---------|---------------------|
-| `handlers/` | Use-cases, business flow, orchestration | Replaces vague "Service" |
-| `queries/` | Data retrieval, no business rules | Separates read from write |
-| `validators/` | Validation logic | Clear single responsibility |
-| `transformers/` | Data shape conversion | Replaces "Helper" utilities |
-| `factories/` | Object construction | Replaces "Builder" folder |
-| `dto/` | Typed data transfer objects | Replaces array-passing |
-| `clients/` | External integrations | Clear boundary |
-| `adapters/` | Map external responses to internal DTOs | Isolates external formats |
-| `commands/` | Console controllers (Yii2 convention) | — |
-| `jobs/` | Queue payloads | — |
+| Folder          | Purpose                                 | Anti-pattern avoided        |
+| --------------- | --------------------------------------- | --------------------------- |
+| `handlers/`     | Use-cases, business flow, orchestration | Replaces vague "handler"    |
+| `queries/`      | Data retrieval, no business rules       | Separates read from write   |
+| `validators/`   | Validation logic                        | Clear single responsibility |
+| `transformers/` | Data shape conversion                   | Replaces "Helper" utilities |
+| `factories/`    | Object construction                     | Replaces "Builder" folder   |
+| `dto/`          | Typed data transfer objects             | Replaces array-passing      |
+| `clients/`      | External integrations                   | Clear boundary              |
+| `adapters/`     | Map external responses to internal DTOs | Isolates external formats   |
+| `commands/`     | Console controllers (Yii2 convention)   | —                           |
+| `jobs/`         | Queue payloads                          | —                           |
 
-**Dropped types**: `services/` (catch-all), `helpers/` (hidden coupling), `components/` (Yii2 framework location, not architecture type).
+**Dropped types**: `handlers/` (catch-all), `helpers/` (hidden coupling), `components/` (Yii2 framework location, not architecture type).
 
 ```
 equity-research/
@@ -295,22 +322,23 @@ equity-research/
 
 ### Folder Decision Guide
 
-| Question | Answer | Folder |
-|----------|--------|--------|
-| Does it orchestrate a flow or make business decisions? | Yes | `handlers/` |
-| Does it only retrieve data without business logic? | Yes | `queries/` |
-| Does it validate data? | Yes | `validators/` |
-| Does it convert data from one shape to another? | Yes | `transformers/` |
-| Does it construct complex objects? | Yes | `factories/` |
-| Is it a typed data structure passed between layers? | Yes | `dto/` |
-| Does it call an external system? | Yes | `clients/` |
-| Does it map external response format to internal DTO? | Yes | `adapters/` |
-| Is it a console entry point? | Yes | `commands/` |
-| Is it a queue payload? | Yes | `jobs/` |
+| Question                                               | Answer | Folder          |
+| ------------------------------------------------------ | ------ | --------------- |
+| Does it orchestrate a flow or make business decisions? | Yes    | `handlers/`     |
+| Does it only retrieve data without business logic?     | Yes    | `queries/`      |
+| Does it validate data?                                 | Yes    | `validators/`   |
+| Does it convert data from one shape to another?        | Yes    | `transformers/` |
+| Does it construct complex objects?                     | Yes    | `factories/`    |
+| Is it a typed data structure passed between layers?    | Yes    | `dto/`          |
+| Does it call an external system?                       | Yes    | `clients/`      |
+| Does it map external response format to internal DTO?  | Yes    | `adapters/`     |
+| Is it a console entry point?                           | Yes    | `commands/`     |
+| Is it a queue payload?                                 | Yes    | `jobs/`         |
 
 ### When to Create a Module
 
 When a domain area has:
+
 - More than 3-4 handlers serving the same subject
 - Its own set of Query/Validator/Transformer
 - Need for clear team ownership
@@ -341,7 +369,7 @@ For now, the flat structure is appropriate given the project scope.
 ```
 INPUT                           PROCESS                         OUTPUT
 ─────                           ───────                         ──────
-industry config      ──►   DataCollectionService        ──►   IndustryDataPack
+industry config      ──►   IndustryCollectionHandler        ──►   IndustryDataPack
 (JSON file)                      │                              (JSON file)
                                  │
                     ┌────────────┴────────────┐
@@ -369,7 +397,7 @@ industry config      ──►   DataCollectionService        ──►   Indust
 ```
 INPUT                           PROCESS                         OUTPUT
 ─────                           ───────                         ──────
-IndustryDataPack     ──►   AnalysisService              ──►   ReportDTO
+IndustryDataPack     ──►   ReportAnalysisHandler              ──►   ReportDTO
 focal_ticker                     │                              (JSON file)
 peer_tickers[]                   │
                     ┌────────────┼────────────┐
@@ -392,7 +420,7 @@ peer_tickers[]                   │
 ```
 INPUT                           PROCESS                         OUTPUT
 ─────                           ───────                         ──────
-ReportDTO            ──►   PdfRenderService             ──►   report.pdf
+ReportDTO            ──►   PdfRenderHandler             ──►   report.pdf
 (JSON file)                      │
                                  │
                     ┌────────────┴────────────┐
@@ -435,13 +463,13 @@ Every collected value must include:
 
 ### Typed Datapoints
 
-| Type | Use Case | Key Fields |
-|------|----------|------------|
-| `DataPointNumber` | Generic numbers (production volumes) | `value`, `unit` |
-| `DataPointMoney` | Monetary values | `value`, `currency`, `scale`, `fx_conversion` |
-| `DataPointPercent` | Percentages (yields, margins) | `value` (stored as 4.5 for 4.5%) |
-| `DataPointRatio` | Dimensionless ratios (P/E, EV/EBITDA) | `value` (stored as 12.5 for 12.5x) |
-| `DataPointUrl` | URLs to documents | `value`, `verified_accessible` |
+| Type               | Use Case                              | Key Fields                                    |
+| ------------------ | ------------------------------------- | --------------------------------------------- |
+| `DataPointNumber`  | Generic numbers (production volumes)  | `value`, `unit`                               |
+| `DataPointMoney`   | Monetary values                       | `value`, `currency`, `scale`, `fx_conversion` |
+| `DataPointPercent` | Percentages (yields, margins)         | `value` (stored as 4.5 for 4.5%)              |
+| `DataPointRatio`   | Dimensionless ratios (P/E, EV/EBITDA) | `value` (stored as 12.5 for 12.5x)            |
+| `DataPointUrl`     | URLs to documents                     | `value`, `verified_accessible`                |
 
 ### Nullable vs Required
 
@@ -466,6 +494,7 @@ Every collected value must include:
 Gates are checkpoints that prevent bad data from flowing downstream.
 
 **Collection Gate (after Phase 1):**
+
 - JSON Schema compliance
 - All required datapoints present
 - All configured companies collected
@@ -473,6 +502,7 @@ Gates are checkpoints that prevent bad data from flowing downstream.
 - Minimum financial history present
 
 **Analysis Gate (after Phase 2):**
+
 - JSON Schema compliance
 - Recompute peer averages → must match reported values
 - Recompute valuation gap → must match reported value
@@ -571,6 +601,8 @@ yii pipeline/run integrated_oil_gas --focal=SHEL --peers=BP,XOM,CVX,TTE
 
 Defines which companies to collect and industry-specific data requirements.
 
+> **Note:** `id` is the `industry_id` used by commands and artifact paths. `sector` is a label for grouping/filtering (not a runnable key in Phase 1).
+
 ```json
 {
   "id": "integrated_oil_gas",
@@ -601,7 +633,12 @@ Defines which companies to collect and industry-specific data requirements.
     "history_years": 5,
     "quarters_to_fetch": 4,
     "required_valuation_metrics": ["market_cap", "fwd_pe", "ev_ebitda"],
-    "optional_valuation_metrics": ["trailing_pe", "fcf_yield", "div_yield", "net_debt_ebitda"]
+    "optional_valuation_metrics": [
+      "trailing_pe",
+      "fcf_yield",
+      "div_yield",
+      "net_debt_ebitda"
+    ]
   }
 }
 ```
@@ -661,8 +698,8 @@ pillow>=10.0
 - PSR-12 formatting
 - Explicit imports (no `use` aliases unless necessary)
 - Type hints on all method parameters and return types
-- Services resolved via `\Yii::$container->get(ClassName::class)`
-- No business logic in controllers; delegate to services
+- handlers resolved via `\Yii::$container->get(ClassName::class)`
+- No business logic in controllers; delegate to handlers
 
 ### JSON Schema
 
@@ -701,11 +738,11 @@ class GateResult
 
 ### Exit Codes
 
-| Code | Constant | Meaning |
-|------|----------|---------|
-| 0 | `ExitCode::OK` | Success |
-| 65 | `ExitCode::DATAERR` | Data/validation error (gate failed) |
-| 70 | `ExitCode::SOFTWARE` | Internal error (exception) |
+| Code | Constant             | Meaning                             |
+| ---- | -------------------- | ----------------------------------- |
+| 0    | `ExitCode::OK`       | Success                             |
+| 65   | `ExitCode::DATAERR`  | Data/validation error (gate failed) |
+| 70   | `ExitCode::SOFTWARE` | Internal error (exception)          |
 
 ---
 
@@ -757,29 +794,31 @@ class GateResult
 
 ## Glossary
 
-| Term | Definition |
-|------|------------|
-| **Focal company** | The company being analyzed (subject of the report) |
-| **Peers** | Comparison companies in the same industry |
-| **DataPack** | Collected raw data for an industry (Phase 1 output) |
-| **ReportDTO** | Analyzed data ready for rendering (Phase 2 output) |
-| **Gate** | Validation checkpoint between phases |
+| Term              | Definition                                                      |
+| ----------------- | --------------------------------------------------------------- |
+| **Focal company** | The company being analyzed (subject of the report)              |
+| **Peers**         | Comparison companies in the same industry                       |
+| **DataPack**      | Collected raw data for an industry (Phase 1 output)             |
+| **ReportDTO**     | Analyzed data ready for rendering (Phase 2 output)              |
+| **Gate**          | Validation checkpoint between phases                            |
 | **Valuation gap** | Percentage difference between focal and peer average valuations |
-| **Provenance** | Source attribution for a datapoint (URL, timestamp, method) |
-| **LTM** | Last Twelve Months (trailing financial metric) |
-| **FY** | Fiscal Year |
+| **Provenance**    | Source attribution for a datapoint (URL, timestamp, method)     |
+| **LTM**           | Last Twelve Months (trailing financial metric)                  |
+| **FY**            | Fiscal Year                                                     |
 
 ---
 
 ## Next Steps
 
 ### Phase 0: Project Setup
+
 1. [ ] Set up project skeleton (composer.json, directories, yii entry point)
 2. [ ] Configure Yii2 console application (config/console.php, params.php, container.php)
 3. [ ] Implement enums (Rating, Fundamentals, Risk, CollectionMethod, etc.)
 4. [ ] Implement exceptions (CollectionException, ValidationException, etc.)
 
 ### Phase 1: Data Collection Infrastructure
+
 5. [ ] Implement DTO datapoints (DataPointMoney, DataPointRatio, etc.)
 6. [ ] Implement DTO structures (IndustryDataPack, CompanyData, MacroData)
 7. [ ] Implement DataPointFactory
@@ -789,6 +828,7 @@ class GateResult
 11. [ ] Implement adapters (YahooFinanceAdapter, SearchResultAdapter)
 
 ### Phase 1: Data Collection Logic
+
 12. [ ] Implement CollectMacroHandler
 13. [ ] Implement CollectCompanyHandler
 14. [ ] Implement CollectIndustryHandler (orchestrates the above)
@@ -798,6 +838,7 @@ class GateResult
 18. [ ] Test Phase 1 end-to-end
 
 ### Phase 2: Analysis
+
 19. [ ] Implement PeerAverageTransformer
 20. [ ] Implement CalculateGapsHandler
 21. [ ] Implement DetermineRatingHandler
@@ -809,6 +850,7 @@ class GateResult
 27. [ ] Test Phase 2 end-to-end
 
 ### Phase 3: Rendering
+
 28. [ ] Implement Python renderer (render_pdf.py, charts.py, layout.py)
 29. [ ] Implement PythonRendererClient
 30. [ ] Implement RenderPdfHandler
@@ -816,6 +858,7 @@ class GateResult
 32. [ ] Test Phase 3 end-to-end
 
 ### Phase 4: Integration
+
 33. [ ] Implement PipelineController (full run)
 34. [ ] Implement queue jobs (optional: CollectIndustryJob, etc.)
 35. [ ] End-to-end integration tests

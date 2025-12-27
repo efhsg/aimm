@@ -4,7 +4,7 @@
 
 - **PSR-12** formatting
 - **Explicit imports** — no aliases unless collision
-- **No `declare(strict_types=1);`** — project convention
+- **`declare(strict_types=1);`** — required in all PHP files
 - **Type hints** on all parameters and return types
 - **No business logic in controllers** — delegate to handlers
 - **Services via DI** — `Yii::$container->get(ClassName::class)`

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use yii\web\Application;
 
 defined('YII_DEBUG') || define('YII_DEBUG', getenv('YII_DEBUG') === '1');
@@ -11,4 +13,3 @@ require __DIR__ . '/../vendor/yiisoft/yii2/Yii.php';
 $config = require __DIR__ . '/../config/web.php';
 
 (new Application($config))->run();
-
