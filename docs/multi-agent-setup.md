@@ -2,6 +2,35 @@
 
 Reusable template for setting up consistent AI agent configuration in PHP/Yii2 projects using Claude CLI, Codex, and Gemini.
 
+---
+
+## Agent Instructions
+
+**When asked to set up multi-agent configuration using this template:**
+
+1. **Gather project context:**
+   - What is the project domain? (e.g., e-commerce, financial data, CMS)
+   - What is the tech stack? (PHP version, frameworks, testing tools)
+   - Is Docker used? If yes, what is the container name?
+   - Are there existing skills or workflows to document?
+
+2. **Execute Quick Start commands** (create directories and files)
+
+3. **Customize templates:**
+   - Update Role section with domain expertise
+   - Update Commands section for Docker/non-Docker
+   - Create initial skills in `docs/skills/index.md`
+   - Adjust rules files for project conventions
+
+4. **Verify setup:**
+   - Confirm all files created
+   - Test that symlink works (`.claude/rules`)
+   - Commit the configuration
+
+**Do not copy templates verbatim** — customize for the specific project.
+
+---
+
 ## Quick Start
 
 ```bash
