@@ -6,18 +6,21 @@ Reusable template for setting up consistent AI agent configuration in PHP/Yii2 p
 
 ```bash
 # 1. Create directory structure
-mkdir -p docs/rules .claude
+mkdir -p docs/rules docs/skills .claude
 
 # 2. Create shared rules files
 touch docs/rules/{coding-standards,architecture,security,testing,commits,workflow}.md
 
-# 3. Create agent entry files
+# 3. Create skills index
+touch docs/skills/index.md
+
+# 4. Create agent entry files
 touch CLAUDE.md AGENTS.md GEMINI.md
 
-# 4. Create symlink for Claude
+# 5. Create symlink for Claude
 ln -s ../docs/rules .claude/rules
 
-# 5. Add php-cs-fixer (optional but recommended)
+# 6. Add php-cs-fixer (optional but recommended)
 composer require --dev friendsofphp/php-cs-fixer
 ```
 
@@ -28,13 +31,18 @@ Then populate each file using the templates below.
 ```
 project/
 ├── docs/
-│   └── rules/                    # SHARED LAYER (tool-agnostic)
-│       ├── coding-standards.md
-│       ├── architecture.md
-│       ├── security.md
-│       ├── testing.md
-│       ├── commits.md
-│       └── workflow.md
+│   ├── rules/                    # SHARED LAYER (tool-agnostic)
+│   │   ├── coding-standards.md
+│   │   ├── architecture.md
+│   │   ├── security.md
+│   │   ├── testing.md
+│   │   ├── commits.md
+│   │   └── workflow.md
+│   │
+│   └── skills/                   # SKILLS LAYER (reusable tasks)
+│       ├── index.md              # Skill registry
+│       └── {category}/           # Grouped by domain
+│           └── {skill-name}.md
 │
 ├── CLAUDE.md                     # ENTRY LAYER: Claude wrapper
 ├── AGENTS.md                     # ENTRY LAYER: Codex wrapper
@@ -48,12 +56,100 @@ project/
 
 Tool-agnostic markdown containing your actual standards. Write these as plain documentation that any agent can understand.
 
-### Layer 2: Entry Files (Tool-Specific Wrappers)
+### Layer 2: Skills (`docs/skills/`)
+
+Reusable task templates with defined inputs, outputs, and completion criteria. Skills are atomic, executable capabilities that agents can reference.
+
+### Layer 3: Entry Files (Tool-Specific Wrappers)
 
 Thin wrappers that:
 - Import shared rules using tool-specific syntax
+- Reference the skills system
 - Add tool-specific behavioral instructions
 - Include workarounds for tool limitations
+
+---
+
+## Skills System
+
+Skills are atomic, executable capabilities with defined inputs, outputs, and completion criteria.
+
+### `docs/skills/index.md`
+
+```markdown
+# Skills Index
+
+Skills are atomic, executable capabilities with defined inputs, outputs, and completion criteria.
+
+## How to Use
+
+1. **Read rules first** — `docs/rules/` applies to everything
+2. **Scan this index** — find relevant skills for your task
+3. **Load only needed skills** — minimize context
+4. **Follow skill contracts** — inputs, outputs, DoD
+5. **Create skills for gaps** — if behavior isn't covered, write a skill
+
+## Skills by Category
+
+### [Category Name]
+
+| Skill | Description |
+|-------|-------------|
+| [skill-name](category/skill-name.md) | One-line description |
+
+## Naming Conventions
+
+- **create-*** — Creates new resources
+- **update-*** — Modifies existing resources
+- **validate-*** — Checks data against rules
+- **transform-*** — Converts data formats
+- **fetch-*** — Retrieves external data
+
+## Adding New Skills
+
+1. Identify atomic operation with clear input/output
+2. Create `{category}/{skill-name}.md`
+3. Include: description, inputs, outputs, algorithm, DoD
+4. Add to this index
+```
+
+### Skill Template
+
+```markdown
+# Skill: {skill-name}
+
+## Description
+
+One paragraph explaining what this skill does.
+
+## Inputs
+
+| Name | Type | Description |
+|------|------|-------------|
+| `param1` | `string` | Description |
+
+## Outputs
+
+| Name | Type | Description |
+|------|------|-------------|
+| `result` | `SomeDTO` | Description |
+
+## Algorithm
+
+1. Step one
+2. Step two
+3. Step three
+
+## Definition of Done
+
+- [ ] Criterion 1
+- [ ] Criterion 2
+- [ ] Tests pass
+
+## Tests
+
+- `tests/unit/.../SkillTest.php` — scenarios covered
+```
 
 ---
 
@@ -193,8 +289,9 @@ TYPE(scope): description
 ## Before Coding
 
 1. Read project rules in `docs/rules/`
-2. Understand existing patterns in codebase
-3. Plan changes before implementing
+2. Check `docs/skills/index.md` for relevant skills
+3. Understand existing patterns in codebase
+4. Plan changes before implementing
 
 ## Code Review Checklist
 
@@ -257,6 +354,11 @@ Before writing or modifying any code, you MUST:
 @docs/rules/commits.md
 @docs/rules/workflow.md
 
+## Skills System
+
+Before implementing, check `docs/skills/index.md` for relevant skills.
+Follow skill contracts (inputs, outputs, DoD) when they apply.
+
 ## Claude-Specific Configuration
 
 ### Tool Preferences
@@ -288,6 +390,7 @@ When implementing tasks, respond with:
 ## Definition of Done
 
 - Read and followed shared rules
+- Checked skills index for applicable skills
 - Used approved folder taxonomy
 - Added tests for new logic
 - Ran linter before commit
@@ -344,6 +447,11 @@ Read and follow these rule files:
 - `docs/rules/commits.md` — Commit message format
 - `docs/rules/workflow.md` — Development process
 
+## Skills System
+
+Before implementing, check `docs/skills/index.md` for relevant skills.
+Follow skill contracts (inputs, outputs, DoD) when they apply.
+
 ## Commands
 
 - Run tests: `vendor/bin/codecept run unit`
@@ -352,6 +460,7 @@ Read and follow these rule files:
 ## Definition of Done
 
 - Read and followed shared rules
+- Checked skills index for applicable skills
 - Used approved folder taxonomy
 - Added tests for new logic
 - Commit message follows format
@@ -405,6 +514,11 @@ Before writing or modifying any code, you MUST:
 @docs/rules/commits.md
 @docs/rules/workflow.md
 
+## Skills System
+
+Before implementing, check `docs/skills/index.md` for relevant skills.
+Follow skill contracts (inputs, outputs, DoD) when they apply.
+
 ## Commands
 
 - Run tests: `vendor/bin/codecept run unit`
@@ -413,6 +527,7 @@ Before writing or modifying any code, you MUST:
 ## Definition of Done
 
 - Read and followed shared rules
+- Checked skills index for applicable skills
 - Used approved folder taxonomy
 - Added tests for new logic
 - Commit message follows format
@@ -438,12 +553,13 @@ cat docs/rules/*.md > AGENTS.generated.md
 ## Benefits
 
 - **Single source of truth** — Rules defined once in `docs/rules/`
+- **Reusable skills** — Common tasks documented in `docs/skills/`
 - **Consistent behavior** — All agents follow the same standards
-- **Easy maintenance** — Update rules in one place
+- **Easy maintenance** — Update rules/skills in one place
 - **Agent flexibility** — Customize tool-specific behavior in wrappers
 
 ## Optional Additions
 
-- `docs/skills/` — Reusable task templates with inputs/outputs/DoD
 - `.php-cs-fixer.php` — Custom linter configuration
 - `Makefile` — Common commands (`make test`, `make lint`)
+- `.claude/commands/` — Claude slash commands for common workflows
