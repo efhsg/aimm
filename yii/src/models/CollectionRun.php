@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace app\models;
 
-use app\models\CollectionError;
-use app\models\IndustryConfig;
 use app\models\query\CollectionRunQuery;
 use yii\db\ActiveQuery;
 use yii\db\ActiveRecord;

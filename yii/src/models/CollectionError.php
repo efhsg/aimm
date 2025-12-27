@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace app\models;
 
 use app\models\query\CollectionErrorQuery;
-use app\models\CollectionRun;
 use yii\db\ActiveQuery;
 use yii\db\ActiveRecord;
 

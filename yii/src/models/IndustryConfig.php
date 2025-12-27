@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace app\models;
 
-use app\models\CollectionRun;
 use app\models\query\IndustryConfigQuery;
 use yii\behaviors\TimestampBehavior;
 use yii\db\ActiveQuery;
