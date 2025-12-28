@@ -5,18 +5,19 @@
   ],
   "service": "aimm_yii",
   "workspaceFolder": "/var/www/html",
-  "workspaceFile": "/var/www/html/aimm.code-workspace",
   "shutdownAction": "stopCompose",
   "customizations": {
     "vscode": {
       "extensions": [
-        "bmewburn.vscode-intelephense-client"
+        "bmewburn.vscode-intelephense-client",
+        "junstyle.php-cs-fixer"
       ],
       "settings": {
         "intelephense.environment.includePaths": [
           "/var/www/html/yii/vendor"
         ],
-        "intelephense.environment.phpVersion": "8.5"
+        "intelephense.environment.phpVersion": "8.5",
+        "php-cs-fixer.executablePath": "/var/www/html/yii/vendor/bin/php-cs-fixer"
       }
     }
   }
