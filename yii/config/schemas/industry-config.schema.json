@@ -1,0 +1,167 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aimm.dev/schemas/industry-config.schema.json",
+  "title": "IndustryConfig",
+  "description": "Configuration for an industry collection",
+  "type": "object",
+  "required": ["id", "name", "sector", "companies", "macro_requirements", "data_requirements"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$",
+      "description": "Unique industry identifier"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable industry name"
+    },
+    "sector": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Industry sector classification"
+    },
+    "companies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/CompanyConfig" },
+      "minItems": 1,
+      "description": "List of companies to collect data for"
+    },
+    "macro_requirements": {
+      "$ref": "#/$defs/MacroRequirements"
+    },
+    "data_requirements": {
+      "$ref": "#/$defs/DataRequirements"
+    }
+  },
+  "$defs": {
+    "CompanyConfig": {
+      "type": "object",
+      "required": ["ticker", "name", "listing_exchange", "listing_currency", "reporting_currency", "fy_end_month"],
+      "properties": {
+        "ticker": {
+          "type": "string",
+          "pattern": "^[A-Z0-9.-]+$",
+          "description": "Stock ticker symbol"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Company name"
+        },
+        "listing_exchange": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Primary stock exchange"
+        },
+        "listing_currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "Currency of stock listing (ISO 4217)"
+        },
+        "reporting_currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "Currency of financial statements (ISO 4217)"
+        },
+        "fy_end_month": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "description": "Fiscal year end month (1-12)"
+        },
+        "alternative_tickers": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            { "type": "null" }
+          ],
+          "description": "Alternative ticker symbols for data lookup"
+        }
+      }
+    },
+    "MacroRequirements": {
+      "type": "object",
+      "properties": {
+        "commodity_benchmark": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ],
+          "description": "Commodity benchmark identifier (e.g., 'BRENT', 'WTI')"
+        },
+        "margin_proxy": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ],
+          "description": "Margin proxy indicator identifier"
+        },
+        "sector_index": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ],
+          "description": "Sector index identifier"
+        },
+        "required_indicators": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Required additional macro indicators"
+        },
+        "optional_indicators": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Optional additional macro indicators"
+        }
+      }
+    },
+    "DataRequirements": {
+      "type": "object",
+      "required": ["history_years", "quarters_to_fetch", "required_valuation_metrics", "optional_valuation_metrics"],
+      "properties": {
+        "history_years": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "description": "Number of years of historical financial data to collect"
+        },
+        "quarters_to_fetch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "description": "Number of quarters of data to collect"
+        },
+        "required_valuation_metrics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ValuationMetric" },
+          "description": "Valuation metrics that must be collected"
+        },
+        "optional_valuation_metrics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ValuationMetric" },
+          "description": "Valuation metrics that are collected if available"
+        }
+      }
+    },
+    "ValuationMetric": {
+      "type": "string",
+      "enum": [
+        "market_cap",
+        "fwd_pe",
+        "trailing_pe",
+        "ev_ebitda",
+        "free_cash_flow_ttm",
+        "fcf_yield",
+        "div_yield",
+        "net_debt_ebitda",
+        "price_to_book"
+      ],
+      "description": "Valid valuation metric identifiers"
+    }
+  }
+}
