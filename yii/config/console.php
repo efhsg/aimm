@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
+use app\log\SanitizedFileTarget;
 use yii\caching\FileCache;
-use yii\log\FileTarget;
 
 $params = require __DIR__ . '/params.php';
 $db = require __DIR__ . '/db.php';
@@ -12,6 +12,7 @@ $container = require __DIR__ . '/container.php';
 return [
     'id' => 'aimm-console',
     'basePath' => dirname(__DIR__),
+    'bootstrap' => ['log'],
     'controllerNamespace' => 'app\\commands',
     'aliases' => [
         '@app' => dirname(__DIR__) . '/src',
@@ -20,6 +21,9 @@ return [
         'migrate' => [
             'class' => \yii\console\controllers\MigrateController::class,
             'migrationPath' => dirname(__DIR__) . '/migrations',
+        ],
+        'collect' => [
+            'class' => \app\commands\CollectController::class,
         ],
     ],
     'components' => [
@@ -30,9 +34,12 @@ return [
         'log' => [
             'targets' => [
                 [
-                    'class' => FileTarget::class,
+                    'class' => SanitizedFileTarget::class,
                     'levels' => ['error', 'warning', 'info'],
-                    'logFile' => '@runtime/logs/app.log',
+                    'categories' => ['collection', 'application', 'alerts'],
+                    'logFile' => '@runtime/logs/collection.log',
+                    'maxFileSize' => 10240,
+                    'maxLogFiles' => 10,
                 ],
             ],
         ],
