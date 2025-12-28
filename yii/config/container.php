@@ -8,6 +8,9 @@ use app\adapters\CachedDataAdapter;
 use app\adapters\SourceAdapterInterface;
 use app\adapters\YahooFinanceAdapter;
 use app\queries\DataPackRepository;
+use app\queries\IndustryConfigQuery;
+use app\validators\SchemaValidator;
+use app\validators\SchemaValidatorInterface;
 use yii\di\Container;
 
 return [
@@ -34,6 +37,16 @@ return [
 
         SourceAdapterInterface::class => AdapterChain::class,
         YahooFinanceAdapter::class => YahooFinanceAdapter::class,
+
+        SchemaValidatorInterface::class => static function (): SchemaValidatorInterface {
+            return new SchemaValidator(Yii::$app->basePath . '/config/schemas');
+        },
+
+        IndustryConfigQuery::class => static function (Container $container): IndustryConfigQuery {
+            return new IndustryConfigQuery(
+                $container->get(SchemaValidatorInterface::class),
+            );
+        },
 
         DataPackRepository::class => static function (): DataPackRepository {
             $params = Yii::$app->params;

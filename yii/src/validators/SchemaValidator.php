@@ -64,7 +64,24 @@ final class SchemaValidator implements SchemaValidatorInterface
     {
         $flat = [];
         foreach ($errors as $path => $messages) {
+            if (is_string($messages)) {
+                $flat[] = "{$path}: {$messages}";
+                continue;
+            }
+
+            if (!is_array($messages)) {
+                $flat[] = "{$path}: {$messages}";
+                continue;
+            }
+
             foreach ($messages as $message) {
+                if (is_array($message)) {
+                    foreach ($message as $nested) {
+                        $flat[] = "{$path}: {$nested}";
+                    }
+                    continue;
+                }
+
                 $flat[] = "{$path}: {$message}";
             }
         }
