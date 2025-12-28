@@ -124,8 +124,7 @@ final class CollectControllerTest extends Unit
         string $industryId,
         string $name,
         string $configJson
-    ): IndustryConfigRecord
-    {
+    ): IndustryConfigRecord {
         $record = new IndustryConfigRecord();
         $record->industry_id = $industryId;
         $record->name = $name;

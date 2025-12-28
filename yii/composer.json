@@ -14,7 +14,8 @@
     "opis/json-schema": "^2.3",
     "symfony/process": "^5.4 || ^6.4 || ^7.0",
     "yiisoft/yii2-queue": "^2.3",
-    "ramsey/uuid": "^4.7"
+    "ramsey/uuid": "^4.7",
+    "guzzlehttp/guzzle": "^7.10"
   },
   "require-dev": {
     "codeception/codeception": "^5.0",

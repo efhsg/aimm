@@ -8,6 +8,8 @@ use app\adapters\CachedDataAdapter;
 use app\adapters\SourceAdapterInterface;
 use app\adapters\YahooFinanceAdapter;
 use app\alerts\AlertDispatcher;
+use app\alerts\EmailAlertNotifier;
+use app\alerts\SlackAlertNotifier;
 use app\clients\AllowedDomainPolicy;
 use app\clients\AllowedDomainPolicyInterface;
 use app\clients\BlockDetector;
@@ -41,9 +43,7 @@ use app\validators\SchemaValidatorInterface;
 use app\validators\SemanticValidator;
 use app\validators\SemanticValidatorInterface;
 use GuzzleHttp\Client;
-use Yii;
 use yii\di\Container;
-use yii\log\Logger;
 
 return [
     'singletons' => [
@@ -54,9 +54,6 @@ return [
         AllowedDomainPolicyInterface::class => AllowedDomainPolicy::class,
         SchemaValidatorInterface::class => static function (): SchemaValidatorInterface {
             return new SchemaValidator(Yii::$app->basePath . '/config/schemas');
-        },
-        Logger::class => static function (): Logger {
-            return Yii::getLogger();
         },
     ],
     'definitions' => [
@@ -79,12 +76,31 @@ return [
                 blockDetector: $container->get(BlockDetectorInterface::class),
                 allowedDomainPolicy: $container->get(AllowedDomainPolicyInterface::class),
                 alertDispatcher: $container->get(AlertDispatcher::class),
-                logger: $container->get(Logger::class),
+                logger: Yii::getLogger(),
             );
         },
 
         AlertDispatcher::class => static function (): AlertDispatcher {
-            return new AlertDispatcher();
+            $notifiers = [];
+
+            $slackWebhook = Yii::$app->params['alerts']['slack_webhook'] ?? null;
+            if (is_string($slackWebhook) && $slackWebhook !== '') {
+                $notifiers[] = new SlackAlertNotifier(
+                    webhookUrl: $slackWebhook,
+                    httpClient: new Client(),
+                );
+            }
+
+            $alertEmail = Yii::$app->params['alerts']['email'] ?? null;
+            if (is_string($alertEmail) && $alertEmail !== '' && Yii::$app->has('mailer')) {
+                $notifiers[] = new EmailAlertNotifier(
+                    mailer: Yii::$app->mailer,
+                    recipientEmail: $alertEmail,
+                    fromEmail: Yii::$app->params['alerts']['from_email'] ?? 'noreply@aimm.dev',
+                );
+            }
+
+            return new AlertDispatcher($notifiers);
         },
 
         BlockedSourceRegistry::class => BlockedSourceRegistry::class,
@@ -103,7 +119,7 @@ return [
                     $container->get(CachedDataAdapter::class),
                 ],
                 blockedRegistry: $container->get(BlockedSourceRegistry::class),
-                logger: $container->get(Logger::class),
+                logger: Yii::getLogger(),
             );
         },
 
@@ -155,7 +171,7 @@ return [
                 webFetchClient: $container->get(WebFetchClientInterface::class),
                 sourceAdapter: $container->get(SourceAdapterInterface::class),
                 dataPointFactory: $container->get(DataPointFactory::class),
-                logger: $container->get(Logger::class),
+                logger: Yii::getLogger(),
             );
         },
 
@@ -164,7 +180,7 @@ return [
                 datapointCollector: $container->get(CollectDatapointInterface::class),
                 sourceCandidateFactory: $container->get(SourceCandidateFactory::class),
                 dataPointFactory: $container->get(DataPointFactory::class),
-                logger: $container->get(Logger::class),
+                logger: Yii::getLogger(),
             );
         },
 
@@ -173,7 +189,7 @@ return [
                 datapointCollector: $container->get(CollectDatapointInterface::class),
                 sourceCandidateFactory: $container->get(SourceCandidateFactory::class),
                 dataPointFactory: $container->get(DataPointFactory::class),
-                logger: $container->get(Logger::class),
+                logger: Yii::getLogger(),
             );
         },
 
@@ -185,7 +201,7 @@ return [
                 assembler: $container->get(DataPackAssemblerInterface::class),
                 gateValidator: $container->get(CollectionGateValidatorInterface::class),
                 alertDispatcher: $container->get(AlertDispatcher::class),
-                logger: $container->get(Logger::class),
+                logger: Yii::getLogger(),
             );
         },
     ],

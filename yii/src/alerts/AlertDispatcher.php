@@ -62,7 +62,7 @@ final class AlertDispatcher
                 'industry_id' => $industryId,
                 'datapack_id' => $datapackId,
                 'error_count' => count($errors),
-                'first_error' => $errors[0]->message ?? 'Unknown',
+                'first_error' => ($errors[0] ?? null)?->message ?? 'Unknown',
             ],
         ));
     }
