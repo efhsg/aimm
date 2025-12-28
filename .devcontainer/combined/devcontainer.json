@@ -1,0 +1,29 @@
+{
+  "name": "AIMM (Combined)",
+  "dockerComposeFile": [
+    "../../docker-compose.yml"
+  ],
+  "service": "aimm_yii",
+  "runServices": [
+    "aimm_yii",
+    "aimm_python",
+    "aimm_mysql",
+    "aimm_nginx"
+  ],
+  "workspaceFolder": "/var/www/html",
+  "workspaceFile": "/var/www/html/aimm.code-workspace",
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bmewburn.vscode-intelephense-client"
+      ],
+      "settings": {
+        "intelephense.environment.includePaths": [
+          "/var/www/html/yii/vendor"
+        ],
+        "intelephense.environment.phpVersion": "8.5"
+      }
+    }
+  }
+}

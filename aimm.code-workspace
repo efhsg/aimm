@@ -1,0 +1,18 @@
+{
+  "folders": [
+    {
+      "name": "yii",
+      "path": "yii"
+    },
+    {
+      "name": "python-renderer",
+      "path": "python-renderer"
+    }
+  ],
+  "settings": {
+    "intelephense.environment.includePaths": [
+      "${workspaceFolder:yii}/vendor"
+    ],
+    "intelephense.environment.phpVersion": "8.5"
+  }
+}
