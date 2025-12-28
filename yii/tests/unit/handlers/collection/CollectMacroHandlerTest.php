@@ -117,6 +117,26 @@ final class CollectMacroHandlerTest extends Unit
         $this->assertEmpty($result->data->additionalIndicators);
     }
 
+    public function testCompleteWhenOnlyOptionalIndicatorsMissing(): void
+    {
+        $request = new CollectMacroRequest(
+            requirements: new MacroRequirements(
+                optionalIndicators: ['macro.gold_price'],
+            ),
+        );
+
+        $this->datapointCollector
+            ->method('collect')
+            ->willReturnCallback(function (CollectDatapointRequest $req) {
+                return $this->createNotFoundResult($req->datapointKey);
+            });
+
+        $result = $this->handler->collect($request);
+
+        $this->assertSame(CollectionStatus::Complete, $result->status);
+        $this->assertEmpty($result->data->additionalIndicators);
+    }
+
     public function testFailureWhenRequiredCommodityBenchmarkMissing(): void
     {
         $request = new CollectMacroRequest(

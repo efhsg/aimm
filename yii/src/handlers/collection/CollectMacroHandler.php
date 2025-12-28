@@ -284,6 +284,9 @@ final class CollectMacroHandler implements CollectMacroInterface
     ): CollectionStatus {
         $missingRequired = 0;
         $missingOptional = 0;
+        $hasRequiredConfigured = $request->requirements->commodityBenchmark !== null
+            || $request->requirements->marginProxy !== null
+            || $request->requirements->requiredIndicators !== [];
 
         if ($request->requirements->commodityBenchmark !== null && $commodityBenchmark === null) {
             $missingRequired++;
@@ -318,7 +321,7 @@ final class CollectMacroHandler implements CollectMacroInterface
             return $hasSomeData ? CollectionStatus::Partial : CollectionStatus::Failed;
         }
 
-        if ($missingOptional > 0) {
+        if ($missingOptional > 0 && $hasRequiredConfigured) {
             return CollectionStatus::Partial;
         }
 
