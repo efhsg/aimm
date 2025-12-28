@@ -6,6 +6,7 @@
 !/.claude/
 !/.claude/commands/
 !/.claude/commands/finalize-changes.md
+/.claude/settings.local.json
 /.idea/
 /.vscode/
 /yii/.phpstorm_helpers/
