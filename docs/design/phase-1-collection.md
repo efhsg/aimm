@@ -245,7 +245,9 @@ final readonly class DataPointMoney
         public ?FxConversion $fxConversion = null,
         public ?string $cacheSource = null,
         public ?int $cacheAgeDays = null,
-    ) {}
+    ) {
+        $this->validateProvenanceForMethod();
+    }
 
     /**
      * Get value in base units (not millions/billions)
@@ -286,6 +288,8 @@ final readonly class DataPointMoney
             'cache_age_days' => $this->cacheAgeDays,
         ];
     }
+
+    // See §2.5.6 for validation implementation
 }
 ```
 
@@ -294,6 +298,7 @@ final readonly class DataPointMoney
 - Provides base value conversion
 - Tracks FX conversion if currency was converted
 - Tracks cache provenance when data is from cache
+- Enforces method-specific provenance requirements (see §2.5.6)
 
 #### 2.5.2 DataPointRatio
 
@@ -323,7 +328,9 @@ final readonly class DataPointRatio
         public ?string $formula = null,
         public ?string $cacheSource = null,
         public ?int $cacheAgeDays = null,
-    ) {}
+    ) {
+        $this->validateProvenanceForMethod();
+    }
 
     public function toArray(): array
     {
@@ -342,6 +349,8 @@ final readonly class DataPointRatio
             'cache_age_days' => $this->cacheAgeDays,
         ];
     }
+
+    // See §2.5.6 for validation implementation
 }
 ```
 
@@ -350,6 +359,7 @@ final readonly class DataPointRatio
 - Supports derived datapoints with formula tracking
 - Supports cache provenance
 - Immutable value object
+- Enforces method-specific provenance requirements (see §2.5.6)
 
 #### 2.5.3 DataPointPercent
 
@@ -379,7 +389,9 @@ final readonly class DataPointPercent
         public ?string $formula = null,
         public ?string $cacheSource = null,
         public ?int $cacheAgeDays = null,
-    ) {}
+    ) {
+        $this->validateProvenanceForMethod();
+    }
 
     /**
      * Get value as decimal (e.g., 0.045 for 4.5%)
@@ -409,6 +421,8 @@ final readonly class DataPointPercent
             'cache_age_days' => $this->cacheAgeDays,
         ];
     }
+
+    // See §2.5.6 for validation implementation
 }
 ```
 
@@ -416,6 +430,7 @@ final readonly class DataPointPercent
 - Stores percentage values (4.5 for 4.5%, not 0.045)
 - Provides decimal conversion helper
 - Full provenance tracking including cache
+- Enforces method-specific provenance requirements (see §2.5.6)
 
 #### 2.5.4 SourceLocator
 
@@ -502,6 +517,148 @@ final readonly class FxConversion
     }
 }
 ```
+
+#### 2.5.6 Provenance Validation
+
+All DataPoint types (Money, Ratio, Percent, Number) enforce method-specific provenance requirements at construction time. This ensures data quality by preventing creation of datapoints with incomplete provenance.
+
+**Validation Rules by Method:**
+
+| Method | Required Fields | Purpose |
+|--------|-----------------|---------|
+| `web_fetch`, `web_search`, `api` | `sourceUrl`, `sourceLocator` | Track where data was fetched and how to locate it |
+| `not_found` | `attemptedSources` | Document which sources were tried before giving up |
+| `derived` | `derivedFrom`, `formula` | Track calculation lineage |
+| `cache` | `cacheSource`, `cacheAgeDays` | Track cache origin and staleness |
+
+**Implementation:**
+
+```php
+private function validateProvenanceForMethod(): void
+{
+    match ($this->method) {
+        CollectionMethod::WebFetch,
+        CollectionMethod::WebSearch,
+        CollectionMethod::Api => $this->validateFetchProvenance(),
+        CollectionMethod::NotFound => $this->validateNotFoundProvenance(),
+        CollectionMethod::Derived => $this->validateDerivedProvenance(),
+        CollectionMethod::Cache => $this->validateCacheProvenance(),
+    };
+}
+
+private function validateFetchProvenance(): void
+{
+    if ($this->sourceUrl === null || $this->sourceUrl === '') {
+        throw new \InvalidArgumentException(
+            "Method {$this->method->value} requires sourceUrl"
+        );
+    }
+    if ($this->sourceLocator === null) {
+        throw new \InvalidArgumentException(
+            "Method {$this->method->value} requires sourceLocator"
+        );
+    }
+}
+
+private function validateNotFoundProvenance(): void
+{
+    if ($this->attemptedSources === null || $this->attemptedSources === []) {
+        throw new \InvalidArgumentException(
+            'Method not_found requires attemptedSources'
+        );
+    }
+}
+
+private function validateDerivedProvenance(): void
+{
+    if ($this->derivedFrom === null || $this->derivedFrom === []) {
+        throw new \InvalidArgumentException(
+            'Method derived requires derivedFrom'
+        );
+    }
+    if ($this->formula === null || $this->formula === '') {
+        throw new \InvalidArgumentException(
+            'Method derived requires formula'
+        );
+    }
+}
+
+private function validateCacheProvenance(): void
+{
+    if ($this->cacheSource === null || $this->cacheSource === '') {
+        throw new \InvalidArgumentException(
+            'Method cache requires cacheSource'
+        );
+    }
+    if ($this->cacheAgeDays === null) {
+        throw new \InvalidArgumentException(
+            'Method cache requires cacheAgeDays'
+        );
+    }
+}
+```
+
+**Note:** This validation is identical across all DataPoint types (DataPointMoney, DataPointRatio, DataPointPercent, DataPointNumber).
+
+#### 2.5.7 DataPointNumber
+
+For generic numeric datapoints (index values, counts, scores).
+
+**Namespace:** `app\dto\datapoints`
+
+```php
+namespace app\dto\datapoints;
+
+use DateTimeImmutable;
+use app\enums\CollectionMethod;
+
+final readonly class DataPointNumber
+{
+    public const UNIT = 'number';
+
+    public function __construct(
+        public ?float $value,
+        public DateTimeImmutable $asOf,
+        public ?string $sourceUrl,
+        public DateTimeImmutable $retrievedAt,
+        public CollectionMethod $method,
+        public ?SourceLocator $sourceLocator = null,
+        public ?array $attemptedSources = null,
+        public ?array $derivedFrom = null,
+        public ?string $formula = null,
+        public ?string $cacheSource = null,
+        public ?int $cacheAgeDays = null,
+    ) {
+        $this->validateProvenanceForMethod();
+    }
+
+    public function toArray(): array
+    {
+        return [
+            'value' => $this->value,
+            'unit' => self::UNIT,
+            'as_of' => $this->asOf->format('Y-m-d'),
+            'source_url' => $this->sourceUrl,
+            'retrieved_at' => $this->retrievedAt->format(DateTimeImmutable::ATOM),
+            'method' => $this->method->value,
+            'source_locator' => $this->sourceLocator?->toArray(),
+            'attempted_sources' => $this->attemptedSources,
+            'derived_from' => $this->derivedFrom,
+            'formula' => $this->formula,
+            'cache_source' => $this->cacheSource,
+            'cache_age_days' => $this->cacheAgeDays,
+        ];
+    }
+
+    // See §2.5.6 for validation implementation
+}
+```
+
+**Responsibilities:**
+- Stores generic numeric values (e.g., sector indices, scores)
+- Fallback type for datapoints that don't fit Money, Ratio, or Percent
+- Full provenance tracking including cache
+- Enforces method-specific provenance requirements (see §2.5.6)
 
 ---
 
