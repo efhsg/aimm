@@ -8,6 +8,8 @@ use app\dto\datapoints\DataPointMoney;
 use app\dto\datapoints\FxConversion;
 use app\dto\datapoints\SourceLocator;
 use app\enums\CollectionMethod;
+use app\enums\DataScale;
+use app\enums\SourceLocatorType;
 use Codeception\Test\Unit;
 use DateTimeImmutable;
 
@@ -30,7 +32,7 @@ final class DataPointMoneyTest extends Unit
         $datapoint = new DataPointMoney(
             value: 150.5,
             currency: 'USD',
-            scale: 'billions',
+            scale: DataScale::Billions,
             asOf: $asOf,
             sourceUrl: 'https://example.com/data',
             retrievedAt: $retrievedAt,
@@ -40,7 +42,7 @@ final class DataPointMoneyTest extends Unit
 
         $this->assertSame(150.5, $datapoint->value);
         $this->assertSame('USD', $datapoint->currency);
-        $this->assertSame('billions', $datapoint->scale);
+        $this->assertSame(DataScale::Billions, $datapoint->scale);
         $this->assertSame($asOf, $datapoint->asOf);
         $this->assertSame('https://example.com/data', $datapoint->sourceUrl);
         $this->assertSame($retrievedAt, $datapoint->retrievedAt);
@@ -58,7 +60,7 @@ final class DataPointMoneyTest extends Unit
         $datapoint = new DataPointMoney(
             value: 150.5,
             currency: 'USD',
-            scale: 'billions',
+            scale: DataScale::Billions,
             asOf: $asOf,
             sourceUrl: 'https://example.com',
             retrievedAt: $retrievedAt,
@@ -83,44 +85,38 @@ final class DataPointMoneyTest extends Unit
 
     public function testGetBaseValueWithUnits(): void
     {
-        $datapoint = $this->createDataPoint(100.0, 'units');
+        $datapoint = $this->createDataPoint(100.0, DataScale::Units);
         $this->assertSame(100.0, $datapoint->getBaseValue());
     }
 
     public function testGetBaseValueWithThousands(): void
     {
-        $datapoint = $this->createDataPoint(100.0, 'thousands');
+        $datapoint = $this->createDataPoint(100.0, DataScale::Thousands);
         $this->assertSame(100_000.0, $datapoint->getBaseValue());
     }
 
     public function testGetBaseValueWithMillions(): void
     {
-        $datapoint = $this->createDataPoint(100.0, 'millions');
+        $datapoint = $this->createDataPoint(100.0, DataScale::Millions);
         $this->assertSame(100_000_000.0, $datapoint->getBaseValue());
     }
 
     public function testGetBaseValueWithBillions(): void
     {
-        $datapoint = $this->createDataPoint(100.0, 'billions');
+        $datapoint = $this->createDataPoint(100.0, DataScale::Billions);
         $this->assertSame(100_000_000_000.0, $datapoint->getBaseValue());
     }
 
     public function testGetBaseValueWithTrillions(): void
     {
-        $datapoint = $this->createDataPoint(1.5, 'trillions');
+        $datapoint = $this->createDataPoint(1.5, DataScale::Trillions);
         $this->assertSame(1_500_000_000_000.0, $datapoint->getBaseValue());
     }
 
     public function testGetBaseValueWithNullValue(): void
     {
-        $datapoint = $this->createDataPoint(null, 'billions');
+        $datapoint = $this->createDataPoint(null, DataScale::Billions);
         $this->assertNull($datapoint->getBaseValue());
-    }
-
-    public function testGetBaseValueWithUnknownScaleReturnsRawValue(): void
-    {
-        $datapoint = $this->createDataPoint(100.0, 'unknown');
-        $this->assertSame(100.0, $datapoint->getBaseValue());
     }
 
     public function testToArrayReturnsCorrectStructure(): void
@@ -132,7 +128,7 @@ final class DataPointMoneyTest extends Unit
         $datapoint = new DataPointMoney(
             value: 150.5,
             currency: 'USD',
-            scale: 'billions',
+            scale: DataScale::Billions,
             asOf: $asOf,
             sourceUrl: 'https://example.com',
             retrievedAt: $retrievedAt,
@@ -143,12 +139,12 @@ final class DataPointMoneyTest extends Unit
         $array = $datapoint->toArray();
 
         $this->assertSame(150.5, $array['value']);
-        $this->assertSame('currency', $array['unit']);
+        $this->assertSame(DataPointMoney::UNIT, $array['unit']);
         $this->assertSame('USD', $array['currency']);
-        $this->assertSame('billions', $array['scale']);
+        $this->assertSame(DataScale::Billions->value, $array['scale']);
         $this->assertSame('2024-01-15', $array['as_of']);
         $this->assertSame('https://example.com', $array['source_url']);
-        $this->assertSame('web_fetch', $array['method']);
+        $this->assertSame(CollectionMethod::WebFetch->value, $array['method']);
         $this->assertIsArray($array['source_locator']);
         $this->assertNull($array['fx_conversion']);
     }
@@ -162,7 +158,7 @@ final class DataPointMoneyTest extends Unit
         $datapoint = new DataPointMoney(
             value: 150.5,
             currency: 'USD',
-            scale: 'billions',
+            scale: DataScale::Billions,
             asOf: $asOf,
             sourceUrl: 'https://example.com',
             retrievedAt: $retrievedAt,
@@ -173,12 +169,12 @@ final class DataPointMoneyTest extends Unit
         $array = $datapoint->toArray();
 
         $this->assertIsArray($array['source_locator']);
-        $this->assertSame('html', $array['source_locator']['type']);
+        $this->assertSame(SourceLocatorType::Html->value, $array['source_locator']['type']);
     }
 
     public function testIsReadonly(): void
     {
-        $datapoint = $this->createDataPoint(100.0, 'units');
+        $datapoint = $this->createDataPoint(100.0, DataScale::Units);
 
         $reflection = new \ReflectionClass($datapoint);
         $this->assertTrue($reflection->isReadOnly());
@@ -192,7 +188,7 @@ final class DataPointMoneyTest extends Unit
         new DataPointMoney(
             value: 100.0,
             currency: 'USD',
-            scale: 'units',
+            scale: DataScale::Units,
             asOf: new DateTimeImmutable(),
             sourceUrl: null,
             retrievedAt: new DateTimeImmutable(),
@@ -209,7 +205,7 @@ final class DataPointMoneyTest extends Unit
         new DataPointMoney(
             value: 100.0,
             currency: 'USD',
-            scale: 'units',
+            scale: DataScale::Units,
             asOf: new DateTimeImmutable(),
             sourceUrl: 'https://example.com',
             retrievedAt: new DateTimeImmutable(),
@@ -225,7 +221,7 @@ final class DataPointMoneyTest extends Unit
         new DataPointMoney(
             value: null,
             currency: 'USD',
-            scale: 'units',
+            scale: DataScale::Units,
             asOf: new DateTimeImmutable(),
             sourceUrl: null,
             retrievedAt: new DateTimeImmutable(),
@@ -241,7 +237,7 @@ final class DataPointMoneyTest extends Unit
         new DataPointMoney(
             value: 100.0,
             currency: 'USD',
-            scale: 'units',
+            scale: DataScale::Units,
             asOf: new DateTimeImmutable(),
             sourceUrl: null,
             retrievedAt: new DateTimeImmutable(),
@@ -257,7 +253,7 @@ final class DataPointMoneyTest extends Unit
         new DataPointMoney(
             value: 100.0,
             currency: 'USD',
-            scale: 'units',
+            scale: DataScale::Units,
             asOf: new DateTimeImmutable(),
             sourceUrl: null,
             retrievedAt: new DateTimeImmutable(),
@@ -265,7 +261,7 @@ final class DataPointMoneyTest extends Unit
         );
     }
 
-    private function createDataPoint(?float $value, string $scale): DataPointMoney
+    private function createDataPoint(?float $value, DataScale $scale): DataPointMoney
     {
         return new DataPointMoney(
             value: $value,

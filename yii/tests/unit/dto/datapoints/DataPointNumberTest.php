@@ -104,10 +104,10 @@ final class DataPointNumberTest extends Unit
         $array = $datapoint->toArray();
 
         $this->assertSame(4532.75, $array['value']);
-        $this->assertSame('number', $array['unit']);
+        $this->assertSame(DataPointNumber::UNIT, $array['unit']);
         $this->assertSame('2024-01-15', $array['as_of']);
         $this->assertSame('https://example.com', $array['source_url']);
-        $this->assertSame('web_fetch', $array['method']);
+        $this->assertSame(CollectionMethod::WebFetch->value, $array['method']);
         $this->assertIsArray($array['source_locator']);
         $this->assertNull($array['attempted_sources']);
     }

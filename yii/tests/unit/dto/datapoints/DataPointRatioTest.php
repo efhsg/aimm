@@ -104,10 +104,10 @@ final class DataPointRatioTest extends Unit
         $array = $datapoint->toArray();
 
         $this->assertSame(12.5, $array['value']);
-        $this->assertSame('ratio', $array['unit']);
+        $this->assertSame(DataPointRatio::UNIT, $array['unit']);
         $this->assertSame('2024-01-15', $array['as_of']);
         $this->assertSame('https://example.com', $array['source_url']);
-        $this->assertSame('api', $array['method']);
+        $this->assertSame(CollectionMethod::Api->value, $array['method']);
         $this->assertIsArray($array['source_locator']);
         $this->assertNull($array['attempted_sources']);
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\dto\datapoints;
 
 use app\enums\CollectionMethod;
+use app\enums\DataScale;
 use DateTimeImmutable;
 
 /**
@@ -21,7 +22,7 @@ final readonly class DataPointMoney
     public function __construct(
         public ?float $value,
         public string $currency,
-        public string $scale,
+        public DataScale $scale,
         public DateTimeImmutable $asOf,
         public ?string $sourceUrl,
         public DateTimeImmutable $retrievedAt,
@@ -115,12 +116,11 @@ final readonly class DataPointMoney
         }
 
         return match ($this->scale) {
-            'units' => $this->value,
-            'thousands' => $this->value * 1_000,
-            'millions' => $this->value * 1_000_000,
-            'billions' => $this->value * 1_000_000_000,
-            'trillions' => $this->value * 1_000_000_000_000,
-            default => $this->value,
+            DataScale::Units => $this->value,
+            DataScale::Thousands => $this->value * 1_000,
+            DataScale::Millions => $this->value * 1_000_000,
+            DataScale::Billions => $this->value * 1_000_000_000,
+            DataScale::Trillions => $this->value * 1_000_000_000_000,
         };
     }
 
@@ -133,7 +133,7 @@ final readonly class DataPointMoney
             'value' => $this->value,
             'unit' => self::UNIT,
             'currency' => $this->currency,
-            'scale' => $this->scale,
+            'scale' => $this->scale->value,
             'as_of' => $this->asOf->format('Y-m-d'),
             'source_url' => $this->sourceUrl,
             'retrieved_at' => $this->retrievedAt->format(DateTimeImmutable::ATOM),

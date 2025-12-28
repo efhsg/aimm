@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace tests\unit\dto\datapoints;
 
 use app\dto\datapoints\SourceLocator;
+use app\enums\SourceLocatorType;
 use Codeception\Test\Unit;
 
 /**
@@ -16,7 +17,7 @@ final class SourceLocatorTest extends Unit
     {
         $locator = SourceLocator::html('div.price', '$123.45');
 
-        $this->assertSame('html', $locator->type);
+        $this->assertSame(SourceLocatorType::Html, $locator->type);
         $this->assertSame('div.price', $locator->selector);
         $this->assertSame('$123.45', $locator->snippet);
     }
@@ -25,7 +26,7 @@ final class SourceLocatorTest extends Unit
     {
         $locator = SourceLocator::json('$.data.price', '123.45');
 
-        $this->assertSame('json', $locator->type);
+        $this->assertSame(SourceLocatorType::Json, $locator->type);
         $this->assertSame('$.data.price', $locator->selector);
         $this->assertSame('123.45', $locator->snippet);
     }
@@ -34,7 +35,7 @@ final class SourceLocatorTest extends Unit
     {
         $locator = SourceLocator::xpath('//div[@class="price"]', '$123.45');
 
-        $this->assertSame('xpath', $locator->type);
+        $this->assertSame(SourceLocatorType::Xpath, $locator->type);
         $this->assertSame('//div[@class="price"]', $locator->selector);
         $this->assertSame('$123.45', $locator->snippet);
     }
@@ -71,7 +72,7 @@ final class SourceLocatorTest extends Unit
         $array = $locator->toArray();
 
         $this->assertSame([
-            'type' => 'html',
+            'type' => SourceLocatorType::Html->value,
             'selector' => 'div.price',
             'snippet' => '$123.45',
         ], $array);

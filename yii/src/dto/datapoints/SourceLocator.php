@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace app\dto\datapoints;
 
+use app\enums\SourceLocatorType;
+
 /**
  * Records the exact location where a datapoint was extracted from.
  */
@@ -12,7 +14,7 @@ final readonly class SourceLocator
     private const MAX_SNIPPET_LENGTH = 100;
 
     public function __construct(
-        public string $type,
+        public SourceLocatorType $type,
         public string $selector,
         public string $snippet,
     ) {
@@ -20,17 +22,17 @@ final readonly class SourceLocator
 
     public static function html(string $selector, string $snippet): self
     {
-        return new self('html', $selector, self::truncateSnippet($snippet));
+        return new self(SourceLocatorType::Html, $selector, self::truncateSnippet($snippet));
     }
 
     public static function json(string $jsonPath, string $snippet): self
     {
-        return new self('json', $jsonPath, self::truncateSnippet($snippet));
+        return new self(SourceLocatorType::Json, $jsonPath, self::truncateSnippet($snippet));
     }
 
     public static function xpath(string $xpath, string $snippet): self
     {
-        return new self('xpath', $xpath, self::truncateSnippet($snippet));
+        return new self(SourceLocatorType::Xpath, $xpath, self::truncateSnippet($snippet));
     }
 
     /**
@@ -39,7 +41,7 @@ final readonly class SourceLocator
     public function toArray(): array
     {
         return [
-            'type' => $this->type,
+            'type' => $this->type->value,
             'selector' => $this->selector,
             'snippet' => $this->snippet,
         ];
