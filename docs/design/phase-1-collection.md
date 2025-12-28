@@ -176,7 +176,65 @@ final readonly class ValuationData
 }
 ```
 
-### 2.4 MacroData
+### 2.4 FinancialsData
+
+**Namespace:** `app\dto`
+
+```php
+namespace app\dto;
+
+final readonly class FinancialsData
+{
+    /**
+     * @param array<int, AnnualFinancials> $annualData Indexed by fiscal year
+     */
+    public function __construct(
+        public int $historyYears,
+        public array $annualData,
+    ) {}
+
+    public function toArray(): array
+    {
+        return [
+            'history_years' => $this->historyYears,
+            'annual_data' => array_map(
+                fn(AnnualFinancials $annual) => $annual->toArray(),
+                $this->annualData
+            ),
+        ];
+    }
+}
+```
+
+### 2.5 QuartersData
+
+**Namespace:** `app\dto`
+
+```php
+namespace app\dto;
+
+final readonly class QuartersData
+{
+    /**
+     * @param array<string, QuarterFinancials> $quarters Indexed by quarter key (e.g., "2024Q3")
+     */
+    public function __construct(
+        public array $quarters,
+    ) {}
+
+    public function toArray(): array
+    {
+        return [
+            'quarters' => array_map(
+                fn(QuarterFinancials $quarter) => $quarter->toArray(),
+                $this->quarters
+            ),
+        ];
+    }
+}
+```
+
+### 2.6 MacroData
 
 **Namespace:** `app\dto`
 
@@ -210,11 +268,82 @@ final readonly class MacroData
 }
 ```
 
-### 2.5 Typed DataPoint Value Objects
+### 2.7 OperationalData
+
+**Namespace:** `app\dto`
+
+```php
+namespace app\dto;
+
+use app\dto\datapoints\DataPointMoney;
+use app\dto\datapoints\DataPointNumber;
+use app\dto\datapoints\DataPointPercent;
+
+final readonly class OperationalData
+{
+    /**
+     * @param array<string, DataPointMoney|DataPointNumber|DataPointPercent> $metrics
+     */
+    public function __construct(
+        public array $metrics,
+    ) {}
+
+    public function toArray(): array
+    {
+        return array_map(
+            fn(DataPointMoney|DataPointNumber|DataPointPercent $dp) => $dp->toArray(),
+            $this->metrics
+        );
+    }
+}
+```
+
+### 2.8 CollectionLog
+
+**Namespace:** `app\dto`
+
+```php
+namespace app\dto;
+
+use DateTimeImmutable;
+use app\enums\CollectionStatus;
+
+final readonly class CollectionLog
+{
+    /**
+     * @param array<string, CollectionStatus> $companyStatuses Indexed by ticker
+     */
+    public function __construct(
+        public DateTimeImmutable $startedAt,
+        public DateTimeImmutable $completedAt,
+        public int $durationSeconds,
+        public array $companyStatuses,
+        public CollectionStatus $macroStatus,
+        public int $totalAttempts,
+    ) {}
+
+    public function toArray(): array
+    {
+        return [
+            'started_at' => $this->startedAt->format(DateTimeImmutable::ATOM),
+            'completed_at' => $this->completedAt->format(DateTimeImmutable::ATOM),
+            'duration_seconds' => $this->durationSeconds,
+            'company_statuses' => array_map(
+                fn(CollectionStatus $s) => $s->value,
+                $this->companyStatuses
+            ),
+            'macro_status' => $this->macroStatus->value,
+            'total_attempts' => $this->totalAttempts,
+        ];
+    }
+}
+```
+
+### 2.9 Typed DataPoint Value Objects
 
 All datapoints follow a common structure but with type-specific semantics.
 
-#### 2.5.1 DataPointMoney
+#### 2.9.1 DataPointMoney
 
 For monetary values (market cap, revenue, prices).
 
@@ -289,7 +418,7 @@ final readonly class DataPointMoney
         ];
     }
 
-    // See §2.5.6 for validation implementation
+    // See §2.9.6 for validation implementation
 }
 ```
 
@@ -298,9 +427,9 @@ final readonly class DataPointMoney
 - Provides base value conversion
 - Tracks FX conversion if currency was converted
 - Tracks cache provenance when data is from cache
-- Enforces method-specific provenance requirements (see §2.5.6)
+- Enforces method-specific provenance requirements (see §2.9.6)
 
-#### 2.5.2 DataPointRatio
+#### 2.9.2 DataPointRatio
 
 For dimensionless ratios (P/E, EV/EBITDA).
 
@@ -350,7 +479,7 @@ final readonly class DataPointRatio
         ];
     }
 
-    // See §2.5.6 for validation implementation
+    // See §2.9.6 for validation implementation
 }
 ```
 
@@ -359,9 +488,9 @@ final readonly class DataPointRatio
 - Supports derived datapoints with formula tracking
 - Supports cache provenance
 - Immutable value object
-- Enforces method-specific provenance requirements (see §2.5.6)
+- Enforces method-specific provenance requirements (see §2.9.6)
 
-#### 2.5.3 DataPointPercent
+#### 2.9.3 DataPointPercent
 
 For percentage values (yields, margins).
 
@@ -422,7 +551,7 @@ final readonly class DataPointPercent
         ];
     }
 
-    // See §2.5.6 for validation implementation
+    // See §2.9.6 for validation implementation
 }
 ```
 
@@ -430,9 +559,9 @@ final readonly class DataPointPercent
 - Stores percentage values (4.5 for 4.5%, not 0.045)
 - Provides decimal conversion helper
 - Full provenance tracking including cache
-- Enforces method-specific provenance requirements (see §2.5.6)
+- Enforces method-specific provenance requirements (see §2.9.6)
 
-#### 2.5.4 SourceLocator
+#### 2.9.4 SourceLocator
 
 **Namespace:** `app\dto\datapoints`
 
@@ -488,7 +617,7 @@ final readonly class SourceLocator
 - Truncates snippets to 100 characters
 - Factory methods for common locator types
 
-#### 2.5.5 FxConversion
+#### 2.9.5 FxConversion
 
 **Namespace:** `app\dto\datapoints`
 
@@ -520,7 +649,7 @@ final readonly class FxConversion
 }
 ```
 
-#### 2.5.6 Provenance Validation
+#### 2.9.6 Provenance Validation
 
 All DataPoint types (Money, Ratio, Percent, Number) enforce method-specific provenance requirements at construction time. This ensures data quality by preventing creation of datapoints with incomplete provenance.
 
@@ -602,7 +731,7 @@ private function validateCacheProvenance(): void
 
 **Note:** This validation is identical across all DataPoint types (DataPointMoney, DataPointRatio, DataPointPercent, DataPointNumber).
 
-#### 2.5.7 DataPointNumber
+#### 2.9.7 DataPointNumber
 
 For generic numeric datapoints (index values, counts, scores).
 
@@ -652,7 +781,7 @@ final readonly class DataPointNumber
         ];
     }
 
-    // See §2.5.6 for validation implementation
+    // See §2.9.6 for validation implementation
 }
 ```
 
@@ -660,7 +789,7 @@ final readonly class DataPointNumber
 - Stores generic numeric values (e.g., sector indices, scores)
 - Fallback type for datapoints that don't fit Money, Ratio, or Percent
 - Full provenance tracking including cache
-- Enforces method-specific provenance requirements (see §2.5.6)
+- Enforces method-specific provenance requirements (see §2.9.6)
 
 ---
 
