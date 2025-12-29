@@ -7,7 +7,7 @@ use yii\log\FileTarget;
 
 $params = require __DIR__ . '/params.php';
 $db = require __DIR__ . '/db.php';
-$container = require __DIR__ . '/container.php';
+$container = require __DIR__ . (YII_ENV_PROD ? '/container-production.php' : '/container.php');
 
 return [
     'id' => 'aimm-web',
