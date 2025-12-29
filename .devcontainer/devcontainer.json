@@ -6,6 +6,12 @@
   "service": "aimm_yii",
   "workspaceFolder": "/var/www/html",
   "shutdownAction": "stopCompose",
+  "mounts": [
+    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+  ],
+  "containerEnv": {
+    "SSH_AUTH_SOCK": "/ssh-agent"
+  },
   "customizations": {
     "vscode": {
       "extensions": [
