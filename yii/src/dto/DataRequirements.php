@@ -10,14 +10,18 @@ namespace app\dto;
 final readonly class DataRequirements
 {
     /**
-     * @param list<string> $requiredValuationMetrics
-     * @param list<string> $optionalValuationMetrics
+     * @param list<MetricDefinition> $valuationMetrics
+     * @param list<MetricDefinition> $annualFinancialMetrics
+     * @param list<MetricDefinition> $quarterMetrics
+     * @param list<MetricDefinition> $operationalMetrics
      */
     public function __construct(
         public int $historyYears,
         public int $quartersToFetch,
-        public array $requiredValuationMetrics,
-        public array $optionalValuationMetrics,
+        public array $valuationMetrics,
+        public array $annualFinancialMetrics,
+        public array $quarterMetrics,
+        public array $operationalMetrics,
     ) {
     }
 
@@ -29,8 +33,22 @@ final readonly class DataRequirements
         return [
             'history_years' => $this->historyYears,
             'quarters_to_fetch' => $this->quartersToFetch,
-            'required_valuation_metrics' => $this->requiredValuationMetrics,
-            'optional_valuation_metrics' => $this->optionalValuationMetrics,
+            'valuation_metrics' => array_map(
+                static fn (MetricDefinition $metric): array => $metric->toArray(),
+                $this->valuationMetrics
+            ),
+            'annual_financial_metrics' => array_map(
+                static fn (MetricDefinition $metric): array => $metric->toArray(),
+                $this->annualFinancialMetrics
+            ),
+            'quarter_metrics' => array_map(
+                static fn (MetricDefinition $metric): array => $metric->toArray(),
+                $this->quarterMetrics
+            ),
+            'operational_metrics' => array_map(
+                static fn (MetricDefinition $metric): array => $metric->toArray(),
+                $this->operationalMetrics
+            ),
         ];
     }
 }

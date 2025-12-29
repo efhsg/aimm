@@ -8,6 +8,7 @@ use app\dto\CompanyConfig;
 use app\dto\DataRequirements;
 use app\dto\IndustryConfig;
 use app\dto\MacroRequirements;
+use app\dto\MetricDefinition;
 use Codeception\Test\Unit;
 
 /**
@@ -62,14 +63,21 @@ final class IndustryConfigTest extends Unit
         $requirements = new DataRequirements(
             historyYears: 5,
             quartersToFetch: 8,
-            requiredValuationMetrics: ['market_cap', 'fwd_pe'],
-            optionalValuationMetrics: ['div_yield'],
+            valuationMetrics: [
+                new MetricDefinition('market_cap', MetricDefinition::UNIT_CURRENCY, true),
+                new MetricDefinition('fwd_pe', MetricDefinition::UNIT_RATIO, true),
+                new MetricDefinition('div_yield', MetricDefinition::UNIT_PERCENT, false),
+            ],
+            annualFinancialMetrics: [],
+            quarterMetrics: [],
+            operationalMetrics: [],
         );
 
         $this->assertSame(5, $requirements->historyYears);
         $this->assertSame(8, $requirements->quartersToFetch);
-        $this->assertSame(['market_cap', 'fwd_pe'], $requirements->requiredValuationMetrics);
-        $this->assertSame(['div_yield'], $requirements->optionalValuationMetrics);
+        $this->assertCount(3, $requirements->valuationMetrics);
+        $this->assertSame('market_cap', $requirements->valuationMetrics[0]->key);
+        $this->assertSame('div_yield', $requirements->valuationMetrics[2]->key);
     }
 
     public function testMacroRequirementsProperties(): void
@@ -155,8 +163,14 @@ final class IndustryConfigTest extends Unit
             dataRequirements: new DataRequirements(
                 historyYears: 5,
                 quartersToFetch: 8,
-                requiredValuationMetrics: ['market_cap', 'fwd_pe'],
-                optionalValuationMetrics: ['div_yield'],
+                valuationMetrics: [
+                    new MetricDefinition('market_cap', MetricDefinition::UNIT_CURRENCY, true),
+                    new MetricDefinition('fwd_pe', MetricDefinition::UNIT_RATIO, true),
+                    new MetricDefinition('div_yield', MetricDefinition::UNIT_PERCENT, false),
+                ],
+                annualFinancialMetrics: [],
+                quarterMetrics: [],
+                operationalMetrics: [],
             ),
         );
     }

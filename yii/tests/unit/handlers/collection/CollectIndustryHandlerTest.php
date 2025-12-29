@@ -24,6 +24,7 @@ use app\dto\IndustryConfig;
 use app\dto\IndustryDataPack;
 use app\dto\MacroData;
 use app\dto\MacroRequirements;
+use app\dto\MetricDefinition;
 use app\dto\QuartersData;
 use app\dto\ValuationData;
 use app\enums\CollectionMethod;
@@ -333,8 +334,12 @@ final class CollectIndustryHandlerTest extends Unit
             dataRequirements: new DataRequirements(
                 historyYears: 1,
                 quartersToFetch: 4,
-                requiredValuationMetrics: ['market_cap'],
-                optionalValuationMetrics: [],
+                valuationMetrics: [
+                    new MetricDefinition('market_cap', MetricDefinition::UNIT_CURRENCY, true),
+                ],
+                annualFinancialMetrics: [],
+                quarterMetrics: [],
+                operationalMetrics: [],
             ),
         );
     }

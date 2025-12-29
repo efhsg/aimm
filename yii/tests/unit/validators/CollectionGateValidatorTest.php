@@ -16,6 +16,7 @@ use app\dto\IndustryConfig;
 use app\dto\IndustryDataPack;
 use app\dto\MacroData;
 use app\dto\MacroRequirements;
+use app\dto\MetricDefinition;
 use app\dto\QuartersData;
 use app\dto\ValidationResult;
 use app\dto\ValuationData;
@@ -166,8 +167,12 @@ final class CollectionGateValidatorTest extends Unit
         $requirements = new DataRequirements(
             historyYears: 0,
             quartersToFetch: 0,
-            requiredValuationMetrics: ['market_cap'],
-            optionalValuationMetrics: [],
+            valuationMetrics: [
+                new MetricDefinition('market_cap', MetricDefinition::UNIT_CURRENCY, true),
+            ],
+            annualFinancialMetrics: [],
+            quarterMetrics: [],
+            operationalMetrics: [],
         );
 
         $company = new CompanyConfig(

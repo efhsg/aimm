@@ -271,6 +271,35 @@ final class CollectDatapointHandlerTest extends Unit
         $this->assertNotEmpty($result->datapoint->attemptedSources);
     }
 
+    public function testNotFoundUsesUnitOverride(): void
+    {
+        $candidate = $this->createCandidate('https://example.com/quote', 'example', 1);
+        $request = $this->createRequest('valuation.custom_metric', [$candidate], null, 'percent');
+
+        $fetchResult = $this->createFetchResult('https://example.com/quote', 200);
+
+        $this->webFetchClient
+            ->method('isRateLimited')
+            ->willReturn(false);
+
+        $this->webFetchClient
+            ->method('fetch')
+            ->willReturn($fetchResult);
+
+        $this->sourceAdapter
+            ->method('adapt')
+            ->willReturn(new AdaptResult(
+                adapterId: 'example',
+                extractions: [],
+                notFound: ['valuation.custom_metric'],
+            ));
+
+        $result = $this->handler->collect($request);
+
+        $this->assertFalse($result->found);
+        $this->assertSame('percent', $result->datapoint::UNIT);
+    }
+
     public function testRejectsStaleData(): void
     {
         $candidate1 = $this->createCandidate('https://first.com/quote', 'first', 1);
@@ -469,7 +498,8 @@ final class CollectDatapointHandlerTest extends Unit
     private function createRequest(
         string $datapointKey,
         array $candidates,
-        ?DateTimeImmutable $asOfMin = null
+        ?DateTimeImmutable $asOfMin = null,
+        ?string $unit = null
     ): CollectDatapointRequest {
         return new CollectDatapointRequest(
             datapointKey: $datapointKey,
@@ -478,6 +508,7 @@ final class CollectDatapointHandlerTest extends Unit
             severity: Severity::Required,
             ticker: 'AAPL',
             asOfMin: $asOfMin,
+            unit: $unit,
         );
     }
 

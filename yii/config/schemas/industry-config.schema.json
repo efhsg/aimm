@@ -122,7 +122,7 @@
     },
     "DataRequirements": {
       "type": "object",
-      "required": ["history_years", "quarters_to_fetch", "required_valuation_metrics", "optional_valuation_metrics"],
+      "required": ["history_years", "quarters_to_fetch", "valuation_metrics"],
       "properties": {
         "history_years": {
           "type": "integer",
@@ -136,32 +136,52 @@
           "maximum": 20,
           "description": "Number of quarters of data to collect"
         },
-        "required_valuation_metrics": {
+        "valuation_metrics": {
           "type": "array",
-          "items": { "$ref": "#/$defs/ValuationMetric" },
-          "description": "Valuation metrics that must be collected"
+          "items": { "$ref": "#/$defs/MetricDefinition" },
+          "description": "Valuation metrics to collect",
+          "default": []
         },
-        "optional_valuation_metrics": {
+        "annual_financial_metrics": {
           "type": "array",
-          "items": { "$ref": "#/$defs/ValuationMetric" },
-          "description": "Valuation metrics that are collected if available"
+          "items": { "$ref": "#/$defs/MetricDefinition" },
+          "description": "Annual financial metrics to collect",
+          "default": []
+        },
+        "quarter_metrics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MetricDefinition" },
+          "description": "Quarterly metrics to collect",
+          "default": []
+        },
+        "operational_metrics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MetricDefinition" },
+          "description": "Operational metrics to collect",
+          "default": []
         }
       }
     },
-    "ValuationMetric": {
-      "type": "string",
-      "enum": [
-        "market_cap",
-        "fwd_pe",
-        "trailing_pe",
-        "ev_ebitda",
-        "free_cash_flow_ttm",
-        "fcf_yield",
-        "div_yield",
-        "net_debt_ebitda",
-        "price_to_book"
-      ],
-      "description": "Valid valuation metric identifiers"
+    "MetricDefinition": {
+      "type": "object",
+      "required": ["key", "unit"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "Metric identifier"
+        },
+        "unit": {
+          "type": "string",
+          "enum": ["currency", "ratio", "percent", "number"],
+          "description": "Unit for the datapoint"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the metric is required"
+        }
+      }
     }
   }
 }

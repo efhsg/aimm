@@ -36,3 +36,4 @@ docs(skills): add validate-analysis-gate skill
 - Description is imperative ("add" not "added")
 - Body explains *why*, not *what*
 - Footer references issues: `Closes #123`
+- No `Co-Authored-By` or AI attribution in commits

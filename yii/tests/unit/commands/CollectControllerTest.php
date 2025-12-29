@@ -181,8 +181,12 @@ final class CollectControllerTest extends Unit
             'data_requirements' => [
                 'history_years' => 1,
                 'quarters_to_fetch' => 4,
-                'required_valuation_metrics' => ['market_cap'],
-                'optional_valuation_metrics' => [],
+                'valuation_metrics' => [
+                    ['key' => 'market_cap', 'unit' => 'currency', 'required' => true],
+                ],
+                'annual_financial_metrics' => [],
+                'quarter_metrics' => [],
+                'operational_metrics' => [],
             ],
         ];
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\dto;
 
 use app\dto\datapoints\DataPointMoney;
+use app\dto\datapoints\DataPointNumber;
 use app\dto\datapoints\DataPointPercent;
 use app\dto\datapoints\DataPointRatio;
 
@@ -23,6 +24,8 @@ final readonly class ValuationData
         public ?DataPointPercent $divYield = null,
         public ?DataPointRatio $netDebtEbitda = null,
         public ?DataPointRatio $priceToBook = null,
+        /** @var array<string, DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber> */
+        public array $additionalMetrics = [],
     ) {
     }
 
@@ -41,6 +44,24 @@ final readonly class ValuationData
             'div_yield' => $this->divYield?->toArray(),
             'net_debt_ebitda' => $this->netDebtEbitda?->toArray(),
             'price_to_book' => $this->priceToBook?->toArray(),
+            'additional_metrics' => $this->mapAdditionalMetrics(),
         ];
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>|null
+     */
+    private function mapAdditionalMetrics(): ?array
+    {
+        if ($this->additionalMetrics === []) {
+            return null;
+        }
+
+        $mapped = [];
+        foreach ($this->additionalMetrics as $key => $datapoint) {
+            $mapped[$key] = $datapoint->toArray();
+        }
+
+        return $mapped;
     }
 }

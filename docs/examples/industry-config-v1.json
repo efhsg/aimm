@@ -1,0 +1,50 @@
+{
+  "id": "integrated_oil_gas",
+  "name": "Integrated Oil & Gas",
+  "sector": "Energy",
+  "companies": [
+    {
+      "ticker": "SHEL",
+      "name": "Shell plc",
+      "listing_exchange": "NYSE",
+      "listing_currency": "USD",
+      "reporting_currency": "USD",
+      "fy_end_month": 12
+    }
+  ],
+  "macro_requirements": {
+    "commodity_benchmark": "BRENT",
+    "margin_proxy": "CRACK_3_2_1",
+    "sector_index": "XLE",
+    "required_indicators": [],
+    "optional_indicators": []
+  },
+  "data_requirements": {
+    "history_years": 5,
+    "quarters_to_fetch": 4,
+    "valuation_metrics": [
+      { "key": "market_cap", "unit": "currency", "required": true },
+      { "key": "fwd_pe", "unit": "ratio", "required": true },
+      { "key": "ev_ebitda", "unit": "ratio", "required": true },
+      { "key": "trailing_pe", "unit": "ratio", "required": false },
+      { "key": "fcf_yield", "unit": "percent", "required": false },
+      { "key": "div_yield", "unit": "percent", "required": false },
+      { "key": "net_debt_ebitda", "unit": "ratio", "required": false },
+      { "key": "price_to_book", "unit": "ratio", "required": false }
+    ],
+    "annual_financial_metrics": [
+      { "key": "revenue", "unit": "currency", "required": false },
+      { "key": "ebitda", "unit": "currency", "required": false },
+      { "key": "net_income", "unit": "currency", "required": false },
+      { "key": "net_debt", "unit": "currency", "required": false },
+      { "key": "free_cash_flow", "unit": "currency", "required": false }
+    ],
+    "quarter_metrics": [
+      { "key": "revenue", "unit": "currency", "required": false },
+      { "key": "ebitda", "unit": "currency", "required": false },
+      { "key": "net_income", "unit": "currency", "required": false },
+      { "key": "free_cash_flow", "unit": "currency", "required": false }
+    ],
+    "operational_metrics": []
+  }
+}

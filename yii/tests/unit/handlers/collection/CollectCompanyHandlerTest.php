@@ -12,6 +12,7 @@ use app\dto\datapoints\DataPointMoney;
 use app\dto\datapoints\DataPointRatio;
 use app\dto\datapoints\SourceLocator;
 use app\dto\DataRequirements;
+use app\dto\MetricDefinition;
 use app\dto\SourceAttempt;
 use app\enums\CollectionMethod;
 use app\enums\CollectionStatus;
@@ -284,6 +285,14 @@ final class CollectCompanyHandlerTest extends Unit
         array $optionalMetrics,
         int $maxDurationSeconds = 120
     ): CollectCompanyRequest {
+        $definitions = [];
+        foreach ($requiredMetrics as $metric) {
+            $definitions[] = new MetricDefinition($metric, $this->unitForMetric($metric), true);
+        }
+        foreach ($optionalMetrics as $metric) {
+            $definitions[] = new MetricDefinition($metric, $this->unitForMetric($metric), false);
+        }
+
         return new CollectCompanyRequest(
             ticker: 'AAPL',
             config: new CompanyConfig(
@@ -297,11 +306,22 @@ final class CollectCompanyHandlerTest extends Unit
             requirements: new DataRequirements(
                 historyYears: 5,
                 quartersToFetch: 4,
-                requiredValuationMetrics: $requiredMetrics,
-                optionalValuationMetrics: $optionalMetrics,
+                valuationMetrics: $definitions,
+                annualFinancialMetrics: [],
+                quarterMetrics: [],
+                operationalMetrics: [],
             ),
             maxDurationSeconds: $maxDurationSeconds,
         );
+    }
+
+    private function unitForMetric(string $metric): string
+    {
+        return match ($metric) {
+            'market_cap', 'free_cash_flow_ttm' => MetricDefinition::UNIT_CURRENCY,
+            'fcf_yield', 'div_yield' => MetricDefinition::UNIT_PERCENT,
+            default => MetricDefinition::UNIT_RATIO,
+        };
     }
 
     private function createMoneyDatapoint(float $value): DataPointMoney

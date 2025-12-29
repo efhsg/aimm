@@ -50,6 +50,11 @@ final class CompanyDataFactory
      */
     public static function valuationFromArray(array $data): ValuationData
     {
+        $additionalMetrics = [];
+        foreach ($data['additional_metrics'] ?? [] as $key => $metric) {
+            $additionalMetrics[$key] = self::dataPointFromArray($metric);
+        }
+
         return new ValuationData(
             marketCap: self::moneyFromArray($data['market_cap']),
             fwdPe: isset($data['fwd_pe']) ? self::ratioFromArray($data['fwd_pe']) : null,
@@ -60,6 +65,7 @@ final class CompanyDataFactory
             divYield: isset($data['div_yield']) ? self::percentFromArray($data['div_yield']) : null,
             netDebtEbitda: isset($data['net_debt_ebitda']) ? self::ratioFromArray($data['net_debt_ebitda']) : null,
             priceToBook: isset($data['price_to_book']) ? self::ratioFromArray($data['price_to_book']) : null,
+            additionalMetrics: $additionalMetrics,
         );
     }
 
@@ -84,6 +90,11 @@ final class CompanyDataFactory
      */
     public static function annualFinancialsFromArray(array $data): AnnualFinancials
     {
+        $additionalMetrics = [];
+        foreach ($data['additional_metrics'] ?? [] as $key => $metric) {
+            $additionalMetrics[$key] = self::dataPointFromArray($metric);
+        }
+
         return new AnnualFinancials(
             fiscalYear: $data['fiscal_year'],
             revenue: isset($data['revenue']) ? self::moneyFromArray($data['revenue']) : null,
@@ -91,6 +102,7 @@ final class CompanyDataFactory
             netIncome: isset($data['net_income']) ? self::moneyFromArray($data['net_income']) : null,
             netDebt: isset($data['net_debt']) ? self::moneyFromArray($data['net_debt']) : null,
             freeCashFlow: isset($data['free_cash_flow']) ? self::moneyFromArray($data['free_cash_flow']) : null,
+            additionalMetrics: $additionalMetrics,
         );
     }
 
@@ -112,6 +124,11 @@ final class CompanyDataFactory
      */
     public static function quarterFinancialsFromArray(array $data): QuarterFinancials
     {
+        $additionalMetrics = [];
+        foreach ($data['additional_metrics'] ?? [] as $key => $metric) {
+            $additionalMetrics[$key] = self::dataPointFromArray($metric);
+        }
+
         return new QuarterFinancials(
             fiscalYear: $data['fiscal_year'],
             fiscalQuarter: $data['fiscal_quarter'],
@@ -120,6 +137,7 @@ final class CompanyDataFactory
             ebitda: isset($data['ebitda']) ? self::moneyFromArray($data['ebitda']) : null,
             netIncome: isset($data['net_income']) ? self::moneyFromArray($data['net_income']) : null,
             freeCashFlow: isset($data['free_cash_flow']) ? self::moneyFromArray($data['free_cash_flow']) : null,
+            additionalMetrics: $additionalMetrics,
         );
     }
 

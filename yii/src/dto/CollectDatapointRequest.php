@@ -22,6 +22,7 @@ final readonly class CollectDatapointRequest
         public Severity $severity,
         public ?string $ticker = null,
         public ?DateTimeImmutable $asOfMin = null,
+        public ?string $unit = null,
     ) {
     }
 }

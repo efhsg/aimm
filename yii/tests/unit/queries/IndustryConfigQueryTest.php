@@ -48,7 +48,11 @@ final class IndustryConfigQueryTest extends Unit
         $this->assertSame('BRENT', $config->macroRequirements->commodityBenchmark);
         $this->assertSame(['rig_count'], $config->macroRequirements->requiredIndicators);
         $this->assertSame(5, $config->dataRequirements->historyYears);
-        $this->assertSame(['market_cap'], $config->dataRequirements->requiredValuationMetrics);
+        $this->assertCount(2, $config->dataRequirements->valuationMetrics);
+        $this->assertSame('market_cap', $config->dataRequirements->valuationMetrics[0]->key);
+        $this->assertTrue($config->dataRequirements->valuationMetrics[0]->required);
+        $this->assertSame('fwd_pe', $config->dataRequirements->valuationMetrics[1]->key);
+        $this->assertFalse($config->dataRequirements->valuationMetrics[1]->required);
 
         $record->delete();
     }
@@ -149,8 +153,13 @@ final class IndustryConfigQueryTest extends Unit
             'data_requirements' => [
                 'history_years' => 5,
                 'quarters_to_fetch' => 8,
-                'required_valuation_metrics' => ['market_cap'],
-                'optional_valuation_metrics' => ['fwd_pe'],
+                'valuation_metrics' => [
+                    ['key' => 'market_cap', 'unit' => 'currency', 'required' => true],
+                    ['key' => 'fwd_pe', 'unit' => 'ratio', 'required' => false],
+                ],
+                'annual_financial_metrics' => [],
+                'quarter_metrics' => [],
+                'operational_metrics' => [],
             ],
         ];
 

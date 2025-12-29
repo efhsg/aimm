@@ -8,6 +8,7 @@ use app\dto\CompanyConfig;
 use app\dto\DataRequirements;
 use app\dto\IndustryConfig as IndustryConfigDto;
 use app\dto\MacroRequirements;
+use app\dto\MetricDefinition;
 use app\models\IndustryConfig as IndustryConfigRecord;
 use app\validators\SchemaValidatorInterface;
 use JsonException;
@@ -39,8 +40,10 @@ final class IndustryConfigQuery
 
     private const KEY_HISTORY_YEARS = 'history_years';
     private const KEY_QUARTERS_TO_FETCH = 'quarters_to_fetch';
-    private const KEY_REQUIRED_VALUATION_METRICS = 'required_valuation_metrics';
-    private const KEY_OPTIONAL_VALUATION_METRICS = 'optional_valuation_metrics';
+    private const KEY_VALUATION_METRICS = 'valuation_metrics';
+    private const KEY_ANNUAL_FINANCIAL_METRICS = 'annual_financial_metrics';
+    private const KEY_QUARTER_METRICS = 'quarter_metrics';
+    private const KEY_OPERATIONAL_METRICS = 'operational_metrics';
 
     public function __construct(
         private readonly SchemaValidatorInterface $schemaValidator,
@@ -196,8 +199,26 @@ final class IndustryConfigQuery
         return new DataRequirements(
             historyYears: $data[self::KEY_HISTORY_YEARS],
             quartersToFetch: $data[self::KEY_QUARTERS_TO_FETCH],
-            requiredValuationMetrics: $data[self::KEY_REQUIRED_VALUATION_METRICS],
-            optionalValuationMetrics: $data[self::KEY_OPTIONAL_VALUATION_METRICS],
+            valuationMetrics: $this->mapMetricDefinitions($data[self::KEY_VALUATION_METRICS] ?? []),
+            annualFinancialMetrics: $this->mapMetricDefinitions($data[self::KEY_ANNUAL_FINANCIAL_METRICS] ?? []),
+            quarterMetrics: $this->mapMetricDefinitions($data[self::KEY_QUARTER_METRICS] ?? []),
+            operationalMetrics: $this->mapMetricDefinitions($data[self::KEY_OPERATIONAL_METRICS] ?? []),
+        );
+    }
+
+    /**
+     * @param list<array<string, mixed>> $metrics
+     * @return list<MetricDefinition>
+     */
+    private function mapMetricDefinitions(array $metrics): array
+    {
+        return array_map(
+            static fn (array $metric): MetricDefinition => new MetricDefinition(
+                key: $metric['key'],
+                unit: $metric['unit'],
+                required: $metric['required'] ?? false,
+            ),
+            $metrics
         );
     }
 }

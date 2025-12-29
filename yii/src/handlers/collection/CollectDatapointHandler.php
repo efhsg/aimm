@@ -314,7 +314,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             $sourceAttempts
         );
 
-        $unit = $this->inferUnitFromDatapointKey($request->datapointKey);
+        $unit = $request->unit ?? $this->inferUnitFromDatapointKey($request->datapointKey);
         $datapoint = $this->dataPointFactory->notFound($unit, $attemptedSources);
 
         $this->logger->log(

@@ -583,21 +583,39 @@ Defines which companies to collect and industry-specific data requirements.
     }
   ],
   "macro_requirements": {
-    "commodity_benchmark": {
-      "name": "Brent Crude",
-      "search_terms": ["brent crude price", "brent oil price today"]
-    },
-    "margin_proxy": {
-      "name": "3-2-1 Crack Spread",
-      "region": "US Gulf Coast",
-      "search_terms": ["gulf coast 3-2-1 crack spread"]
-    }
+    "commodity_benchmark": "BRENT",
+    "margin_proxy": "CRACK_3_2_1",
+    "sector_index": "XLE",
+    "required_indicators": [],
+    "optional_indicators": []
   },
   "data_requirements": {
     "history_years": 5,
     "quarters_to_fetch": 4,
-    "required_valuation_metrics": ["market_cap", "fwd_pe", "ev_ebitda"],
-    "optional_valuation_metrics": ["trailing_pe", "fcf_yield", "div_yield", "net_debt_ebitda"]
+    "valuation_metrics": [
+      { "key": "market_cap", "unit": "currency", "required": true },
+      { "key": "fwd_pe", "unit": "ratio", "required": true },
+      { "key": "ev_ebitda", "unit": "ratio", "required": true },
+      { "key": "trailing_pe", "unit": "ratio", "required": false },
+      { "key": "fcf_yield", "unit": "percent", "required": false },
+      { "key": "div_yield", "unit": "percent", "required": false },
+      { "key": "net_debt_ebitda", "unit": "ratio", "required": false },
+      { "key": "price_to_book", "unit": "ratio", "required": false }
+    ],
+    "annual_financial_metrics": [
+      { "key": "revenue", "unit": "currency", "required": false },
+      { "key": "ebitda", "unit": "currency", "required": false },
+      { "key": "net_income", "unit": "currency", "required": false },
+      { "key": "net_debt", "unit": "currency", "required": false },
+      { "key": "free_cash_flow", "unit": "currency", "required": false }
+    ],
+    "quarter_metrics": [
+      { "key": "revenue", "unit": "currency", "required": false },
+      { "key": "ebitda", "unit": "currency", "required": false },
+      { "key": "net_income", "unit": "currency", "required": false },
+      { "key": "free_cash_flow", "unit": "currency", "required": false }
+    ],
+    "operational_metrics": []
   }
 }
 ```

@@ -100,7 +100,23 @@
         "fcf_yield": { "oneOf": [{ "$ref": "#/$defs/DataPointPercent" }, { "type": "null" }] },
         "div_yield": { "oneOf": [{ "$ref": "#/$defs/DataPointPercent" }, { "type": "null" }] },
         "net_debt_ebitda": { "oneOf": [{ "$ref": "#/$defs/DataPointRatio" }, { "type": "null" }] },
-        "price_to_book": { "oneOf": [{ "$ref": "#/$defs/DataPointRatio" }, { "type": "null" }] }
+        "price_to_book": { "oneOf": [{ "$ref": "#/$defs/DataPointRatio" }, { "type": "null" }] },
+        "additional_metrics": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "oneOf": [
+                  { "$ref": "#/$defs/DataPointMoney" },
+                  { "$ref": "#/$defs/DataPointRatio" },
+                  { "$ref": "#/$defs/DataPointPercent" },
+                  { "$ref": "#/$defs/DataPointNumber" }
+                ]
+              }
+            },
+            { "type": "null" }
+          ]
+        }
       }
     },
     "FinancialsData": {
@@ -123,7 +139,23 @@
         "ebitda": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] },
         "net_income": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] },
         "net_debt": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] },
-        "free_cash_flow": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] }
+        "free_cash_flow": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] },
+        "additional_metrics": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "oneOf": [
+                  { "$ref": "#/$defs/DataPointMoney" },
+                  { "$ref": "#/$defs/DataPointRatio" },
+                  { "$ref": "#/$defs/DataPointPercent" },
+                  { "$ref": "#/$defs/DataPointNumber" }
+                ]
+              }
+            },
+            { "type": "null" }
+          ]
+        }
       }
     },
     "QuartersData": {
@@ -146,7 +178,23 @@
         "revenue": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] },
         "ebitda": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] },
         "net_income": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] },
-        "free_cash_flow": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] }
+        "free_cash_flow": { "oneOf": [{ "$ref": "#/$defs/DataPointMoney" }, { "type": "null" }] },
+        "additional_metrics": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "oneOf": [
+                  { "$ref": "#/$defs/DataPointMoney" },
+                  { "$ref": "#/$defs/DataPointRatio" },
+                  { "$ref": "#/$defs/DataPointPercent" },
+                  { "$ref": "#/$defs/DataPointNumber" }
+                ]
+              }
+            },
+            { "type": "null" }
+          ]
+        }
       }
     },
     "OperationalData": {

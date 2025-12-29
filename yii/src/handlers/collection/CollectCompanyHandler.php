@@ -13,6 +13,7 @@ use app\dto\datapoints\DataPointNumber;
 use app\dto\datapoints\DataPointPercent;
 use app\dto\datapoints\DataPointRatio;
 use app\dto\FinancialsData;
+use app\dto\MetricDefinition;
 use app\dto\QuartersData;
 use app\dto\SourceAttempt;
 use app\dto\SourceCandidate;
@@ -149,28 +150,25 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         float $deadline
     ): ValuationData {
         $metrics = [];
-        $requiredKeys = $request->requirements->requiredValuationMetrics;
-        $optionalKeys = $request->requirements->optionalValuationMetrics;
-        $allMetricKeys = array_merge($requiredKeys, $optionalKeys);
+        $definitions = $request->requirements->valuationMetrics;
 
-        foreach ($allMetricKeys as $metric) {
+        foreach ($definitions as $definition) {
             if ($this->isTimedOut($deadline)) {
                 break;
             }
 
-            $severity = in_array($metric, $requiredKeys, true)
-                ? Severity::Required
-                : Severity::Optional;
+            $severity = $definition->required ? Severity::Required : Severity::Optional;
 
             $result = $this->datapointCollector->collect(new CollectDatapointRequest(
-                datapointKey: "valuation.{$metric}",
+                datapointKey: "valuation.{$definition->key}",
                 sourceCandidates: $sources,
                 adapterId: 'chain',
                 severity: $severity,
                 ticker: $request->ticker,
+                unit: $definition->unit,
             ));
 
-            $metrics[$metric] = $result->datapoint;
+            $metrics[$definition->key] = $result->datapoint;
             $allAttempts = array_merge($allAttempts, $result->sourceAttempts);
         }
 
@@ -244,6 +242,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             }
         }
 
+        $additionalMetrics = $this->extractAdditionalMetrics($metrics);
+
         return new ValuationData(
             marketCap: $marketCap,
             fwdPe: $this->getAsRatio($metrics, 'fwd_pe'),
@@ -254,6 +254,7 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             divYield: $this->getAsPercent($metrics, 'div_yield'),
             netDebtEbitda: $this->getAsRatio($metrics, 'net_debt_ebitda'),
             priceToBook: $this->getAsRatio($metrics, 'price_to_book'),
+            additionalMetrics: $additionalMetrics,
         );
     }
 
@@ -347,8 +348,9 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             return CollectionStatus::Failed;
         }
 
+        $requiredKeys = $this->getRequiredMetricKeys($request->requirements->valuationMetrics);
         $missingRequired = 0;
-        foreach ($request->requirements->requiredValuationMetrics as $metric) {
+        foreach ($requiredKeys as $metric) {
             $datapoint = $this->getValuationMetric($valuation, $metric);
             if ($datapoint === null || $datapoint->value === null) {
                 $missingRequired++;
@@ -365,8 +367,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
     private function getValuationMetric(
         ValuationData $valuation,
         string $metric
-    ): DataPointMoney|DataPointRatio|DataPointPercent|null {
-        return match ($metric) {
+    ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber|null {
+        $known = match ($metric) {
             'market_cap' => $valuation->marketCap,
             'fwd_pe' => $valuation->fwdPe,
             'trailing_pe' => $valuation->trailingPe,
@@ -378,5 +380,58 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             'price_to_book' => $valuation->priceToBook,
             default => null,
         };
+
+        if ($known !== null) {
+            return $known;
+        }
+
+        return $valuation->additionalMetrics[$metric] ?? null;
+    }
+
+    /**
+     * @param list<MetricDefinition> $definitions
+     * @return list<string>
+     */
+    private function getRequiredMetricKeys(array $definitions): array
+    {
+        $required = [];
+        foreach ($definitions as $definition) {
+            if ($definition->required) {
+                $required[] = $definition->key;
+            }
+        }
+
+        return $required;
+    }
+
+    /**
+     * @param array<string, DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber> $metrics
+     * @return array<string, DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber>
+     */
+    private function extractAdditionalMetrics(array $metrics): array
+    {
+        $knownKeys = [
+            'market_cap',
+            'fwd_pe',
+            'trailing_pe',
+            'ev_ebitda',
+            'free_cash_flow_ttm',
+            'fcf_yield',
+            'div_yield',
+            'net_debt_ebitda',
+            'price_to_book',
+        ];
+
+        $knownLookup = array_fill_keys($knownKeys, true);
+        $additional = [];
+
+        foreach ($metrics as $key => $datapoint) {
+            if (isset($knownLookup[$key])) {
+                continue;
+            }
+            $additional[$key] = $datapoint;
+        }
+
+        return $additional;
     }
 }

@@ -15,6 +15,7 @@ use app\dto\GateResult;
 use app\dto\GateWarning;
 use app\dto\IndustryConfig;
 use app\dto\IndustryDataPack;
+use app\dto\MetricDefinition;
 use app\dto\QuarterFinancials;
 use app\enums\CollectionMethod;
 use DateTimeImmutable;
@@ -143,7 +144,7 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     private function validateRequiredDatapoints(IndustryDataPack $dataPack, IndustryConfig $config): array
     {
         $errors = [];
-        $requiredMetrics = $config->dataRequirements->requiredValuationMetrics;
+        $requiredMetrics = $this->filterRequiredMetrics($config->dataRequirements->valuationMetrics);
 
         foreach ($dataPack->companies as $ticker => $company) {
             foreach ($requiredMetrics as $metric) {
@@ -283,6 +284,13 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
             }
         }
 
+        foreach ($valuation->additionalMetrics as $name => $datapoint) {
+            $errors = array_merge(
+                $errors,
+                $this->validateDatapointProvenance($datapoint, "companies.{$ticker}.valuation.additional_metrics.{$name}")
+            );
+        }
+
         return $errors;
     }
 
@@ -370,6 +378,13 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
             );
         }
 
+        foreach ($annual->additionalMetrics as $name => $datapoint) {
+            $errors = array_merge(
+                $errors,
+                $this->validateDatapointProvenance($datapoint, "{$basePath}.additional_metrics.{$name}")
+            );
+        }
+
         return $errors;
     }
 
@@ -416,6 +431,13 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
             $errors = array_merge(
                 $errors,
                 $this->validateDatapointProvenance($datapoint, "{$basePath}.{$name}")
+            );
+        }
+
+        foreach ($quarter->additionalMetrics as $name => $datapoint) {
+            $errors = array_merge(
+                $errors,
+                $this->validateDatapointProvenance($datapoint, "{$basePath}.additional_metrics.{$name}")
             );
         }
 
@@ -615,7 +637,7 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         }
 
         // Low coverage on optional metrics
-        $optionalMetrics = $config->dataRequirements->optionalValuationMetrics;
+        $optionalMetrics = $this->filterOptionalMetrics($config->dataRequirements->valuationMetrics);
         foreach ($optionalMetrics as $metric) {
             $coverage = $this->calculateCoverage($dataPack, $metric);
             if ($coverage < 0.5) {
@@ -633,8 +655,8 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     private function getValuationMetric(
         CompanyData $company,
         string $metric
-    ): DataPointMoney|DataPointRatio|DataPointPercent|null {
-        return match ($metric) {
+    ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber|null {
+        $known = match ($metric) {
             'market_cap' => $company->valuation->marketCap,
             'fwd_pe' => $company->valuation->fwdPe,
             'trailing_pe' => $company->valuation->trailingPe,
@@ -646,6 +668,44 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
             'price_to_book' => $company->valuation->priceToBook,
             default => null,
         };
+
+        if ($known !== null) {
+            return $known;
+        }
+
+        return $company->valuation->additionalMetrics[$metric] ?? null;
+    }
+
+    /**
+     * @param list<MetricDefinition> $metrics
+     * @return list<string>
+     */
+    private function filterRequiredMetrics(array $metrics): array
+    {
+        $required = [];
+        foreach ($metrics as $metric) {
+            if ($metric->required) {
+                $required[] = $metric->key;
+            }
+        }
+
+        return $required;
+    }
+
+    /**
+     * @param list<MetricDefinition> $metrics
+     * @return list<string>
+     */
+    private function filterOptionalMetrics(array $metrics): array
+    {
+        $optional = [];
+        foreach ($metrics as $metric) {
+            if (!$metric->required) {
+                $optional[] = $metric->key;
+            }
+        }
+
+        return $optional;
     }
 
     private function calculateCoverage(IndustryDataPack $dataPack, string $metric): float
