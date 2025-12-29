@@ -1,0 +1,240 @@
+/**
+ * AIMM Design System - CSS Custom Properties
+ * Version: 1.2.0
+ * Generated: December 2025
+ * 
+ * Usage: Import this file and use variables like var(--brand-primary)
+ */
+
+:root {
+  /* ========================================
+     BRAND COLORS
+     ======================================== */
+  --brand-primary: #1a4a55;
+  --brand-primary-hover: #153d47;
+  --brand-primary-active: #0d2a32;
+  --brand-dark: #0d2a32;
+  --brand-light: #2a6a78;
+  --brand-accent: #A68248; /* WCAG AA compliant (4.5:1) */
+  --brand-accent-decorative: #c59d5f; /* Decorative only - NOT for text */
+
+  /* ========================================
+     SEMANTIC COLORS
+     ======================================== */
+  --color-success: #3b755f;
+  --color-success-hover: #2d5a4a;
+  --color-success-light: #e8f0ec;
+
+  --color-error: #a5443f;
+  --color-error-hover: #8a3833;
+  --color-error-light: #f5e8e7;
+
+  --color-warning: #b8860b;
+  --color-warning-hover: #9a7009;
+  --color-warning-light: #fdf6e3;
+
+  --color-info: #1a4a55;
+  --color-info-hover: #153d47;
+  --color-info-light: #e6eef0;
+
+  /* ========================================
+     TEXT COLORS
+     ======================================== */
+  --text-primary: #1a3540;    /* 12.4:1 contrast */
+  --text-secondary: #5a7a88;  /* 4.7:1 contrast */
+  --text-tertiary: #8a9da6;   /* 2.9:1 - decorative/disabled only! */
+  --text-inverse: #ffffff;
+
+  /* ========================================
+     BACKGROUND COLORS
+     ======================================== */
+  --bg-page: #f0f4f5;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f8fafa;
+  --bg-muted: #e6eef0;
+
+  /* ========================================
+     BORDER COLORS
+     ======================================== */
+  --border-default: #d0dce0;
+  --border-subtle: #e6eef0;
+
+  /* ========================================
+     INTERACTIVE STATES
+     ======================================== */
+  --state-hover: rgba(26, 74, 85, 0.08);
+  --state-active: rgba(26, 74, 85, 0.12);
+  --state-focus: rgba(74, 184, 213, 0.6);
+  --state-disabled-bg: #e6eef0;
+  --state-disabled-text: #8a9da6;
+  --state-disabled-opacity: 0.5;
+
+  /* ========================================
+     DATA VISUALIZATION
+     ======================================== */
+  --viz-1: #4ab8d5;
+  --viz-2: #2a6a78;
+  --viz-3: #1a4a55;
+  --viz-4: #0d2a32;
+  --viz-5: #c59d5f;
+  --viz-6: #5a7a88;
+  --viz-7: #8a9da6;
+  --viz-positive: #3b755f;
+  --viz-negative: #a5443f;
+  --viz-neutral: #5a7a88;
+
+  /* ========================================
+     TYPOGRAPHY
+     ======================================== */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Fira Code', 'Consolas', monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --text-4xl: 2.5rem;
+
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  --leading-tight: 1.1;
+  --leading-snug: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  /* ========================================
+     SPACING (4px base unit)
+     ======================================== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ========================================
+     BORDER RADIUS
+     ======================================== */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ========================================
+     SHADOWS
+     ======================================== */
+  --shadow-sm: 0 1px 2px rgba(26, 53, 64, 0.05);
+  --shadow-md: 0 4px 6px rgba(26, 53, 64, 0.07), 0 1px 3px rgba(26, 53, 64, 0.05);
+  --shadow-lg: 0 10px 20px rgba(26, 53, 64, 0.1), 0 3px 6px rgba(26, 53, 64, 0.05);
+  --shadow-xl: 0 20px 40px rgba(26, 53, 64, 0.15), 0 5px 10px rgba(26, 53, 64, 0.05);
+
+  /* ========================================
+     BREAKPOINTS (for reference - use in media queries)
+     ======================================== */
+  --breakpoint-xs: 0px;
+  --breakpoint-sm: 480px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* ========================================
+     GRID SYSTEM
+     ======================================== */
+  --grid-columns: 12;
+  --grid-gutter: 24px;
+  --grid-margin-mobile: 16px;
+  --grid-margin-tablet: 32px;
+  --grid-margin-desktop: 64px;
+
+  --container-sm: 640px;
+  --container-md: 768px;
+  --container-lg: 1024px;
+  --container-xl: 1280px;
+  --container-2xl: 1440px;
+
+  /* ========================================
+     ACCESSIBILITY
+     ======================================== */
+  --touch-target-min: 44px;
+  --touch-target-comfortable: 48px;
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+
+  /* ========================================
+     MOTION / TRANSITIONS
+     ======================================== */
+  --duration-instant: 0ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  --easing-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-in: cubic-bezier(0.4, 0, 1, 1);
+  --easing-out: cubic-bezier(0, 0, 0.2, 1);
+  --easing-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ========================================
+     Z-INDEX SCALE
+     ======================================== */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-popover: 500;
+  --z-tooltip: 600;
+  --z-toast: 700;
+}
+
+/* ==========================================
+   DARK MODE
+   ========================================== */
+[data-theme="dark"] {
+  --text-primary: #e8eef0;
+  --text-secondary: #a0b4bc;
+  --text-tertiary: #6a8490;
+  --text-inverse: #1a3540;
+
+  --bg-page: #0d1a1f;
+  --bg-surface: #152328;
+  --bg-elevated: #1a3038;
+  --bg-muted: #1a3540;
+
+  --border-default: #2a4a55;
+  --border-subtle: #1a3540;
+
+  --color-success-light: #1a2f28;
+  --color-error-light: #2a1f1e;
+
+  --state-hover: rgba(74, 184, 213, 0.12);
+  --state-active: rgba(74, 184, 213, 0.18);
+  --state-focus: rgba(74, 184, 213, 0.6);
+  --state-disabled-bg: #1a3540;
+  --state-disabled-text: #6a8490;
+}
+
+/* ==========================================
+   REDUCED MOTION
+   ========================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
