@@ -24,7 +24,7 @@
 
 ## 1. Overview
 
-Phase 1 transforms an industry configuration file into a validated `IndustryDataPack`. The system collects financial data for all configured companies, macro indicators, and passes through a validation gate before persisting to disk.
+Phase 1 transforms an industry configuration record (stored in the `industry_config` table as JSON) into a validated `IndustryDataPack`. The system collects financial data for all configured companies, macro indicators, and passes through a validation gate before persisting to disk.
 
 ### Core Principle
 
@@ -34,7 +34,7 @@ Phase 1 transforms an industry configuration file into a validated `IndustryData
 
 | Item | Description |
 |------|-------------|
-| **Input** | `config/industries/{industry_id}.json` |
+| **Input** | `industry_config` table row (`config_yaml` JSON), loaded via `IndustryConfigQuery` |
 | **Output** | `runtime/datapacks/{industry_id}/{uuid}/datapack.json` |
 | **Gate** | `CollectionGateValidator` — blocks pipeline on failure |
 
