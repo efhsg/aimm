@@ -37,3 +37,4 @@ docs(skills): add validate-analysis-gate skill
 - Body explains *why*, not *what*
 - Footer references issues: `Closes #123`
 - No `Co-Authored-By` or AI attribution in commits
+- Do not commit generated artifacts (e.g., `tests/_support/_generated/`)
