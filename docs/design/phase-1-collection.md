@@ -3,7 +3,7 @@
 **Project:** Aimm (Equity Intelligence Pipeline)
 **Phase:** 1 — Collection
 **Version:** 1.0
-**Status:** Draft
+**Status:** Complete
 
 ---
 
@@ -7456,54 +7456,54 @@ CREATE TABLE source_block (
 Before marking Phase 1 complete:
 
 **Database:**
-- [ ] All migrations created and applied
-- [ ] All ActiveRecord models created with validation rules
-- [ ] All ActiveQuery classes created with fluent scopes
-- [ ] Model relations working (IndustryConfig → CollectionRun → CollectionError)
-- [ ] Query chaining verified (e.g., `CollectionRun::find()->forIndustry($id)->complete()->gatePassed()->all()`)
-- [ ] CollectionRunRepository CRUD operations working
-- [ ] SourceBlockRepository concurrency handling verified
-- [ ] Foreign key constraints tested
+- [x] All migrations created and applied
+- [x] All ActiveRecord models created with validation rules
+- [x] All ActiveQuery classes created with fluent scopes
+- [x] Model relations working (IndustryConfig → CollectionRun → CollectionError)
+- [x] Query chaining verified (e.g., `CollectionRun::find()->forIndustry($id)->complete()->gatePassed()->all()`)
+- [x] CollectionRunRepository CRUD operations working
+- [x] SourceBlockRepository concurrency handling verified
+- [x] Foreign key constraints tested
 
 **Foundation & Value Objects:**
-- [ ] All enums created and tested
-- [ ] All exceptions created
-- [ ] All DataPoint value objects created and tested
+- [x] All enums created and tested
+- [x] All exceptions created
+- [x] All DataPoint value objects created and tested
 
 **Infrastructure:**
-- [ ] WebFetchClient working with rate limiting
-- [ ] YahooFinanceAdapter parsing fixtures correctly
-- [ ] StockAnalysisAdapter parsing fixtures correctly
-- [ ] ReutersAdapter parsing fixtures correctly
-- [ ] DataPointFactory creating all types
-- [ ] BlockedSourceRegistry persisting/expiring blocks
-- [ ] AdapterChain falling back through adapters
-- [ ] CachedDataAdapter retrieving from previous datapacks
+- [x] WebFetchClient working with rate limiting
+- [x] YahooFinanceAdapter parsing fixtures correctly
+- [x] StockAnalysisAdapter parsing fixtures correctly
+- [x] ReutersAdapter parsing fixtures correctly
+- [x] DataPointFactory creating all types
+- [x] BlockedSourceRegistry persisting/expiring blocks
+- [x] AdapterChain falling back through adapters
+- [x] CachedDataAdapter retrieving from previous datapacks
 
 **Validators:**
-- [ ] JSON schemas defined with conditional requirements
-- [ ] SchemaValidator working with opis/json-schema
-- [ ] CollectionGateValidator enforcing all rules
-- [ ] SemanticValidator checking ranges and cross-field consistency
+- [x] JSON schemas defined with conditional requirements
+- [x] SchemaValidator working with opis/json-schema
+- [x] CollectionGateValidator enforcing all rules
+- [x] SemanticValidator checking ranges and cross-field consistency
 
 **Handlers:**
-- [ ] CollectDatapointHandler iterating sources
-- [ ] CollectCompanyHandler collecting all metrics
-- [ ] CollectIndustryHandler orchestrating full collection
-- [ ] DataPackAssembler streaming JSON without OOM
+- [x] CollectDatapointHandler iterating sources
+- [x] CollectCompanyHandler collecting all metrics
+- [x] CollectIndustryHandler orchestrating full collection
+- [x] DataPackAssembler streaming JSON without OOM
 
 **Storage & CLI:**
-- [ ] DataPackRepository persisting and loading
-- [ ] CollectController CLI working
-- [ ] DI container configured
-- [ ] SanitizedFileTarget redacting sensitive data
-- [ ] AlertDispatcher sending Slack/email on critical errors
+- [x] DataPackRepository persisting and loading
+- [x] CollectController CLI working
+- [x] DI container configured
+- [x] SanitizedFileTarget redacting sensitive data
+- [x] AlertDispatcher sending Slack/email on critical errors
 
 **Quality:**
-- [ ] Unit tests > 80% coverage
-- [ ] Integration tests passing
-- [ ] End-to-end smoke test passing
-- [ ] Memory usage < 80% of limit for 50-company industry
+- [x] Unit tests > 80% coverage
+- [x] Integration tests passing
+- [x] End-to-end smoke test passing
+- [x] Memory usage < 80% of limit for 50-company industry
 
 ### 10.10 Risk Mitigation
 
