@@ -10,7 +10,7 @@ use yii\db\Connection;
 /**
  * Repository for source block persistence (database-backed rate limiting).
  */
-final class SourceBlockRepository
+final class SourceBlockRepository implements SourceBlockRepositoryInterface
 {
     public function __construct(
         private readonly Connection $db,

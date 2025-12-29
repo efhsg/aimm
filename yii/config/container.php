@@ -14,6 +14,7 @@ use app\clients\AllowedDomainPolicy;
 use app\clients\AllowedDomainPolicyInterface;
 use app\clients\BlockDetector;
 use app\clients\BlockDetectorInterface;
+use app\clients\DatabaseRateLimiter;
 use app\clients\FileRateLimiter;
 use app\clients\GuzzleWebFetchClient;
 use app\clients\RandomUserAgentProvider;
@@ -32,8 +33,11 @@ use app\handlers\collection\CollectIndustryHandler;
 use app\handlers\collection\CollectIndustryInterface;
 use app\handlers\collection\CollectMacroHandler;
 use app\handlers\collection\CollectMacroInterface;
+use app\queries\CollectionRunRepository;
 use app\queries\DataPackRepository;
 use app\queries\IndustryConfigQuery;
+use app\queries\SourceBlockRepository;
+use app\queries\SourceBlockRepositoryInterface;
 use app\transformers\DataPackAssembler;
 use app\transformers\DataPackAssemblerInterface;
 use app\validators\CollectionGateValidator;
@@ -47,7 +51,15 @@ use yii\di\Container;
 
 return [
     'singletons' => [
-        RateLimiterInterface::class => static function (): RateLimiterInterface {
+        RateLimiterInterface::class => static function (Container $container): RateLimiterInterface {
+            $type = Yii::$app->params['rateLimiter'] ?? 'file';
+
+            if ($type === 'database') {
+                return new DatabaseRateLimiter(
+                    $container->get(SourceBlockRepository::class),
+                );
+            }
+
             return new FileRateLimiter(Yii::getAlias('@runtime/ratelimit'));
         },
         BlockDetectorInterface::class => BlockDetector::class,
@@ -141,6 +153,18 @@ return [
         SourceCandidateFactory::class => SourceCandidateFactory::class,
         CompanyDataFactory::class => CompanyDataFactory::class,
         IndustryDataPackFactory::class => IndustryDataPackFactory::class,
+
+        SourceBlockRepository::class => static function (): SourceBlockRepository {
+            return new SourceBlockRepository(Yii::$app->db);
+        },
+
+        SourceBlockRepositoryInterface::class => static function (Container $container): SourceBlockRepositoryInterface {
+            return $container->get(SourceBlockRepository::class);
+        },
+
+        CollectionRunRepository::class => static function (): CollectionRunRepository {
+            return new CollectionRunRepository(Yii::$app->db);
+        },
 
         DataPackRepository::class => static function (): DataPackRepository {
             $params = Yii::$app->params;

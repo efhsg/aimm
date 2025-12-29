@@ -8,6 +8,19 @@ return [
     'datapacksPath' => '@runtime/datapacks',
     'macroStalenessThresholdDays' => 10,
     'renderTimeoutSeconds' => 120,
+    'allowedSourceDomains' => [
+        'finance.yahoo.com',
+        'query1.finance.yahoo.com',
+        'www.reuters.com',
+        'www.wsj.com',
+        'www.bloomberg.com',
+        'www.morningstar.com',
+        'seekingalpha.com',
+        'stockanalysis.com',
+    ],
+
+    // Rate limiter: 'file' (dev/single-process) or 'database' (production/multi-process)
+    'rateLimiter' => 'file',
 
     // Alert notifier configuration (set in params-local.php for production)
     'alerts' => [
