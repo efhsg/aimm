@@ -6,6 +6,9 @@
   "service": "aimm_yii",
   "workspaceFolder": "/var/www/html",
   "shutdownAction": "stopCompose",
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/erwin/.ssh,type=bind,readonly"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
