@@ -128,7 +128,7 @@ final class CollectControllerTest extends Unit
         $record = new IndustryConfigRecord();
         $record->industry_id = $industryId;
         $record->name = $name;
-        $record->config_yaml = $configJson;
+        $record->config_json = $configJson;
         $record->is_active = true;
         $record->save();
 

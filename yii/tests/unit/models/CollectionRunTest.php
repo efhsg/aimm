@@ -29,7 +29,7 @@ final class CollectionRunTest extends Unit
         $this->industryConfig = new IndustryConfig();
         $this->industryConfig->industry_id = 'test-industry';
         $this->industryConfig->name = 'Test Industry';
-        $this->industryConfig->config_yaml = 'companies: []';
+        $this->industryConfig->config_json = 'companies: []';
         $this->industryConfig->save();
     }
 

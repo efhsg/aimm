@@ -16,7 +16,7 @@ use yii\db\Expression;
  * @property int $id
  * @property string $industry_id
  * @property string $name
- * @property string $config_yaml
+ * @property string $config_json
  * @property bool $is_active
  * @property string $created_at
  * @property string $updated_at
@@ -43,11 +43,11 @@ final class IndustryConfig extends ActiveRecord
     public function rules(): array
     {
         return [
-            [['industry_id', 'name', 'config_yaml'], 'required'],
+            [['industry_id', 'name', 'config_json'], 'required'],
             [['industry_id'], 'string', 'max' => 64],
             [['industry_id'], 'unique'],
             [['name'], 'string', 'max' => 255],
-            [['config_yaml'], 'string'],
+            [['config_json'], 'string'],
             [['is_active'], 'boolean'],
             [['is_active'], 'default', 'value' => true],
         ];
@@ -59,7 +59,7 @@ final class IndustryConfig extends ActiveRecord
             'id' => 'ID',
             'industry_id' => 'Industry ID',
             'name' => 'Name',
-            'config_yaml' => 'Configuration YAML',
+            'config_json' => 'Configuration',
             'is_active' => 'Active',
             'created_at' => 'Created At',
             'updated_at' => 'Updated At',

@@ -228,7 +228,7 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         $record = new IndustryConfigRecord();
         $record->industry_id = 'tech';
         $record->name = 'Technology';
-        $record->config_yaml = json_encode([
+        $record->config_json = json_encode([
             'id' => 'tech',
             'name' => 'Technology',
             'sector' => 'Software',

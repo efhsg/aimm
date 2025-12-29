@@ -28,7 +28,7 @@ final class IndustryConfigTest extends Unit
         $this->assertFalse($model->validate());
         $this->assertArrayHasKey('industry_id', $model->getErrors());
         $this->assertArrayHasKey('name', $model->getErrors());
-        $this->assertArrayHasKey('config_yaml', $model->getErrors());
+        $this->assertArrayHasKey('config_json', $model->getErrors());
     }
 
     public function testValidationPassesWithRequiredFields(): void
@@ -36,7 +36,7 @@ final class IndustryConfigTest extends Unit
         $model = new IndustryConfig();
         $model->industry_id = 'oil-majors';
         $model->name = 'Oil Majors';
-        $model->config_yaml = 'companies: []';
+        $model->config_json = 'companies: []';
 
         $this->assertTrue($model->validate());
     }
@@ -46,13 +46,13 @@ final class IndustryConfigTest extends Unit
         $model1 = new IndustryConfig();
         $model1->industry_id = 'test-industry';
         $model1->name = 'Test Industry';
-        $model1->config_yaml = 'companies: []';
+        $model1->config_json = 'companies: []';
         $model1->save();
 
         $model2 = new IndustryConfig();
         $model2->industry_id = 'test-industry';
         $model2->name = 'Test Industry 2';
-        $model2->config_yaml = 'companies: []';
+        $model2->config_json = 'companies: []';
 
         $this->assertFalse($model2->validate());
         $this->assertArrayHasKey('industry_id', $model2->getErrors());
@@ -63,7 +63,7 @@ final class IndustryConfigTest extends Unit
         $model = new IndustryConfig();
         $model->industry_id = 'test-industry';
         $model->name = 'Test Industry';
-        $model->config_yaml = 'companies: []';
+        $model->config_json = 'companies: []';
         $model->save();
 
         $this->assertTrue((bool) $model->is_active);
@@ -81,14 +81,14 @@ final class IndustryConfigTest extends Unit
         $active = new IndustryConfig();
         $active->industry_id = 'active-industry';
         $active->name = 'Active Industry';
-        $active->config_yaml = 'companies: []';
+        $active->config_json = 'companies: []';
         $active->is_active = true;
         $active->save();
 
         $inactive = new IndustryConfig();
         $inactive->industry_id = 'inactive-industry';
         $inactive->name = 'Inactive Industry';
-        $inactive->config_yaml = 'companies: []';
+        $inactive->config_json = 'companies: []';
         $inactive->is_active = false;
         $inactive->save();
 
@@ -106,7 +106,7 @@ final class IndustryConfigTest extends Unit
         $config = new IndustryConfig();
         $config->industry_id = 'test-industry';
         $config->name = 'Test Industry';
-        $config->config_yaml = 'companies: []';
+        $config->config_json = 'companies: []';
         $config->save();
 
         $run = new CollectionRun();
@@ -126,7 +126,7 @@ final class IndustryConfigTest extends Unit
         $config = new IndustryConfig();
         $config->industry_id = 'specific-industry';
         $config->name = 'Specific Industry';
-        $config->config_yaml = 'companies: []';
+        $config->config_json = 'companies: []';
         $config->save();
 
         $result = IndustryConfig::find()->byIndustryId('specific-industry')->one();

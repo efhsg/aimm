@@ -93,7 +93,7 @@ final class IndustryConfigQuery
     private function validateAndDecode(IndustryConfigRecord $record): array
     {
         $result = $this->schemaValidator->validate(
-            $record->config_yaml,
+            $record->config_json,
             self::SCHEMA_FILE
         );
 
@@ -106,7 +106,7 @@ final class IndustryConfigQuery
 
         try {
             $data = json_decode(
-                $record->config_yaml,
+                $record->config_json,
                 true,
                 512,
                 JSON_THROW_ON_ERROR
