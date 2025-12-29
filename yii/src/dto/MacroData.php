@@ -28,14 +28,20 @@ final readonly class MacroData
      */
     public function toArray(): array
     {
+        $additionalIndicators = [];
+        foreach ($this->additionalIndicators as $name => $datapoint) {
+            $additionalIndicators[$name] = $datapoint->toArray();
+        }
+
+        if ($additionalIndicators === []) {
+            $additionalIndicators = new \stdClass();
+        }
+
         return [
             'commodity_benchmark' => $this->commodityBenchmark?->toArray(),
             'margin_proxy' => $this->marginProxy?->toArray(),
             'sector_index' => $this->sectorIndex?->toArray(),
-            'additional_indicators' => array_map(
-                static fn (DataPointMoney|DataPointNumber $dp) => $dp->toArray(),
-                $this->additionalIndicators
-            ),
+            'additional_indicators' => $additionalIndicators,
         ];
     }
 }

@@ -127,6 +127,39 @@ final class CollectionRunTest extends Unit
         $this->assertCount(0, CollectionRun::find()->failed()->all());
     }
 
+    public function testQueryChainingFiltersCorrectly(): void
+    {
+        $completePassed = new CollectionRun();
+        $completePassed->industry_id = 'test-industry';
+        $completePassed->datapack_id = Uuid::uuid4()->toString();
+        $completePassed->status = CollectionRun::STATUS_COMPLETE;
+        $completePassed->gate_passed = true;
+        $completePassed->save();
+
+        $completeFailed = new CollectionRun();
+        $completeFailed->industry_id = 'test-industry';
+        $completeFailed->datapack_id = Uuid::uuid4()->toString();
+        $completeFailed->status = CollectionRun::STATUS_COMPLETE;
+        $completeFailed->gate_passed = false;
+        $completeFailed->save();
+
+        $otherIndustry = new CollectionRun();
+        $otherIndustry->industry_id = 'other-industry';
+        $otherIndustry->datapack_id = Uuid::uuid4()->toString();
+        $otherIndustry->status = CollectionRun::STATUS_COMPLETE;
+        $otherIndustry->gate_passed = true;
+        $otherIndustry->save();
+
+        $results = CollectionRun::find()
+            ->forIndustry('test-industry')
+            ->complete()
+            ->gatePassed()
+            ->all();
+
+        $this->assertCount(1, $results);
+        $this->assertSame($completePassed->datapack_id, $results[0]->datapack_id);
+    }
+
     public function testMarkRunningUpdatesStatus(): void
     {
         $run = new CollectionRun();
@@ -198,6 +231,29 @@ final class CollectionRunTest extends Unit
 
         $this->assertCount(1, $errors);
         $this->assertInstanceOf(CollectionError::class, $errors[0]);
+    }
+
+    public function testDeletingIndustryConfigCascadesToRunsAndErrors(): void
+    {
+        $run = new CollectionRun();
+        $run->industry_id = $this->industryConfig->industry_id;
+        $run->datapack_id = Uuid::uuid4()->toString();
+        $run->save();
+
+        $error = CollectionError::createError(
+            $run->id,
+            'TEST_ERROR',
+            'Test error message'
+        );
+        $error->save();
+
+        $this->assertSame(1, CollectionRun::find()->count());
+        $this->assertSame(1, CollectionError::find()->count());
+
+        $this->industryConfig->delete();
+
+        $this->assertSame(0, CollectionRun::find()->count());
+        $this->assertSame(0, CollectionError::find()->count());
     }
 
     public function testGatePassedScopeFiltersCorrectly(): void

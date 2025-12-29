@@ -25,10 +25,10 @@ final readonly class FinancialsData
     {
         return [
             'history_years' => $this->historyYears,
-            'annual_data' => array_map(
+            'annual_data' => array_values(array_map(
                 static fn (AnnualFinancials $annual) => $annual->toArray(),
                 $this->annualData
-            ),
+            )),
         ];
     }
 }

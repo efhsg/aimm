@@ -22,11 +22,17 @@ final readonly class QuartersData
      */
     public function toArray(): array
     {
+        $quarters = [];
+        foreach ($this->quarters as $key => $quarter) {
+            $quarters[$key] = $quarter->toArray();
+        }
+
+        if ($quarters === []) {
+            $quarters = new \stdClass();
+        }
+
         return [
-            'quarters' => array_map(
-                static fn (QuarterFinancials $quarter) => $quarter->toArray(),
-                $this->quarters
-            ),
+            'quarters' => $quarters,
         ];
     }
 }

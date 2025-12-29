@@ -84,23 +84,47 @@ final class DataPackAssemblerTest extends Unit
         $this->assertSame($industryId, $payload['industry_id']);
         $this->assertSame($datapackId, $payload['datapack_id']);
         $this->assertSame($collectedAt->format(DateTimeImmutable::ATOM), $payload['collected_at']);
-        $this->assertSame($macro->toArray(), $payload['macro']);
+        $this->assertSame($macro->commodityBenchmark?->toArray(), $payload['macro']['commodity_benchmark']);
+        $this->assertSame($macro->marginProxy?->toArray(), $payload['macro']['margin_proxy']);
+        $this->assertSame($macro->sectorIndex?->toArray(), $payload['macro']['sector_index']);
+        $this->assertSame([], $payload['macro']['additional_indicators']);
         $this->assertSame($log->toArray(), $payload['collection_log']);
         $this->assertCount(2, $payload['companies']);
-        $this->assertEquals(
-            $this->createCompanyData('AAA')->toArray(),
-            $payload['companies']['AAA']
-        );
-        $this->assertEquals(
-            $this->createCompanyData('BBB')->toArray(),
-            $payload['companies']['BBB']
-        );
+        $this->assertCompanyPayloadMatches($payload['companies']['AAA'], $this->createCompanyData('AAA'));
+        $this->assertCompanyPayloadMatches($payload['companies']['BBB'], $this->createCompanyData('BBB'));
 
         $logPath = $this->repository->getCollectionLogPath($industryId, $datapackId);
         $this->assertFileExists($logPath);
         $logContent = file_get_contents($logPath);
         $this->assertIsString($logContent);
         $this->assertStringContainsString('Collection Log', $logContent);
+    }
+
+    public function testAssembleHandlesFiftyCompanies(): void
+    {
+        $industryId = 'energy';
+        $datapackId = 'dp-050';
+
+        for ($i = 1; $i <= 50; $i++) {
+            $ticker = 'C' . str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+            $this->repository->saveCompanyIntermediate(
+                $industryId,
+                $datapackId,
+                $this->createCompanyData($ticker)
+            );
+        }
+
+        $path = $this->assembler->assemble(
+            $industryId,
+            $datapackId,
+            new MacroData(),
+            $this->createCollectionLog([]),
+            new DateTimeImmutable('2024-02-01T00:00:00Z')
+        );
+
+        $payload = json_decode((string) file_get_contents($path), true);
+        $this->assertNotNull($payload);
+        $this->assertCount(50, $payload['companies']);
     }
 
     public function testAssembleThrowsWhenOutputPathIsNotWritable(): void
@@ -167,6 +191,19 @@ final class DataPackAssemblerTest extends Unit
             ),
             quarters: new QuartersData(quarters: []),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function assertCompanyPayloadMatches(array $payload, CompanyData $expected): void
+    {
+        $this->assertSame($expected->ticker, $payload['ticker']);
+        $this->assertSame($expected->name, $payload['name']);
+        $this->assertSame($expected->listingCurrency, $payload['listing_currency']);
+        $this->assertEquals($expected->valuation->marketCap->toArray(), $payload['valuation']['market_cap']);
+        $this->assertSame([], $payload['financials']['annual_data']);
+        $this->assertSame([], $payload['quarters']['quarters']);
     }
 
     /**

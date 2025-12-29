@@ -76,7 +76,9 @@ final class CompanyDataFactory
     {
         $annualData = [];
         foreach ($data['annual_data'] as $year => $annual) {
-            $annualData[(int) $year] = self::annualFinancialsFromArray($annual);
+            $annual = (array) $annual;
+            $yearKey = array_key_exists('fiscal_year', $annual) ? (int) $annual['fiscal_year'] : (int) $year;
+            $annualData[$yearKey] = self::annualFinancialsFromArray($annual);
         }
 
         return new FinancialsData(
