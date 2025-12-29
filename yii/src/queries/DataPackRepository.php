@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace app\queries;
 
+use app\dto\CollectionLog;
 use app\dto\CompanyData;
 use app\dto\GateResult;
 use app\dto\IndustryDataPack;
@@ -32,6 +33,7 @@ final class DataPackRepository
     private const DATAPACK_FILENAME = 'datapack.json';
     private const VALIDATION_FILENAME = 'validation.json';
     private const INTERMEDIATE_DIR = 'intermediate';
+    private const COLLECTION_LOG_FILENAME = 'collection.log';
 
     private string $basePath;
 
@@ -54,6 +56,14 @@ final class DataPackRepository
     public function getIntermediateDir(string $industryId, string $datapackId): string
     {
         return "{$this->getDataPackDir($industryId, $datapackId)}/" . self::INTERMEDIATE_DIR;
+    }
+
+    /**
+     * Get the path to the collection log file.
+     */
+    public function getCollectionLogPath(string $industryId, string $datapackId): string
+    {
+        return "{$this->getDataPackDir($industryId, $datapackId)}/" . self::COLLECTION_LOG_FILENAME;
     }
 
     /**
@@ -207,6 +217,30 @@ final class DataPackRepository
     }
 
     /**
+     * Save a human-readable collection log.
+     *
+     * @throws RuntimeException If directory creation or file write fails
+     */
+    public function saveCollectionLog(
+        string $industryId,
+        string $datapackId,
+        CollectionLog $log
+    ): string {
+        $dir = $this->getDataPackDir($industryId, $datapackId);
+
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new RuntimeException("Failed to create datapack directory: {$dir}");
+        }
+
+        $path = $this->getCollectionLogPath($industryId, $datapackId);
+        $content = $this->formatCollectionLog($log);
+
+        $this->atomicWrite($path, $content);
+
+        return $path;
+    }
+
+    /**
      * Load datapack from disk.
      */
     public function load(string $industryId, string $datapackId): ?IndustryDataPack
@@ -347,6 +381,31 @@ final class DataPackRepository
             @unlink($tmpPath);
             throw new RuntimeException("Failed to move file into place: {$path}");
         }
+    }
+
+    private function formatCollectionLog(CollectionLog $log): string
+    {
+        $lines = [
+            'Collection Log',
+            str_repeat('=', 60),
+            '',
+            sprintf('Started:   %s', $log->startedAt->format('Y-m-d H:i:s T')),
+            sprintf('Completed: %s', $log->completedAt->format('Y-m-d H:i:s T')),
+            sprintf('Duration:  %d seconds', $log->durationSeconds),
+            '',
+            'Company Statuses:',
+        ];
+
+        foreach ($log->companyStatuses as $ticker => $status) {
+            $lines[] = sprintf('  %-10s %s', $ticker, $status->value);
+        }
+
+        $lines[] = '';
+        $lines[] = sprintf('Macro Status:   %s', $log->macroStatus->value);
+        $lines[] = sprintf('Total Attempts: %d', $log->totalAttempts);
+        $lines[] = '';
+
+        return implode("\n", $lines);
     }
 
     /**

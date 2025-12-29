@@ -78,6 +78,8 @@ final class DataPackAssembler implements DataPackAssemblerInterface
                 throw new RuntimeException("Failed to finalize datapack: {$outputPath}");
             }
 
+            $this->repository->saveCollectionLog($industryId, $datapackId, $collectionLog);
+
             return $outputPath;
         } catch (Throwable $e) {
             if (is_resource($handle)) {

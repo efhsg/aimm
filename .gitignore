@@ -1,5 +1,6 @@
 /yii/vendor/
 /yii/runtime/
+/yii/tests/_output/
 /data/
 .env
 /.claude/

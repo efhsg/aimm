@@ -231,6 +231,7 @@ return [
                 assembler: $container->get(DataPackAssemblerInterface::class),
                 gateValidator: $container->get(CollectionGateValidatorInterface::class),
                 alertDispatcher: $container->get(AlertDispatcher::class),
+                runRepository: $container->get(CollectionRunRepository::class),
                 logger: Yii::getLogger(),
             );
         },

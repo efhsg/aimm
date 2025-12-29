@@ -32,17 +32,20 @@ use app\enums\DataScale;
 use app\handlers\collection\CollectCompanyInterface;
 use app\handlers\collection\CollectIndustryHandler;
 use app\handlers\collection\CollectMacroInterface;
+use app\queries\CollectionRunRepository;
 use app\queries\DataPackRepository;
 use app\transformers\DataPackAssemblerInterface;
 use app\validators\CollectionGateValidatorInterface;
 use Codeception\Test\Unit;
 use DateTimeImmutable;
+use yii\db\Connection;
 use yii\log\Logger;
 
 final class CollectIndustryHandlerTest extends Unit
 {
     private string $tempDir;
     private DataPackRepository $repository;
+    private ?Connection $runDb = null;
 
     protected function _before(): void
     {
@@ -54,6 +57,10 @@ final class CollectIndustryHandlerTest extends Unit
     protected function _after(): void
     {
         $this->deleteDirectory($this->tempDir);
+        if ($this->runDb !== null) {
+            $this->runDb->close();
+            $this->runDb = null;
+        }
     }
 
     public function testCollectsIndustrySuccessfully(): void
@@ -83,13 +90,16 @@ final class CollectIndustryHandlerTest extends Unit
         $alertNotifier = new TestAlertNotifier();
         $alertDispatcher = new AlertDispatcher([$alertNotifier]);
 
+        $runRepository = $this->createRunRepository();
+
         $handler = $this->createHandler(
             $companyCollector,
             $macroCollector,
             $this->repository,
             $assembler,
             $gateValidator,
-            $alertDispatcher
+            $alertDispatcher,
+            $runRepository
         );
 
         $result = $handler->collect(new CollectIndustryRequest(
@@ -111,6 +121,18 @@ final class CollectIndustryHandlerTest extends Unit
             $this->repository->listIntermediateTickers($config->id, $result->datapackId)
         );
         $this->assertSame([], $alertNotifier->events);
+
+        $run = $this->getRunRow();
+        $this->assertSame($config->id, $run['industry_id']);
+        $this->assertSame($result->datapackId, $run['datapack_id']);
+        $this->assertSame(CollectionStatus::Complete->value, $run['status']);
+        $this->assertSame(2, (int) $run['companies_total']);
+        $this->assertSame(2, (int) $run['companies_success']);
+        $this->assertSame(0, (int) $run['companies_failed']);
+        $this->assertSame(1, (int) $run['gate_passed']);
+        $this->assertSame(0, (int) $run['error_count']);
+        $this->assertSame(0, (int) $run['warning_count']);
+        $this->assertNotSame('', (string) $run['file_path']);
     }
 
     public function testFailsOverallWhenMacroFails(): void
@@ -141,13 +163,16 @@ final class CollectIndustryHandlerTest extends Unit
         $alertNotifier = new TestAlertNotifier();
         $alertDispatcher = new AlertDispatcher([$alertNotifier]);
 
+        $runRepository = $this->createRunRepository();
+
         $handler = $this->createHandler(
             $companyCollector,
             $macroCollector,
             $this->repository,
             $assembler,
             $gateValidator,
-            $alertDispatcher
+            $alertDispatcher,
+            $runRepository
         );
 
         $result = $handler->collect(new CollectIndustryRequest(
@@ -158,6 +183,12 @@ final class CollectIndustryHandlerTest extends Unit
 
         $this->assertSame(CollectionStatus::Failed, $result->overallStatus);
         $this->assertSame([], $alertNotifier->events);
+
+        $run = $this->getRunRow();
+        $this->assertSame(CollectionStatus::Failed->value, $run['status']);
+        $this->assertSame(1, (int) $run['companies_total']);
+        $this->assertSame(1, (int) $run['companies_success']);
+        $this->assertSame(0, (int) $run['companies_failed']);
     }
 
     public function testPersistsIntermediatesInBatches(): void
@@ -190,13 +221,16 @@ final class CollectIndustryHandlerTest extends Unit
         $alertNotifier = new TestAlertNotifier();
         $alertDispatcher = new AlertDispatcher([$alertNotifier]);
 
+        $runRepository = $this->createRunRepository();
+
         $handler = $this->createHandler(
             $companyCollector,
             $macroCollector,
             $this->repository,
             $assembler,
             $gateValidator,
-            $alertDispatcher
+            $alertDispatcher,
+            $runRepository
         );
 
         $result = $handler->collect(new CollectIndustryRequest(
@@ -210,6 +244,11 @@ final class CollectIndustryHandlerTest extends Unit
             ['AAA', 'BBB', 'CCC'],
             $this->repository->listIntermediateTickers($config->id, $result->datapackId)
         );
+
+        $run = $this->getRunRow();
+        $this->assertSame(3, (int) $run['companies_total']);
+        $this->assertSame(3, (int) $run['companies_success']);
+        $this->assertSame(0, (int) $run['companies_failed']);
     }
 
     public function testAlertsWhenGateFails(): void
@@ -241,13 +280,16 @@ final class CollectIndustryHandlerTest extends Unit
         $alertNotifier = new TestAlertNotifier();
         $alertDispatcher = new AlertDispatcher([$alertNotifier]);
 
+        $runRepository = $this->createRunRepository();
+
         $handler = $this->createHandler(
             $companyCollector,
             $macroCollector,
             $this->repository,
             $assembler,
             $gateValidator,
-            $alertDispatcher
+            $alertDispatcher,
+            $runRepository
         );
 
         $result = $handler->collect(new CollectIndustryRequest(
@@ -263,6 +305,13 @@ final class CollectIndustryHandlerTest extends Unit
         $this->assertSame('GATE_FAILED', $event->type);
         $this->assertSame($config->id, $event->context['industry_id'] ?? null);
         $this->assertSame($result->datapackId, $event->context['datapack_id'] ?? null);
+
+        $run = $this->getRunRow();
+        $this->assertSame(CollectionStatus::Failed->value, $run['status']);
+        $errorCount = $this->runDb?->createCommand(
+            'SELECT COUNT(*) FROM collection_error'
+        )->queryScalar();
+        $this->assertSame(1, (int) $errorCount);
     }
 
     /**
@@ -354,7 +403,8 @@ final class CollectIndustryHandlerTest extends Unit
         DataPackRepository $repository,
         DataPackAssemblerInterface $assembler,
         CollectionGateValidatorInterface $gateValidator,
-        AlertDispatcher $alertDispatcher
+        AlertDispatcher $alertDispatcher,
+        CollectionRunRepository $runRepository
     ): CollectIndustryHandler {
         return new CollectIndustryHandler(
             companyCollector: $companyCollector,
@@ -363,8 +413,61 @@ final class CollectIndustryHandlerTest extends Unit
             assembler: $assembler,
             gateValidator: $gateValidator,
             alertDispatcher: $alertDispatcher,
+            runRepository: $runRepository,
             logger: $this->createMock(Logger::class),
         );
+    }
+
+    private function createRunRepository(): CollectionRunRepository
+    {
+        $db = new Connection(['dsn' => 'sqlite::memory:']);
+        $db->open();
+        $db->createCommand(
+            'CREATE TABLE collection_run (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                industry_id TEXT NOT NULL,
+                datapack_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                completed_at TEXT NULL,
+                companies_total INTEGER NOT NULL DEFAULT 0,
+                companies_success INTEGER NOT NULL DEFAULT 0,
+                companies_failed INTEGER NOT NULL DEFAULT 0,
+                gate_passed INTEGER NULL,
+                error_count INTEGER NOT NULL DEFAULT 0,
+                warning_count INTEGER NOT NULL DEFAULT 0,
+                file_path TEXT NULL,
+                file_size_bytes INTEGER NULL,
+                duration_seconds INTEGER NULL
+            )'
+        )->execute();
+        $db->createCommand(
+            'CREATE TABLE collection_error (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                collection_run_id INTEGER NOT NULL,
+                severity TEXT NOT NULL,
+                error_code TEXT NOT NULL,
+                error_message TEXT NOT NULL,
+                error_path TEXT NULL,
+                ticker TEXT NULL
+            )'
+        )->execute();
+
+        $this->runDb = $db;
+
+        return new CollectionRunRepository($db);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getRunRow(): array
+    {
+        $this->assertNotNull($this->runDb);
+        $row = $this->runDb->createCommand('SELECT * FROM collection_run')->queryOne();
+        $this->assertIsArray($row);
+
+        return $row;
     }
 
     private function deleteDirectory(string $dir): void

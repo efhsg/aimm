@@ -159,6 +159,33 @@ final class DataPackRepositoryTest extends Unit
         $this->assertArrayHasKey('validated_at', $content);
     }
 
+    public function testSaveCollectionLogWritesReadableLog(): void
+    {
+        $log = new CollectionLog(
+            startedAt: new DateTimeImmutable('2024-01-01 10:00:00'),
+            completedAt: new DateTimeImmutable('2024-01-01 10:05:00'),
+            durationSeconds: 300,
+            companyStatuses: [
+                'AAPL' => CollectionStatus::Complete,
+                'MSFT' => CollectionStatus::Partial,
+            ],
+            macroStatus: CollectionStatus::Complete,
+            totalAttempts: 15,
+        );
+
+        $path = $this->repository->saveCollectionLog('energy', 'dp-123', $log);
+
+        $this->assertFileExists($path);
+
+        $content = file_get_contents($path);
+        $this->assertIsString($content);
+        $this->assertStringContainsString('Collection Log', $content);
+        $this->assertStringContainsString('AAPL', $content);
+        $this->assertStringContainsString('MSFT', $content);
+        $this->assertStringContainsString('300 seconds', $content);
+        $this->assertStringContainsString('Total Attempts: 15', $content);
+    }
+
     public function testListByIndustryReturnsDatapacksSortedByDate(): void
     {
         // Create first datapack

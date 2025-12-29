@@ -4247,6 +4247,7 @@ final class SemanticValidator implements SemanticValidatorInterface
      */
     private const ALLOWED_DOMAINS = [
         'finance.yahoo.com',
+        'query1.finance.yahoo.com',
         'www.reuters.com',
         'www.wsj.com',
         'www.bloomberg.com',
@@ -5412,6 +5413,7 @@ final class CollectionRun extends ActiveRecord
     public const STATUS_PENDING = 'pending';
     public const STATUS_RUNNING = 'running';
     public const STATUS_COMPLETE = 'complete';
+    public const STATUS_PARTIAL = 'partial';
     public const STATUS_FAILED = 'failed';
 
     public static function tableName(): string
@@ -5432,6 +5434,7 @@ final class CollectionRun extends ActiveRecord
                 self::STATUS_PENDING,
                 self::STATUS_RUNNING,
                 self::STATUS_COMPLETE,
+                self::STATUS_PARTIAL,
                 self::STATUS_FAILED,
             ]],
             [['companies_total', 'companies_success', 'companies_failed'], 'integer', 'min' => 0],

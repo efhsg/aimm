@@ -95,6 +95,12 @@ final class DataPackAssemblerTest extends Unit
             $this->createCompanyData('BBB')->toArray(),
             $payload['companies']['BBB']
         );
+
+        $logPath = $this->repository->getCollectionLogPath($industryId, $datapackId);
+        $this->assertFileExists($logPath);
+        $logContent = file_get_contents($logPath);
+        $this->assertIsString($logContent);
+        $this->assertStringContainsString('Collection Log', $logContent);
     }
 
     public function testAssembleThrowsWhenOutputPathIsNotWritable(): void
