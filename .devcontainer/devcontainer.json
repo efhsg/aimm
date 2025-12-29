@@ -6,6 +6,12 @@
   "service": "aimm_yii",
   "workspaceFolder": "/var/www/html",
   "shutdownAction": "stopCompose",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": false,
+      "installOhMyZsh": false
+    }
+  },
   "mounts": [
     "source=${localEnv:HOME}/.ssh,target=/home/erwin/.ssh,type=bind,readonly"
   ],
