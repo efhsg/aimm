@@ -11,16 +11,44 @@ use app\dto\SourceCandidate;
  */
 final class SourceCandidateFactory
 {
+    private const KEY_DOMAIN = 'domain';
+    private const KEY_PRIORITY = 'priority';
+    private const KEY_URL_TEMPLATE = 'url_template';
+    private const KEY_TICKER_FORMAT = 'ticker_format';
+    private const KEY_SUPPORTS_MACRO = 'supports_macro';
+
+    private const TICKER_FORMAT_YAHOO = 'yahoo';
+    private const TICKER_FORMAT_LOWER = 'lower';
+    private const TICKER_FORMAT_REUTERS = 'reuters';
+
     private const SOURCE_TEMPLATES = [
         'yahoo_finance' => [
-            'domain' => 'finance.yahoo.com',
-            'priority' => 1,
-            'url_template' => 'https://finance.yahoo.com/quote/{ticker}',
+            self::KEY_DOMAIN => 'finance.yahoo.com',
+            self::KEY_PRIORITY => 1,
+            self::KEY_URL_TEMPLATE => 'https://finance.yahoo.com/quote/{ticker}',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_YAHOO,
+            self::KEY_SUPPORTS_MACRO => true,
         ],
         'yahoo_finance_api' => [
-            'domain' => 'query1.finance.yahoo.com',
-            'priority' => 2,
-            'url_template' => 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=financialData,defaultKeyStatistics',
+            self::KEY_DOMAIN => 'query1.finance.yahoo.com',
+            self::KEY_PRIORITY => 2,
+            self::KEY_URL_TEMPLATE => 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=financialData,defaultKeyStatistics,price',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_YAHOO,
+            self::KEY_SUPPORTS_MACRO => true,
+        ],
+        'stockanalysis' => [
+            self::KEY_DOMAIN => 'stockanalysis.com',
+            self::KEY_PRIORITY => 3,
+            self::KEY_URL_TEMPLATE => 'https://stockanalysis.com/stocks/{ticker}/',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_LOWER,
+            self::KEY_SUPPORTS_MACRO => false,
+        ],
+        'reuters' => [
+            self::KEY_DOMAIN => 'www.reuters.com',
+            self::KEY_PRIORITY => 4,
+            self::KEY_URL_TEMPLATE => 'https://www.reuters.com/companies/{ticker}.{exchange}',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_REUTERS,
+            self::KEY_SUPPORTS_MACRO => false,
         ],
     ];
 
@@ -41,6 +69,25 @@ final class SourceCandidateFactory
         'XASX' => '.AX',
     ];
 
+    private const REUTERS_EXCHANGE_SUFFIX_MAP = [
+        'NYSE' => 'N',
+        'NASDAQ' => 'O',
+        'LSE' => 'L',
+        'XLON' => 'L',
+        'AMS' => 'AS',
+        'XAMS' => 'AS',
+        'XPAR' => 'PA',
+        'PAR' => 'PA',
+        'FRA' => 'F',
+        'XFRA' => 'F',
+        'TYO' => 'T',
+        'XTKS' => 'T',
+        'HKG' => 'HK',
+        'XHKG' => 'HK',
+        'TSX' => 'TO',
+        'XTSE' => 'TO',
+    ];
+
     /**
      * Generate prioritized source candidates for a ticker.
      *
@@ -49,16 +96,18 @@ final class SourceCandidateFactory
     public function forTicker(string $ticker, ?string $exchange = null): array
     {
         $candidates = [];
-        $yahooTicker = $this->toYahooTicker($ticker, $exchange);
 
         foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
-            $url = str_replace('{ticker}', urlencode($yahooTicker), $config['url_template']);
+            $url = $this->buildUrl($config, $ticker, $exchange);
+            if ($url === null) {
+                continue;
+            }
 
             $candidates[] = new SourceCandidate(
                 url: $url,
                 adapterId: $adapterId,
-                priority: $config['priority'],
-                domain: $config['domain'],
+                priority: $config[self::KEY_PRIORITY],
+                domain: $config[self::KEY_DOMAIN],
             );
         }
 
@@ -93,13 +142,20 @@ final class SourceCandidateFactory
         }
 
         foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
-            $url = str_replace('{ticker}', urlencode($symbol), $config['url_template']);
+            if (!($config[self::KEY_SUPPORTS_MACRO] ?? false)) {
+                continue;
+            }
+
+            $url = $this->buildUrl($config, $symbol, null);
+            if ($url === null) {
+                continue;
+            }
 
             $candidates[] = new SourceCandidate(
                 url: $url,
                 adapterId: $adapterId,
-                priority: $config['priority'],
-                domain: $config['domain'],
+                priority: $config[self::KEY_PRIORITY],
+                domain: $config[self::KEY_DOMAIN],
             );
         }
 
@@ -128,5 +184,54 @@ final class SourceCandidateFactory
         }
 
         return $ticker . $suffix;
+    }
+
+    private function buildUrl(
+        array $config,
+        string $ticker,
+        ?string $exchange
+    ): ?string {
+        $urlTemplate = $config[self::KEY_URL_TEMPLATE];
+        $normalizedTicker = $this->normalizeTicker(
+            $config[self::KEY_TICKER_FORMAT] ?? null,
+            $ticker,
+            $exchange
+        );
+
+        if ($normalizedTicker === null) {
+            return null;
+        }
+
+        $url = str_replace('{ticker}', urlencode($normalizedTicker), $urlTemplate);
+
+        if (str_contains($urlTemplate, '{exchange}')) {
+            $exchangeSuffix = $this->toReutersExchangeSuffix($exchange);
+            if ($exchangeSuffix === null) {
+                return null;
+            }
+            $url = str_replace('{exchange}', $exchangeSuffix, $url);
+        }
+
+        return $url;
+    }
+
+    private function normalizeTicker(?string $format, string $ticker, ?string $exchange): ?string
+    {
+        return match ($format) {
+            self::TICKER_FORMAT_YAHOO => $this->toYahooTicker($ticker, $exchange),
+            self::TICKER_FORMAT_LOWER => strtolower($ticker),
+            self::TICKER_FORMAT_REUTERS => $ticker,
+            null => $ticker,
+            default => null,
+        };
+    }
+
+    private function toReutersExchangeSuffix(?string $exchange): ?string
+    {
+        if ($exchange === null) {
+            return null;
+        }
+
+        return self::REUTERS_EXCHANGE_SUFFIX_MAP[$exchange] ?? null;
     }
 }

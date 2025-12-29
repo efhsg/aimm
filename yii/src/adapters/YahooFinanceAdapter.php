@@ -48,6 +48,24 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
             'selector' => 'td[data-test="PB_RATIO-value"]',
             'unit' => 'ratio',
         ],
+        'valuation.net_debt_ebitda' => [
+            'json_path' => '$.quoteSummary.result[0].financialData.netDebtToEbitda',
+            'unit' => 'ratio',
+        ],
+        'macro.commodity_benchmark' => [
+            'json_path' => '$.quoteSummary.result[0].price.regularMarketPrice',
+            'currency_path' => '$.quoteSummary.result[0].price.currency',
+            'unit' => 'currency',
+        ],
+        'macro.margin_proxy' => [
+            'json_path' => '$.quoteSummary.result[0].price.regularMarketPrice',
+            'currency_path' => '$.quoteSummary.result[0].price.currency',
+            'unit' => 'currency',
+        ],
+        'macro.sector_index' => [
+            'json_path' => '$.quoteSummary.result[0].price.regularMarketPrice',
+            'unit' => 'number',
+        ],
     ];
 
     public function getAdapterId(): string
@@ -178,6 +196,7 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
             'currency' => $this->parseCurrencyValue($normalized),
             'ratio' => $this->parseRatioValue($normalized),
             'percent' => $this->parsePercentValue($normalized),
+            'number' => $this->parseNumberValue($normalized),
             default => null,
         };
     }
@@ -248,6 +267,18 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
         return ['value' => (float)$value];
     }
 
+    /**
+     * @return array{value: float}|null
+     */
+    private function parseNumberValue(string $value): ?array
+    {
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        return ['value' => (float)$value];
+    }
+
     private function cssToXpath(string $css): string
     {
         if (preg_match('/^(\w+)\[([a-z-]+)="([^"]+)"\]$/i', $css, $matches)) {
@@ -295,21 +326,37 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
             }
 
             $path = self::SELECTORS[$key]['json_path'];
-            $value = $this->getJsonPath($data, $path);
+            $rawValue = $this->getJsonPath($data, $path);
+            $value = $this->normalizeJsonValue($rawValue);
 
             if ($value === null) {
                 $notFound[] = $key;
                 continue;
             }
 
+            $unit = self::SELECTORS[$key]['unit'];
+            $parsed = $this->parseJsonValue($value, $unit);
+
+            if ($parsed === null) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            $currency = null;
+            $scale = null;
+            if ($unit === 'currency') {
+                $currency = $this->resolveCurrency($data, self::SELECTORS[$key]['currency_path'] ?? null) ?? 'USD';
+                $scale = $parsed['scale'] ?? 'units';
+            }
+
             $extractions[$key] = new Extraction(
                 datapointKey: $key,
-                rawValue: $value,
-                unit: self::SELECTORS[$key]['unit'],
-                currency: 'USD',
-                scale: 'units',
+                rawValue: $parsed['value'],
+                unit: $unit,
+                currency: $currency,
+                scale: $scale,
                 asOf: null,
-                locator: SourceLocator::json($path, json_encode($value) ?: ''),
+                locator: SourceLocator::json($path, json_encode($rawValue) ?: ''),
             );
         }
 
@@ -344,5 +391,63 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
         }
 
         return $current;
+    }
+
+    private function normalizeJsonValue(string|int|float|array|bool|null $value): string|int|float|bool|null
+    {
+        if ($value === null || is_bool($value)) {
+            return $value;
+        }
+
+        if (is_array($value)) {
+            if (array_key_exists('raw', $value)) {
+                return is_scalar($value['raw']) ? $value['raw'] : null;
+            }
+            if (array_key_exists('fmt', $value)) {
+                return is_scalar($value['fmt']) ? $value['fmt'] : null;
+            }
+            return null;
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return array{value: float, scale?: string}|null
+     */
+    private function parseJsonValue(string|int|float|bool $value, string $unit): ?array
+    {
+        if (is_bool($value)) {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            return ['value' => (float)$value];
+        }
+
+        if (!is_string($value)) {
+            return null;
+        }
+
+        return $this->parseValue($value, $unit);
+    }
+
+    private function resolveCurrency(array $data, ?string $path): ?string
+    {
+        if ($path === null) {
+            return null;
+        }
+
+        $value = $this->getJsonPath($data, $path);
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $value = strtoupper(trim($value));
+        if ($value === '') {
+            return null;
+        }
+
+        return $value;
     }
 }

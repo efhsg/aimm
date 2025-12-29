@@ -1,0 +1,22 @@
+{
+  "quoteSummary": {
+    "result": [
+      {
+        "price": {
+          "regularMarketPrice": {
+            "raw": 74.5,
+            "fmt": "74.50"
+          },
+          "currency": "USD"
+        },
+        "financialData": {
+          "netDebtToEbitda": {
+            "raw": 1.8,
+            "fmt": "1.80"
+          }
+        }
+      }
+    ],
+    "error": null
+  }
+}

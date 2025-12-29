@@ -5,7 +5,9 @@ declare(strict_types=1);
 use app\adapters\AdapterChain;
 use app\adapters\BlockedSourceRegistry;
 use app\adapters\CachedDataAdapter;
+use app\adapters\ReutersAdapter;
 use app\adapters\SourceAdapterInterface;
+use app\adapters\StockAnalysisAdapter;
 use app\adapters\YahooFinanceAdapter;
 use app\alerts\AlertDispatcher;
 use app\alerts\EmailAlertNotifier;
@@ -128,6 +130,8 @@ return [
             return new AdapterChain(
                 adapters: [
                     $container->get(YahooFinanceAdapter::class),
+                    $container->get(StockAnalysisAdapter::class),
+                    $container->get(ReutersAdapter::class),
                     $container->get(CachedDataAdapter::class),
                 ],
                 blockedRegistry: $container->get(BlockedSourceRegistry::class),
@@ -137,6 +141,8 @@ return [
 
         SourceAdapterInterface::class => AdapterChain::class,
         YahooFinanceAdapter::class => YahooFinanceAdapter::class,
+        StockAnalysisAdapter::class => StockAnalysisAdapter::class,
+        ReutersAdapter::class => ReutersAdapter::class,
 
         SemanticValidatorInterface::class => SemanticValidator::class,
 

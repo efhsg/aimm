@@ -1804,6 +1804,24 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
             'selector' => 'td[data-test="PB_RATIO-value"]',
             'unit' => 'ratio',
         ],
+        'valuation.net_debt_ebitda' => [
+            'json_path' => '$.quoteSummary.result[0].financialData.netDebtToEbitda',
+            'unit' => 'ratio',
+        ],
+        'macro.commodity_benchmark' => [
+            'json_path' => '$.quoteSummary.result[0].price.regularMarketPrice',
+            'currency_path' => '$.quoteSummary.result[0].price.currency',
+            'unit' => 'currency',
+        ],
+        'macro.margin_proxy' => [
+            'json_path' => '$.quoteSummary.result[0].price.regularMarketPrice',
+            'currency_path' => '$.quoteSummary.result[0].price.currency',
+            'unit' => 'currency',
+        ],
+        'macro.sector_index' => [
+            'json_path' => '$.quoteSummary.result[0].price.regularMarketPrice',
+            'unit' => 'number',
+        ],
     ];
 
     public function getAdapterId(): string
@@ -2038,21 +2056,37 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
             }
 
             $path = self::SELECTORS[$key]['json_path'];
-            $value = $this->getJsonPath($data, $path);
+            $rawValue = $this->getJsonPath($data, $path);
+            $value = $this->normalizeJsonValue($rawValue);
 
             if ($value === null) {
                 $notFound[] = $key;
                 continue;
             }
 
+            $unit = self::SELECTORS[$key]['unit'];
+            $parsed = $this->parseJsonValue($value, $unit);
+
+            if ($parsed === null) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            $currency = null;
+            $scale = null;
+            if ($unit === 'currency') {
+                $currency = $this->resolveCurrency($data, self::SELECTORS[$key]['currency_path'] ?? null) ?? 'USD';
+                $scale = $parsed['scale'] ?? 'units';
+            }
+
             $extractions[$key] = new Extraction(
                 datapointKey: $key,
-                rawValue: $value,
-                unit: self::SELECTORS[$key]['unit'],
-                currency: 'USD',
-                scale: 'units',
+                rawValue: $parsed['value'],
+                unit: $unit,
+                currency: $currency,
+                scale: $scale,
                 asOf: null,
-                locator: SourceLocator::json($path, json_encode($value)),
+                locator: SourceLocator::json($path, json_encode($rawValue)),
             );
         }
 
@@ -2095,6 +2129,7 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
 - Parse Yahoo Finance JSON API responses
 - Map selectors to datapoint keys
 - Normalize value formats (1.5T → billions)
+- Resolve macro prices from the JSON `price` module
 - Extract source locators for provenance
 
 **Method Signatures:**
@@ -2104,11 +2139,42 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
 | `getSupportedKeys` | `getSupportedKeys(): array` |
 | `adapt` | `adapt(AdaptRequest $request): AdaptResult` |
 
+#### StockAnalysisAdapter
+
+Parses StockAnalysis HTML tables by row labels to extract valuation metrics.
+
+**Supported keys (initial):**
+`valuation.market_cap`, `valuation.fwd_pe`, `valuation.trailing_pe`,
+`valuation.ev_ebitda`, `valuation.div_yield`, `valuation.fcf_yield`,
+`valuation.net_debt_ebitda`, `valuation.price_to_book`,
+`valuation.free_cash_flow_ttm`.
+
+**Responsibilities:**
+- Parse HTML tables by label text (resilient to column order changes)
+- Normalize currency, ratio, and percent values
+- Emit XPath locators with row context
+
+#### ReutersAdapter
+
+Parses Reuters company pages by row labels to extract valuation metrics.
+
+**Supported keys (initial):**
+`valuation.market_cap`, `valuation.fwd_pe`, `valuation.trailing_pe`,
+`valuation.ev_ebitda`, `valuation.div_yield`, `valuation.net_debt_ebitda`,
+`valuation.price_to_book`.
+
+**Responsibilities:**
+- Parse HTML tables by label text
+- Normalize currency, ratio, and percent values
+- Emit XPath locators with row context
+
 ### 3.2.1 AdapterChain (Fallback Parsing)
 
 **Problem:** A single adapter (or a blocked provider) can collapse collection quality and cause gate failure.
 
 **Solution:** Use an `AdapterChain` that tries priority-ordered adapters and merges partial extraction results. If an adapter is known-blocked, skip it until its cooldown expires.
+
+**Default ordering:** `YahooFinanceAdapter` -> `StockAnalysisAdapter` -> `ReutersAdapter` -> `CachedDataAdapter`.
 
 **Namespace:** `app\adapters`
 
@@ -6480,6 +6546,7 @@ Centralized rate limiting constants to prevent bot detection and ensure responsi
 | Domain | Min Delay | Max Requests/Minute | Notes |
 |--------|-----------|---------------------|-------|
 | `finance.yahoo.com` | 2000ms | 30 | Primary valuation source |
+| `query1.finance.yahoo.com` | 2000ms | 30 | Yahoo Finance JSON API |
 | `www.reuters.com` | 3000ms | 20 | Supplementary source |
 | `www.wsj.com` | 3000ms | 20 | Requires subscription for some data |
 | `www.bloomberg.com` | 5000ms | 12 | Aggressive bot detection |
@@ -6798,6 +6865,9 @@ final class EmailAlertNotifier implements AlertNotifierInterface
 | `GuzzleWebFetchClient` | `GuzzleWebFetchClientTest.php` | Retry-After parsing, 401/403 blocked cooldown, retry-on-5xx/timeout, effective finalUrl |
 | `DataPointFactory` | `DataPointFactoryTest.php` | From extraction provenance, not-found null source_url, derived percent with formula/derived_from |
 | `YahooFinanceAdapter` | `YahooFinanceAdapterTest.php` | Dividend+yield composite parsing, currency symbols, free_cash_flow_ttm JSON extraction, selector brittleness |
+| `StockAnalysisAdapter` | `StockAnalysisAdapterTest.php` | Label-based parsing, currency/percent normalization, FCF extraction |
+| `ReutersAdapter` | `ReutersAdapterTest.php` | Label-based parsing, currency/percent normalization |
+| `SourceCandidateFactory` | `SourceCandidateFactoryTest.php` | Provider ordering, exchange mapping, macro filtering |
 | `CollectionGateValidator` | `CollectionGateValidatorTest.php` | Fail on null required values, fail on missing source_locator (web_fetch), fail on derived missing formula |
 | `SchemaValidator` | `SchemaValidatorTest.php` | Reject web_fetch missing source_locator/source_url, reject not_found missing attempted_sources, reject derived missing formula |
 
@@ -6817,9 +6887,13 @@ tests/fixtures/
 ├── yahoo-finance/
 │   ├── SHEL-quote-2024-12.html
 │   ├── AAPL-quote-2024-12.html
-│   └── invalid-page.html
+│   ├── invalid-page.html
+│   └── CL-F-quote.json
+├── stockanalysis/
+│   └── AAPL-quote.html
 └── reuters/
-    └── SHEL-profile-2024-12.html
+    ├── SHEL-profile-2024-12.html
+    └── AAPL-profile.html
 ```
 
 ### 9.4 Test Commands
@@ -6854,6 +6928,11 @@ These are the “lock the contract” tests derived from the Phase 1 design revi
 | `tests/unit/adapters/YahooFinanceAdapterTest.php` | `testParsesDividendAndYieldCompositeValueUsesPercentInsideParentheses()` |
 | `tests/unit/adapters/YahooFinanceAdapterTest.php` | `testParsesCurrencySymbolsIntoCurrencyCodes()` |
 | `tests/unit/adapters/YahooFinanceAdapterTest.php` | `testExtractsFreeCashFlowTtmFromJsonWithSourceLocator()` |
+| `tests/unit/adapters/YahooFinanceAdapterTest.php` | `testParsesMacroAndNetDebtFromJson()` |
+| `tests/unit/adapters/StockAnalysisAdapterTest.php` | `testParsesValuationMetricsFromHtml()` |
+| `tests/unit/adapters/ReutersAdapterTest.php` | `testParsesValuationMetricsFromHtml()` |
+| `tests/unit/factories/SourceCandidateFactoryTest.php` | `testBuildsCandidatesForTicker()` |
+| `tests/unit/factories/SourceCandidateFactoryTest.php` | `testMacroCandidatesUseYahooSourcesOnly()` |
 | `tests/unit/validators/CollectionGateValidatorTest.php` | `testFailsGateWhenRequiredMetricValueNull()` |
 | `tests/unit/validators/CollectionGateValidatorTest.php` | `testFailsGateWhenWebFetchMetricMissingSourceLocator()` |
 | `tests/unit/validators/CollectionGateValidatorTest.php` | `testFailsGateWhenNotFoundMetricMissingAttemptedSources()` |
@@ -7132,6 +7211,24 @@ CREATE TABLE source_block (
 
 **Dependencies:** Task 1.1, Task 2.5
 
+#### Task 2.6a: Implement StockAnalysisAdapter
+
+**Files:** `src/Adapters/StockAnalysisAdapter.php`
+
+**Fixtures:**
+- `tests/fixtures/stockanalysis/AAPL-quote.html`
+
+**Dependencies:** Task 1.1, Task 2.5
+
+#### Task 2.6b: Implement ReutersAdapter
+
+**Files:** `src/Adapters/ReutersAdapter.php`
+
+**Fixtures:**
+- `tests/fixtures/reuters/AAPL-profile.html`
+
+**Dependencies:** Task 1.1, Task 2.5
+
 #### Task 2.7: Create DataPointFactory
 
 **Files:** `src/Factories/DataPointFactory.php`
@@ -7373,6 +7470,8 @@ Before marking Phase 1 complete:
 **Infrastructure:**
 - [ ] WebFetchClient working with rate limiting
 - [ ] YahooFinanceAdapter parsing fixtures correctly
+- [ ] StockAnalysisAdapter parsing fixtures correctly
+- [ ] ReutersAdapter parsing fixtures correctly
 - [ ] DataPointFactory creating all types
 - [ ] BlockedSourceRegistry persisting/expiring blocks
 - [ ] AdapterChain falling back through adapters
@@ -7629,11 +7728,13 @@ use app\alerts\SlackAlertNotifier;
 use app\alerts\EmailAlertNotifier;
 
 // Adapters
-use app\adapters\AdapterChain;
-use app\adapters\BlockedSourceRegistry;
-use app\adapters\CachedDataAdapter;
-use app\adapters\YahooFinanceAdapter;
-use app\adapters\SourceAdapterInterface;
+	use app\adapters\AdapterChain;
+	use app\adapters\BlockedSourceRegistry;
+	use app\adapters\CachedDataAdapter;
+	use app\adapters\ReutersAdapter;
+	use app\adapters\StockAnalysisAdapter;
+	use app\adapters\YahooFinanceAdapter;
+	use app\adapters\SourceAdapterInterface;
 
 // Validators
 use app\validators\SchemaValidator;
@@ -7761,6 +7862,8 @@ return [
             return new AdapterChain(
                 adapters: [
                     $container->get(YahooFinanceAdapter::class),
+                    $container->get(StockAnalysisAdapter::class),
+                    $container->get(ReutersAdapter::class),
                     $container->get(CachedDataAdapter::class),
                 ],
                 blockedRegistry: $container->get(BlockedSourceRegistry::class),
@@ -7770,6 +7873,8 @@ return [
 
         SourceAdapterInterface::class => AdapterChain::class,
         YahooFinanceAdapter::class => YahooFinanceAdapter::class,
+        StockAnalysisAdapter::class => StockAnalysisAdapter::class,
+        ReutersAdapter::class => ReutersAdapter::class,
 
         // --- Validators ---
         SemanticValidatorInterface::class => SemanticValidator::class,
@@ -7903,6 +8008,7 @@ return [
     // --- Validation ---
     'allowedSourceDomains' => [
         'finance.yahoo.com',
+        'query1.finance.yahoo.com',
         'www.reuters.com',
         'www.wsj.com',
         'www.bloomberg.com',
@@ -8078,6 +8184,8 @@ CollectController
     │   │   └── AlertDispatcher
     │   ├── SourceAdapterInterface (AdapterChain)
     │   │   ├── YahooFinanceAdapter
+    │   │   ├── StockAnalysisAdapter
+    │   │   ├── ReutersAdapter
     │   │   ├── CachedDataAdapter
     │   │   │   └── DataPackRepository
     │   │   └── BlockedSourceRegistry
