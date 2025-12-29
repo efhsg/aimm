@@ -33,7 +33,7 @@ RUN pecl install xdebug \
 
 RUN { \
       echo "max_execution_time=600"; \
-      echo "register_argc_argv=On"; \
+      echo "register_argc_argv=Off"; \
     } > /usr/local/etc/php/conf.d/99-custom.ini
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
