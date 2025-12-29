@@ -8,6 +8,9 @@ use app\dto\AdaptRequest;
 use app\dto\AdaptResult;
 use app\dto\datapoints\SourceLocator;
 use app\dto\Extraction;
+use app\dto\HistoricalExtraction;
+use app\dto\PeriodValue;
+use DateTimeImmutable;
 use DOMDocument;
 use DOMNode;
 use DOMXPath;
@@ -68,6 +71,60 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
         ],
     ];
 
+    /**
+     * Financials/quarters selectors using incomeStatementHistory, balanceSheetHistory, cashflowStatementHistory modules.
+     */
+    private const FINANCIALS_SELECTORS = [
+        'financials.revenue' => [
+            'json_path' => '$.quoteSummary.result[0].incomeStatementHistory.incomeStatementHistory',
+            'field' => 'totalRevenue',
+            'unit' => 'currency',
+        ],
+        'financials.ebitda' => [
+            'json_path' => '$.quoteSummary.result[0].incomeStatementHistory.incomeStatementHistory',
+            'field' => 'ebitda',
+            'unit' => 'currency',
+        ],
+        'financials.net_income' => [
+            'json_path' => '$.quoteSummary.result[0].incomeStatementHistory.incomeStatementHistory',
+            'field' => 'netIncome',
+            'unit' => 'currency',
+        ],
+        'financials.net_debt' => [
+            'json_path' => '$.quoteSummary.result[0].balanceSheetHistory.balanceSheetStatements',
+            'field' => 'netDebt',
+            'unit' => 'currency',
+        ],
+        'financials.free_cash_flow' => [
+            'json_path' => '$.quoteSummary.result[0].cashflowStatementHistory.cashflowStatements',
+            'field' => 'freeCashFlow',
+            'unit' => 'currency',
+        ],
+    ];
+
+    private const QUARTERS_SELECTORS = [
+        'quarters.revenue' => [
+            'json_path' => '$.quoteSummary.result[0].incomeStatementHistoryQuarterly.incomeStatementHistory',
+            'field' => 'totalRevenue',
+            'unit' => 'currency',
+        ],
+        'quarters.ebitda' => [
+            'json_path' => '$.quoteSummary.result[0].incomeStatementHistoryQuarterly.incomeStatementHistory',
+            'field' => 'ebitda',
+            'unit' => 'currency',
+        ],
+        'quarters.net_income' => [
+            'json_path' => '$.quoteSummary.result[0].incomeStatementHistoryQuarterly.incomeStatementHistory',
+            'field' => 'netIncome',
+            'unit' => 'currency',
+        ],
+        'quarters.free_cash_flow' => [
+            'json_path' => '$.quoteSummary.result[0].cashflowStatementHistoryQuarterly.cashflowStatements',
+            'field' => 'freeCashFlow',
+            'unit' => 'currency',
+        ],
+    ];
+
     public function getAdapterId(): string
     {
         return self::ADAPTER_ID;
@@ -75,7 +132,11 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
 
     public function getSupportedKeys(): array
     {
-        return array_keys(self::SELECTORS);
+        return array_merge(
+            array_keys(self::SELECTORS),
+            array_keys(self::FINANCIALS_SELECTORS),
+            array_keys(self::QUARTERS_SELECTORS)
+        );
     }
 
     public function adapt(AdaptRequest $request): AdaptResult
@@ -317,54 +378,184 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
         }
 
         $extractions = [];
+        $historicalExtractions = [];
         $notFound = [];
 
         foreach ($request->datapointKeys as $key) {
-            if (!isset(self::SELECTORS[$key]['json_path'])) {
-                $notFound[] = $key;
+            // Check for valuation/macro selectors first (scalar values)
+            if (isset(self::SELECTORS[$key]['json_path'])) {
+                $extraction = $this->extractValuationJsonField($data, $key);
+                if ($extraction !== null) {
+                    $extractions[$key] = $extraction;
+                } else {
+                    $notFound[] = $key;
+                }
                 continue;
             }
 
-            $path = self::SELECTORS[$key]['json_path'];
-            $rawValue = $this->getJsonPath($data, $path);
-            $value = $this->normalizeJsonValue($rawValue);
-
-            if ($value === null) {
-                $notFound[] = $key;
+            // Check for financials selectors (historical array data)
+            if (isset(self::FINANCIALS_SELECTORS[$key])) {
+                $historicalExtraction = $this->extractHistoricalJsonField($data, $key, self::FINANCIALS_SELECTORS[$key]);
+                if ($historicalExtraction !== null) {
+                    $historicalExtractions[$key] = $historicalExtraction;
+                } else {
+                    $notFound[] = $key;
+                }
                 continue;
             }
 
-            $unit = self::SELECTORS[$key]['unit'];
-            $parsed = $this->parseJsonValue($value, $unit);
-
-            if ($parsed === null) {
-                $notFound[] = $key;
+            // Check for quarters selectors (historical array data)
+            if (isset(self::QUARTERS_SELECTORS[$key])) {
+                $historicalExtraction = $this->extractHistoricalJsonField($data, $key, self::QUARTERS_SELECTORS[$key]);
+                if ($historicalExtraction !== null) {
+                    $historicalExtractions[$key] = $historicalExtraction;
+                } else {
+                    $notFound[] = $key;
+                }
                 continue;
             }
 
-            $currency = null;
-            $scale = null;
-            if ($unit === 'currency') {
-                $currency = $this->resolveCurrency($data, self::SELECTORS[$key]['currency_path'] ?? null) ?? 'USD';
-                $scale = $parsed['scale'] ?? 'units';
-            }
-
-            $extractions[$key] = new Extraction(
-                datapointKey: $key,
-                rawValue: $parsed['value'],
-                unit: $unit,
-                currency: $currency,
-                scale: $scale,
-                asOf: null,
-                locator: SourceLocator::json($path, json_encode($rawValue) ?: ''),
-            );
+            $notFound[] = $key;
         }
 
         return new AdaptResult(
             adapterId: self::ADAPTER_ID,
             extractions: $extractions,
             notFound: $notFound,
+            historicalExtractions: $historicalExtractions,
         );
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function extractValuationJsonField(array $data, string $key): ?Extraction
+    {
+        $path = self::SELECTORS[$key]['json_path'];
+        $rawValue = $this->getJsonPath($data, $path);
+        $value = $this->normalizeJsonValue($rawValue);
+
+        if ($value === null) {
+            return null;
+        }
+
+        $unit = self::SELECTORS[$key]['unit'];
+        $parsed = $this->parseJsonValue($value, $unit);
+
+        if ($parsed === null) {
+            return null;
+        }
+
+        $currency = null;
+        $scale = null;
+        if ($unit === 'currency') {
+            $currency = $this->resolveCurrency($data, self::SELECTORS[$key]['currency_path'] ?? null) ?? 'USD';
+            $scale = $parsed['scale'] ?? 'units';
+        }
+
+        return new Extraction(
+            datapointKey: $key,
+            rawValue: $parsed['value'],
+            unit: $unit,
+            currency: $currency,
+            scale: $scale,
+            asOf: null,
+            locator: SourceLocator::json($path, json_encode($rawValue) ?: ''),
+        );
+    }
+
+    /**
+     * Extract historical financial data from Yahoo Finance JSON.
+     * Returns HistoricalExtraction with properly typed period data.
+     *
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $config
+     */
+    private function extractHistoricalJsonField(array $data, string $key, array $config): ?HistoricalExtraction
+    {
+        $path = $config['json_path'];
+        $field = $config['field'];
+        $unit = $config['unit'];
+
+        $statements = $this->getJsonPath($data, $path);
+
+        if (!is_array($statements) || empty($statements)) {
+            return null;
+        }
+
+        $periods = [];
+        foreach ($statements as $statement) {
+            if (!is_array($statement)) {
+                continue;
+            }
+
+            $endDate = $statement['endDate'] ?? null;
+            $fieldValue = $statement[$field] ?? null;
+
+            if ($endDate === null) {
+                continue;
+            }
+
+            $dateStr = is_array($endDate) ? ($endDate['fmt'] ?? null) : $endDate;
+            $value = $this->normalizeJsonValue($fieldValue);
+
+            if ($value === null || !is_numeric($value)) {
+                continue;
+            }
+
+            $parsedDate = $this->parseEndDate($dateStr);
+            if ($parsedDate === null) {
+                continue;
+            }
+
+            $periods[] = new PeriodValue(
+                endDate: $parsedDate,
+                value: (float) $value,
+            );
+        }
+
+        if (empty($periods)) {
+            return null;
+        }
+
+        // Sort by date descending (most recent first)
+        usort($periods, fn (PeriodValue $a, PeriodValue $b) => $b->endDate <=> $a->endDate);
+
+        $currency = $this->resolveCurrency(
+            $data,
+            '$.quoteSummary.result[0].price.currency'
+        ) ?? 'USD';
+
+        return new HistoricalExtraction(
+            datapointKey: $key,
+            periods: $periods,
+            unit: $unit,
+            currency: $currency,
+            scale: 'units',
+            locator: SourceLocator::json(
+                "{$path}[*].{$field}",
+                "Historical {$field}: " . count($periods) . ' periods'
+            ),
+        );
+    }
+
+    private function parseEndDate(mixed $dateStr): ?DateTimeImmutable
+    {
+        if (!is_string($dateStr)) {
+            return null;
+        }
+
+        // Handle "YYYY-MM-DD" format
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStr)) {
+            return new DateTimeImmutable($dateStr);
+        }
+
+        // Handle Unix timestamp (as string)
+        if (is_numeric($dateStr)) {
+            return (new DateTimeImmutable())->setTimestamp((int) $dateStr);
+        }
+
+        return null;
     }
 
     /**

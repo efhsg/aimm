@@ -105,6 +105,10 @@ trait ParsesFinancialValues
      */
     private function parsePercentValue(string $value): ?array
     {
+        if (preg_match('/(-?\d+(?:\.\d+)?)%/', $value, $matches) === 1) {
+            return ['value' => (float)$matches[1]];
+        }
+
         $value = rtrim($value, '%');
 
         if (!is_numeric($value)) {

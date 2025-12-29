@@ -28,6 +28,9 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     private const ERROR_SCHEMA_INVALID = 'SCHEMA_INVALID';
     private const ERROR_MISSING_COMPANY = 'MISSING_COMPANY';
     private const ERROR_MISSING_REQUIRED = 'MISSING_REQUIRED';
+    private const ERROR_MISSING_REQUIRED_FINANCIAL = 'MISSING_REQUIRED_FINANCIAL';
+    private const ERROR_MISSING_REQUIRED_QUARTER = 'MISSING_REQUIRED_QUARTER';
+    private const ERROR_MISSING_REQUIRED_OPERATIONAL = 'MISSING_REQUIRED_OPERATIONAL';
     private const ERROR_UNDOCUMENTED_MISSING = 'UNDOCUMENTED_MISSING';
     private const ERROR_MISSING_PROVENANCE = 'MISSING_PROVENANCE';
     private const ERROR_MISSING_ATTEMPTS = 'MISSING_ATTEMPTS';
@@ -72,19 +75,31 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         $companyErrors = $this->validateCompanyCompleteness($dataPack, $config);
         $errors = array_merge($errors, $companyErrors);
 
-        // 4. Required datapoints
+        // 4. Required datapoints (valuation)
         $requiredErrors = $this->validateRequiredDatapoints($dataPack, $config);
         $errors = array_merge($errors, $requiredErrors);
 
-        // 5. Provenance validation
+        // 5. Required financial metrics
+        $financialErrors = $this->validateRequiredFinancials($dataPack, $config);
+        $errors = array_merge($errors, $financialErrors);
+
+        // 6. Required quarter metrics
+        $quarterErrors = $this->validateRequiredQuarters($dataPack, $config);
+        $errors = array_merge($errors, $quarterErrors);
+
+        // 7. Required operational metrics
+        $operationalErrors = $this->validateRequiredOperational($dataPack, $config);
+        $errors = array_merge($errors, $operationalErrors);
+
+        // 8. Provenance validation
         $provenanceErrors = $this->validateProvenance($dataPack);
         $errors = array_merge($errors, $provenanceErrors);
 
-        // 6. Macro freshness
+        // 9. Macro freshness
         $macroErrors = $this->validateMacroFreshness($dataPack);
         $errors = array_merge($errors, $macroErrors);
 
-        // 7. Warnings
+        // 10. Warnings
         $warnings = array_merge($warnings, $this->checkWarnings($dataPack, $config));
 
         return new GateResult(
@@ -181,6 +196,161 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         }
 
         return $errors;
+    }
+
+    /**
+     * @return list<GateError>
+     */
+    private function validateRequiredFinancials(IndustryDataPack $dataPack, IndustryConfig $config): array
+    {
+        $errors = [];
+        $requiredMetrics = $this->filterRequiredMetrics($config->dataRequirements->annualFinancialMetrics);
+
+        if (empty($requiredMetrics)) {
+            return $errors;
+        }
+
+        $historyYears = $config->dataRequirements->historyYears;
+        $currentYear = (int) date('Y');
+        $startYear = $currentYear - $historyYears + 1;
+
+        foreach ($dataPack->companies as $ticker => $company) {
+            foreach ($requiredMetrics as $metric) {
+                // Check at least one year of data exists
+                $hasData = false;
+                for ($year = $currentYear; $year >= $startYear; $year--) {
+                    $annual = $company->financials->annualData[$year] ?? null;
+                    if ($annual === null) {
+                        continue;
+                    }
+
+                    $value = $this->getFinancialMetric($annual, $metric);
+                    if ($value !== null && $value->value !== null) {
+                        $hasData = true;
+                        break;
+                    }
+                }
+
+                if (!$hasData) {
+                    $errors[] = new GateError(
+                        code: self::ERROR_MISSING_REQUIRED_FINANCIAL,
+                        message: "Required financial metric {$metric} has no data for {$ticker}",
+                        path: "companies.{$ticker}.financials.{$metric}",
+                    );
+                }
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * @return list<GateError>
+     */
+    private function validateRequiredQuarters(IndustryDataPack $dataPack, IndustryConfig $config): array
+    {
+        $errors = [];
+        $requiredMetrics = $this->filterRequiredMetrics($config->dataRequirements->quarterMetrics);
+
+        if (empty($requiredMetrics)) {
+            return $errors;
+        }
+
+        $quartersToFetch = $config->dataRequirements->quartersToFetch;
+
+        foreach ($dataPack->companies as $ticker => $company) {
+            foreach ($requiredMetrics as $metric) {
+                $foundCount = 0;
+                foreach ($company->quarters->quarters as $quarter) {
+                    $value = $this->getQuarterMetric($quarter, $metric);
+                    if ($value !== null && $value->value !== null) {
+                        $foundCount++;
+                    }
+                }
+
+                if ($foundCount === 0) {
+                    $errors[] = new GateError(
+                        code: self::ERROR_MISSING_REQUIRED_QUARTER,
+                        message: "Required quarter metric {$metric} has no data for {$ticker}",
+                        path: "companies.{$ticker}.quarters.{$metric}",
+                    );
+                } elseif ($foundCount < $quartersToFetch) {
+                    $errors[] = new GateError(
+                        code: self::ERROR_MISSING_REQUIRED_QUARTER,
+                        message: "Required quarter metric {$metric} has {$foundCount}/{$quartersToFetch} quarters for {$ticker}",
+                        path: "companies.{$ticker}.quarters.{$metric}",
+                    );
+                }
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * @return list<GateError>
+     */
+    private function validateRequiredOperational(IndustryDataPack $dataPack, IndustryConfig $config): array
+    {
+        $errors = [];
+        $requiredMetrics = $this->filterRequiredMetrics($config->dataRequirements->operationalMetrics);
+
+        if (empty($requiredMetrics)) {
+            return $errors;
+        }
+
+        foreach ($dataPack->companies as $ticker => $company) {
+            if ($company->operational === null) {
+                foreach ($requiredMetrics as $metric) {
+                    $errors[] = new GateError(
+                        code: self::ERROR_MISSING_REQUIRED_OPERATIONAL,
+                        message: "Required operational metric {$metric} is missing for {$ticker}",
+                        path: "companies.{$ticker}.operational.{$metric}",
+                    );
+                }
+                continue;
+            }
+
+            foreach ($requiredMetrics as $metric) {
+                $datapoint = $company->operational->getMetric($metric);
+                if ($datapoint === null || $datapoint->value === null) {
+                    $errors[] = new GateError(
+                        code: self::ERROR_MISSING_REQUIRED_OPERATIONAL,
+                        message: "Required operational metric {$metric} is null for {$ticker}",
+                        path: "companies.{$ticker}.operational.{$metric}",
+                    );
+                }
+            }
+        }
+
+        return $errors;
+    }
+
+    private function getFinancialMetric(
+        AnnualFinancials $annual,
+        string $metric
+    ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber|null {
+        return match ($metric) {
+            'revenue' => $annual->revenue,
+            'ebitda' => $annual->ebitda,
+            'net_income' => $annual->netIncome,
+            'net_debt' => $annual->netDebt,
+            'free_cash_flow' => $annual->freeCashFlow,
+            default => $annual->additionalMetrics[$metric] ?? null,
+        };
+    }
+
+    private function getQuarterMetric(
+        QuarterFinancials $quarter,
+        string $metric
+    ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber|null {
+        return match ($metric) {
+            'revenue' => $quarter->revenue,
+            'ebitda' => $quarter->ebitda,
+            'net_income' => $quarter->netIncome,
+            'free_cash_flow' => $quarter->freeCashFlow,
+            default => $quarter->additionalMetrics[$metric] ?? null,
+        };
     }
 
     /**

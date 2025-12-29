@@ -20,6 +20,10 @@ final class SourceCandidateFactory
     private const TICKER_FORMAT_YAHOO = 'yahoo';
     private const TICKER_FORMAT_LOWER = 'lower';
     private const TICKER_FORMAT_REUTERS = 'reuters';
+    private const TICKER_FORMAT_UPPER = 'upper';
+
+    private const KEY_SUPPORTS_FINANCIALS = 'supports_financials';
+    private const KEY_SUPPORTS_QUARTERS = 'supports_quarters';
 
     private const SOURCE_TEMPLATES = [
         'yahoo_finance' => [
@@ -28,6 +32,8 @@ final class SourceCandidateFactory
             self::KEY_URL_TEMPLATE => 'https://finance.yahoo.com/quote/{ticker}',
             self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_YAHOO,
             self::KEY_SUPPORTS_MACRO => true,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => false,
         ],
         'yahoo_finance_api' => [
             self::KEY_DOMAIN => 'query1.finance.yahoo.com',
@@ -35,6 +41,26 @@ final class SourceCandidateFactory
             self::KEY_URL_TEMPLATE => 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=financialData,defaultKeyStatistics,price',
             self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_YAHOO,
             self::KEY_SUPPORTS_MACRO => true,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => false,
+        ],
+        'yahoo_finance_financials' => [
+            self::KEY_DOMAIN => 'query1.finance.yahoo.com',
+            self::KEY_PRIORITY => 1,
+            self::KEY_URL_TEMPLATE => 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=incomeStatementHistory,balanceSheetHistory,cashflowStatementHistory,price',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_YAHOO,
+            self::KEY_SUPPORTS_MACRO => false,
+            self::KEY_SUPPORTS_FINANCIALS => true,
+            self::KEY_SUPPORTS_QUARTERS => false,
+        ],
+        'yahoo_finance_quarters' => [
+            self::KEY_DOMAIN => 'query1.finance.yahoo.com',
+            self::KEY_PRIORITY => 1,
+            self::KEY_URL_TEMPLATE => 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=incomeStatementHistoryQuarterly,cashflowStatementHistoryQuarterly,price',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_YAHOO,
+            self::KEY_SUPPORTS_MACRO => false,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => true,
         ],
         'stockanalysis' => [
             self::KEY_DOMAIN => 'stockanalysis.com',
@@ -42,6 +68,8 @@ final class SourceCandidateFactory
             self::KEY_URL_TEMPLATE => 'https://stockanalysis.com/stocks/{ticker}/',
             self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_LOWER,
             self::KEY_SUPPORTS_MACRO => false,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => false,
         ],
         'reuters' => [
             self::KEY_DOMAIN => 'www.reuters.com',
@@ -49,6 +77,44 @@ final class SourceCandidateFactory
             self::KEY_URL_TEMPLATE => 'https://www.reuters.com/companies/{ticker}.{exchange}',
             self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_REUTERS,
             self::KEY_SUPPORTS_MACRO => false,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => false,
+        ],
+        'wsj' => [
+            self::KEY_DOMAIN => 'www.wsj.com',
+            self::KEY_PRIORITY => 5,
+            self::KEY_URL_TEMPLATE => 'https://www.wsj.com/market-data/quotes/{ticker}',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_UPPER,
+            self::KEY_SUPPORTS_MACRO => false,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => false,
+        ],
+        'bloomberg' => [
+            self::KEY_DOMAIN => 'www.bloomberg.com',
+            self::KEY_PRIORITY => 6,
+            self::KEY_URL_TEMPLATE => 'https://www.bloomberg.com/quote/{ticker}:US',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_UPPER,
+            self::KEY_SUPPORTS_MACRO => false,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => false,
+        ],
+        'morningstar' => [
+            self::KEY_DOMAIN => 'www.morningstar.com',
+            self::KEY_PRIORITY => 7,
+            self::KEY_URL_TEMPLATE => 'https://www.morningstar.com/stocks/{exchange}/{ticker}/quote',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_LOWER,
+            self::KEY_SUPPORTS_MACRO => false,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => false,
+        ],
+        'seeking_alpha' => [
+            self::KEY_DOMAIN => 'seekingalpha.com',
+            self::KEY_PRIORITY => 8,
+            self::KEY_URL_TEMPLATE => 'https://seekingalpha.com/symbol/{ticker}',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_UPPER,
+            self::KEY_SUPPORTS_MACRO => false,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => false,
         ],
     ];
 
@@ -168,6 +234,78 @@ final class SourceCandidateFactory
         return $candidates;
     }
 
+    /**
+     * Generate source candidates for annual financials data.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forFinancials(string $ticker, ?string $exchange = null): array
+    {
+        $candidates = [];
+
+        foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
+            if (!($config[self::KEY_SUPPORTS_FINANCIALS] ?? false)) {
+                continue;
+            }
+
+            $url = $this->buildUrl($config, $ticker, $exchange);
+            if ($url === null) {
+                continue;
+            }
+
+            $candidates[] = new SourceCandidate(
+                url: $url,
+                adapterId: $adapterId,
+                priority: $config[self::KEY_PRIORITY],
+                domain: $config[self::KEY_DOMAIN],
+            );
+        }
+
+        usort(
+            $candidates,
+            static fn (SourceCandidate $a, SourceCandidate $b): int =>
+            $a->priority <=> $b->priority
+        );
+
+        return $candidates;
+    }
+
+    /**
+     * Generate source candidates for quarterly financials data.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forQuarters(string $ticker, ?string $exchange = null): array
+    {
+        $candidates = [];
+
+        foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
+            if (!($config[self::KEY_SUPPORTS_QUARTERS] ?? false)) {
+                continue;
+            }
+
+            $url = $this->buildUrl($config, $ticker, $exchange);
+            if ($url === null) {
+                continue;
+            }
+
+            $candidates[] = new SourceCandidate(
+                url: $url,
+                adapterId: $adapterId,
+                priority: $config[self::KEY_PRIORITY],
+                domain: $config[self::KEY_DOMAIN],
+            );
+        }
+
+        usort(
+            $candidates,
+            static fn (SourceCandidate $a, SourceCandidate $b): int =>
+            $a->priority <=> $b->priority
+        );
+
+        return $candidates;
+    }
+
     private function toYahooTicker(string $ticker, ?string $exchange): string
     {
         if ($exchange === null) {
@@ -220,6 +358,7 @@ final class SourceCandidateFactory
         return match ($format) {
             self::TICKER_FORMAT_YAHOO => $this->toYahooTicker($ticker, $exchange),
             self::TICKER_FORMAT_LOWER => strtolower($ticker),
+            self::TICKER_FORMAT_UPPER => strtoupper($ticker),
             self::TICKER_FORMAT_REUTERS => $ticker,
             null => $ticker,
             default => null,

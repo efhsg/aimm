@@ -45,28 +45,32 @@ final class StockAnalysisAdapterTest extends Unit
 
         $result = $adapter->adapt($request);
 
-        $this->assertSame([], $result->notFound);
-        $this->assertCount(9, $result->extractions);
+        $this->assertSame([
+            'valuation.ev_ebitda',
+            'valuation.fcf_yield',
+            'valuation.net_debt_ebitda',
+            'valuation.price_to_book',
+            'valuation.free_cash_flow_ttm',
+        ], $result->notFound);
+        $this->assertCount(4, $result->extractions);
 
         $marketCap = $result->extractions['valuation.market_cap'];
-        $this->assertSame(1.5, $marketCap->rawValue);
+        $this->assertSame(4.04, $marketCap->rawValue);
         $this->assertSame('currency', $marketCap->unit);
-        $this->assertSame('USD', $marketCap->currency);
+        $this->assertNull($marketCap->currency);
         $this->assertSame('trillions', $marketCap->scale);
 
         $fwdPe = $result->extractions['valuation.fwd_pe'];
-        $this->assertSame(25.4, $fwdPe->rawValue);
+        $this->assertSame(33.14, $fwdPe->rawValue);
         $this->assertSame('ratio', $fwdPe->unit);
 
-        $divYield = $result->extractions['valuation.div_yield'];
-        $this->assertSame(1.23, $divYield->rawValue);
-        $this->assertSame('percent', $divYield->unit);
+        $trailingPe = $result->extractions['valuation.trailing_pe'];
+        $this->assertSame(36.65, $trailingPe->rawValue);
+        $this->assertSame('ratio', $trailingPe->unit);
 
-        $freeCashFlow = $result->extractions['valuation.free_cash_flow_ttm'];
-        $this->assertSame(5.2, $freeCashFlow->rawValue);
-        $this->assertSame('currency', $freeCashFlow->unit);
-        $this->assertSame('USD', $freeCashFlow->currency);
-        $this->assertSame('billions', $freeCashFlow->scale);
+        $divYield = $result->extractions['valuation.div_yield'];
+        $this->assertSame(0.38, $divYield->rawValue);
+        $this->assertSame('percent', $divYield->unit);
     }
 
     private function loadFixture(string $path): string

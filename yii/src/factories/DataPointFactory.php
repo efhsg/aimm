@@ -11,6 +11,8 @@ use app\dto\datapoints\DataPointRatio;
 use app\dto\datapoints\SourceLocator;
 use app\dto\Extraction;
 use app\dto\FetchResult;
+use app\dto\HistoricalExtraction;
+use app\dto\PeriodValue;
 use app\enums\CollectionMethod;
 use app\enums\DataScale;
 use DateTimeImmutable;
@@ -252,6 +254,108 @@ final class DataPointFactory
                 cacheAgeDays: $cacheAgeDays,
             ),
         };
+    }
+
+    /**
+     * Create DataPoints from historical extraction, keyed by fiscal year.
+     *
+     * @return array<int, DataPointMoney>
+     */
+    public function fromHistoricalExtractionByYear(
+        HistoricalExtraction $extraction,
+        FetchResult $fetchResult,
+        int $maxYears
+    ): array {
+        $result = [];
+        $byYear = $extraction->getByYear();
+        $count = 0;
+
+        foreach ($byYear as $year => $periods) {
+            if ($count >= $maxYears) {
+                break;
+            }
+
+            // For annual data, take the most recent period in the year
+            $period = $periods[0];
+            $result[$year] = $this->createDataPointForPeriod(
+                $period,
+                $extraction,
+                $fetchResult
+            );
+            $count++;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Create DataPoints from historical extraction, keyed by quarter key (e.g., "2024Q3").
+     *
+     * @return array<string, DataPointMoney>
+     */
+    public function fromHistoricalExtractionByQuarter(
+        HistoricalExtraction $extraction,
+        FetchResult $fetchResult,
+        int $maxQuarters
+    ): array {
+        $result = [];
+        $byQuarter = $extraction->getByQuarter();
+        $count = 0;
+
+        foreach ($byQuarter as $quarterKey => $period) {
+            if ($count >= $maxQuarters) {
+                break;
+            }
+
+            $result[$quarterKey] = $this->createDataPointForPeriod(
+                $period,
+                $extraction,
+                $fetchResult
+            );
+            $count++;
+        }
+
+        return $result;
+    }
+
+    public function fromHistoricalExtractionMostRecent(
+        HistoricalExtraction $extraction,
+        FetchResult $fetchResult
+    ): ?DataPointMoney {
+        $mostRecent = null;
+
+        foreach ($extraction->periods as $period) {
+            if ($mostRecent === null || $period->endDate > $mostRecent->endDate) {
+                $mostRecent = $period;
+            }
+        }
+
+        if ($mostRecent === null) {
+            return null;
+        }
+
+        return $this->createDataPointForPeriod(
+            $mostRecent,
+            $extraction,
+            $fetchResult
+        );
+    }
+
+    private function createDataPointForPeriod(
+        PeriodValue $period,
+        HistoricalExtraction $extraction,
+        FetchResult $fetchResult
+    ): DataPointMoney {
+        return new DataPointMoney(
+            value: $period->value,
+            currency: $extraction->currency ?? 'USD',
+            scale: $this->parseScale($extraction->scale),
+            asOf: $period->endDate,
+            sourceUrl: $fetchResult->finalUrl,
+            retrievedAt: $fetchResult->retrievedAt,
+            method: CollectionMethod::WebFetch,
+            sourceLocator: $extraction->locator,
+        );
     }
 
     private function parseScale(?string $scale): DataScale

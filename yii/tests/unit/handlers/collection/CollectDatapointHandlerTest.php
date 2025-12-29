@@ -13,6 +13,8 @@ use app\dto\CollectDatapointRequest;
 use app\dto\datapoints\SourceLocator;
 use app\dto\Extraction;
 use app\dto\FetchResult;
+use app\dto\HistoricalExtraction;
+use app\dto\PeriodValue;
 use app\dto\SourceCandidate;
 use app\enums\CollectionMethod;
 use app\enums\Severity;
@@ -81,6 +83,54 @@ final class CollectDatapointHandlerTest extends Unit
         $this->assertSame(CollectionMethod::WebFetch, $result->datapoint->method);
         $this->assertCount(1, $result->sourceAttempts);
         $this->assertSame('success', $result->sourceAttempts[0]->outcome);
+    }
+
+    public function testReturnsHistoricalExtractionWhenFound(): void
+    {
+        $candidate = $this->createCandidate('https://example.com/financials', 'yahoo', 1);
+        $request = $this->createRequest('financials.revenue', [$candidate], null, 'currency');
+
+        $fetchResult = $this->createFetchResult('https://example.com/financials');
+
+        $this->webFetchClient
+            ->method('isRateLimited')
+            ->willReturn(false);
+
+        $this->webFetchClient
+            ->method('fetch')
+            ->willReturn($fetchResult);
+
+        $asOfOld = new DateTimeImmutable('2022-12-31');
+        $asOfNew = new DateTimeImmutable('2023-12-31');
+
+        $historicalExtraction = new HistoricalExtraction(
+            datapointKey: 'financials.revenue',
+            periods: [
+                new PeriodValue($asOfOld, 100.0),
+                new PeriodValue($asOfNew, 120.0),
+            ],
+            unit: 'currency',
+            currency: 'USD',
+            scale: 'millions',
+            locator: SourceLocator::json('$.financials.revenue', 'Historical revenue'),
+        );
+
+        $this->sourceAdapter
+            ->method('adapt')
+            ->willReturn(new AdaptResult(
+                adapterId: 'yahoo',
+                extractions: [],
+                notFound: [],
+                historicalExtractions: ['financials.revenue' => $historicalExtraction],
+            ));
+
+        $result = $this->handler->collect($request);
+
+        $this->assertTrue($result->found);
+        $this->assertNotNull($result->historicalExtraction);
+        $this->assertSame(120.0, $result->datapoint->value);
+        $this->assertSame($asOfNew, $result->datapoint->asOf);
+        $this->assertSame(CollectionMethod::WebFetch, $result->datapoint->method);
     }
 
     public function testFallsBackToSecondCandidateWhenFirstFails(): void

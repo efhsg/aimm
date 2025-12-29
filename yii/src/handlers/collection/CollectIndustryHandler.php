@@ -69,6 +69,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                     requirements: $request->config->macroRequirements,
                 )
             );
+            $totalAttempts = count($macroResult->sourceAttempts);
 
             $companyStatuses = [];
             $batches = array_chunk($request->config->companies, $request->batchSize);
@@ -105,6 +106,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                         );
 
                         $companyStatuses[$companyConfig->ticker] = $companyResult->status;
+                        $totalAttempts += count($companyResult->sourceAttempts);
 
                         unset($companyResult);
                     } catch (CollectionException $exception) {
@@ -148,7 +150,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                 durationSeconds: $endTime->getTimestamp() - $startTime->getTimestamp(),
                 companyStatuses: $companyStatuses,
                 macroStatus: $macroResult->status,
-                totalAttempts: 0,
+                totalAttempts: $totalAttempts,
             );
 
             $dataPackPath = $this->assembler->assemble(

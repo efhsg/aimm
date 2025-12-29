@@ -12,6 +12,7 @@ use app\dto\CollectDatapointRequest;
 use app\dto\CollectDatapointResult;
 use app\dto\Extraction;
 use app\dto\FetchResult;
+use app\dto\HistoricalExtraction;
 use app\dto\SourceAttempt;
 use app\dto\SourceCandidate;
 use app\exceptions\BlockedException;
@@ -189,6 +190,32 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             );
         }
 
+        // Check for historical extraction first
+        $historicalExtraction = $adaptResult->getHistoricalExtraction($request->datapointKey);
+        if ($historicalExtraction !== null && !$historicalExtraction->isEmpty()) {
+            $this->storeHistoricalExtractionForResult($candidate, $fetchResult, $historicalExtraction);
+
+            $this->logger->log(
+                [
+                    'message' => 'Successfully extracted historical datapoint',
+                    'datapoint_key' => $request->datapointKey,
+                    'url' => $candidate->url,
+                    'period_count' => $historicalExtraction->getPeriodCount(),
+                ],
+                Logger::LEVEL_INFO,
+                'collection'
+            );
+
+            return new SourceAttempt(
+                url: $candidate->url,
+                providerId: $candidate->adapterId,
+                attemptedAt: $attemptedAt,
+                outcome: self::OUTCOME_SUCCESS,
+                httpStatus: $fetchResult->statusCode,
+            );
+        }
+
+        // Check for scalar extraction
         $extraction = $adaptResult->getExtraction($request->datapointKey);
 
         if ($extraction === null) {
@@ -260,6 +287,11 @@ final class CollectDatapointHandler implements CollectDatapointInterface
      */
     private ?array $lastSuccessfulExtraction = null;
 
+    /**
+     * @var array{candidate: SourceCandidate, fetchResult: FetchResult, historicalExtraction: HistoricalExtraction}|null
+     */
+    private ?array $lastSuccessfulHistoricalExtraction = null;
+
     private function storeExtractionForResult(
         SourceCandidate $candidate,
         FetchResult $fetchResult,
@@ -272,6 +304,18 @@ final class CollectDatapointHandler implements CollectDatapointInterface
         ];
     }
 
+    private function storeHistoricalExtractionForResult(
+        SourceCandidate $candidate,
+        FetchResult $fetchResult,
+        HistoricalExtraction $historicalExtraction
+    ): void {
+        $this->lastSuccessfulHistoricalExtraction = [
+            'candidate' => $candidate,
+            'fetchResult' => $fetchResult,
+            'historicalExtraction' => $historicalExtraction,
+        ];
+    }
+
     /**
      * @param SourceAttempt[] $sourceAttempts
      */
@@ -279,6 +323,32 @@ final class CollectDatapointHandler implements CollectDatapointInterface
         CollectDatapointRequest $request,
         array $sourceAttempts
     ): CollectDatapointResult {
+        // Check for historical extraction first
+        if ($this->lastSuccessfulHistoricalExtraction !== null) {
+            $historicalExtraction = $this->lastSuccessfulHistoricalExtraction['historicalExtraction'];
+            $fetchResult = $this->lastSuccessfulHistoricalExtraction['fetchResult'];
+
+            $datapoint = $this->dataPointFactory->fromHistoricalExtractionMostRecent(
+                $historicalExtraction,
+                $fetchResult
+            );
+            if ($datapoint === null) {
+                throw new \LogicException('Historical extraction returned no periods');
+            }
+
+            $this->lastSuccessfulHistoricalExtraction = null;
+            $this->lastSuccessfulExtraction = null;
+
+            return new CollectDatapointResult(
+                datapointKey: $request->datapointKey,
+                datapoint: $datapoint,
+                sourceAttempts: $sourceAttempts,
+                found: true,
+                historicalExtraction: $historicalExtraction,
+                fetchResult: $fetchResult,
+            );
+        }
+
         if ($this->lastSuccessfulExtraction === null) {
             throw new \LogicException('Success result requested but no extraction stored');
         }

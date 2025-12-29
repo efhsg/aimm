@@ -31,7 +31,7 @@ final class StockAnalysisAdapter implements SourceAdapterInterface
             'unit' => 'ratio',
         ],
         'valuation.trailing_pe' => [
-            'labels' => ['p/e ratio', 'p/e', 'trailing p/e'],
+            'labels' => ['p/e ratio', 'p/e', 'trailing p/e', 'pe ratio'],
             'unit' => 'ratio',
         ],
         'valuation.ev_ebitda' => [
@@ -39,7 +39,7 @@ final class StockAnalysisAdapter implements SourceAdapterInterface
             'unit' => 'ratio',
         ],
         'valuation.div_yield' => [
-            'labels' => ['dividend yield', 'dividend & yield'],
+            'labels' => ['dividend yield', 'dividend & yield', 'dividend'],
             'unit' => 'percent',
         ],
         'valuation.fcf_yield' => [

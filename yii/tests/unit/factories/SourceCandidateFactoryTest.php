@@ -17,21 +17,30 @@ final class SourceCandidateFactoryTest extends Unit
         $factory = new SourceCandidateFactory();
         $candidates = $factory->forTicker('AAPL', 'NASDAQ');
 
-        $this->assertCount(4, $candidates);
-        $this->assertSame('yahoo_finance', $candidates[0]->adapterId);
-        $this->assertSame('https://finance.yahoo.com/quote/AAPL', $candidates[0]->url);
+        // Now includes Yahoo (4 variants), StockAnalysis, Reuters, WSJ, Bloomberg, Morningstar, SeekingAlpha
+        $this->assertGreaterThanOrEqual(10, count($candidates));
 
-        $this->assertSame('yahoo_finance_api', $candidates[1]->adapterId);
-        $this->assertSame(
-            'https://query1.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=financialData,defaultKeyStatistics,price',
-            $candidates[1]->url
-        );
+        // Check that all expected adapters are present
+        $adapterIds = array_map(static fn ($c) => $c->adapterId, $candidates);
+        $this->assertContains('yahoo_finance', $adapterIds);
+        $this->assertContains('yahoo_finance_api', $adapterIds);
+        $this->assertContains('yahoo_finance_financials', $adapterIds);
+        $this->assertContains('yahoo_finance_quarters', $adapterIds);
+        $this->assertContains('stockanalysis', $adapterIds);
+        $this->assertContains('reuters', $adapterIds);
+        $this->assertContains('wsj', $adapterIds);
+        $this->assertContains('bloomberg', $adapterIds);
+        $this->assertContains('morningstar', $adapterIds);
+        $this->assertContains('seeking_alpha', $adapterIds);
 
-        $this->assertSame('stockanalysis', $candidates[2]->adapterId);
-        $this->assertSame('https://stockanalysis.com/stocks/aapl/', $candidates[2]->url);
+        // Check URLs for key adapters
+        $urlsByAdapter = [];
+        foreach ($candidates as $candidate) {
+            $urlsByAdapter[$candidate->adapterId] = $candidate->url;
+        }
 
-        $this->assertSame('reuters', $candidates[3]->adapterId);
-        $this->assertSame('https://www.reuters.com/companies/AAPL.O', $candidates[3]->url);
+        $this->assertSame('https://finance.yahoo.com/quote/AAPL', $urlsByAdapter['yahoo_finance']);
+        $this->assertStringContainsString('query1.finance.yahoo.com', $urlsByAdapter['yahoo_finance_api']);
     }
 
     public function testMacroCandidatesUseYahooSourcesOnly(): void

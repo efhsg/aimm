@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 use app\adapters\AdapterChain;
 use app\adapters\BlockedSourceRegistry;
+use app\adapters\BloombergAdapter;
 use app\adapters\CachedDataAdapter;
+use app\adapters\MorningstarAdapter;
 use app\adapters\ReutersAdapter;
+use app\adapters\SeekingAlphaAdapter;
 use app\adapters\SourceAdapterInterface;
 use app\adapters\StockAnalysisAdapter;
+use app\adapters\WsjAdapter;
 use app\adapters\YahooFinanceAdapter;
 use app\alerts\AlertDispatcher;
 use app\alerts\EmailAlertNotifier;
@@ -132,6 +136,10 @@ return [
                     $container->get(YahooFinanceAdapter::class),
                     $container->get(StockAnalysisAdapter::class),
                     $container->get(ReutersAdapter::class),
+                    $container->get(WsjAdapter::class),
+                    $container->get(BloombergAdapter::class),
+                    $container->get(MorningstarAdapter::class),
+                    $container->get(SeekingAlphaAdapter::class),
                     $container->get(CachedDataAdapter::class),
                 ],
                 blockedRegistry: $container->get(BlockedSourceRegistry::class),
@@ -143,6 +151,10 @@ return [
         YahooFinanceAdapter::class => YahooFinanceAdapter::class,
         StockAnalysisAdapter::class => StockAnalysisAdapter::class,
         ReutersAdapter::class => ReutersAdapter::class,
+        WsjAdapter::class => WsjAdapter::class,
+        BloombergAdapter::class => BloombergAdapter::class,
+        MorningstarAdapter::class => MorningstarAdapter::class,
+        SeekingAlphaAdapter::class => SeekingAlphaAdapter::class,
 
         SemanticValidatorInterface::class => SemanticValidator::class,
 

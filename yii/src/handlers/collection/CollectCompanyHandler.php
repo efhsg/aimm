@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace app\handlers\collection;
 
+use app\dto\AnnualFinancials;
 use app\dto\CollectCompanyRequest;
 use app\dto\CollectCompanyResult;
 use app\dto\CollectDatapointRequest;
+use app\dto\CollectDatapointResult;
 use app\dto\CompanyData;
 use app\dto\datapoints\DataPointMoney;
 use app\dto\datapoints\DataPointNumber;
@@ -14,6 +16,8 @@ use app\dto\datapoints\DataPointPercent;
 use app\dto\datapoints\DataPointRatio;
 use app\dto\FinancialsData;
 use app\dto\MetricDefinition;
+use app\dto\OperationalData;
+use app\dto\QuarterFinancials;
 use app\dto\QuartersData;
 use app\dto\SourceAttempt;
 use app\dto\SourceCandidate;
@@ -22,6 +26,7 @@ use app\enums\CollectionStatus;
 use app\enums\Severity;
 use app\factories\DataPointFactory;
 use app\factories\SourceCandidateFactory;
+use DateTimeImmutable;
 use yii\log\Logger;
 
 /**
@@ -96,6 +101,20 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 $allAttempts,
                 $deadline
             );
+
+            if ($this->isTimedOut($deadline)) {
+                $timedOut = true;
+            }
+        }
+
+        $operational = null;
+        if (!$timedOut && !empty($request->requirements->operationalMetrics)) {
+            $operational = $this->collectOperationalMetrics(
+                $request,
+                $sources,
+                $allAttempts,
+                $deadline
+            );
         }
 
         $financials ??= new FinancialsData(
@@ -133,6 +152,7 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 valuation: $valuation,
                 financials: $financials,
                 quarters: $quarters,
+                operational: $operational,
             ),
             sourceAttempts: $allAttempts,
             status: $status,
@@ -311,10 +331,138 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             );
         }
 
+        $financialsSources = $this->sourceCandidateFactory->forFinancials(
+            $request->ticker,
+            $request->config->listingExchange
+        );
+
+        if (empty($financialsSources)) {
+            return new FinancialsData(
+                historyYears: $request->requirements->historyYears,
+                annualData: [],
+            );
+        }
+
+        $annualData = [];
+        $definitions = $request->requirements->annualFinancialMetrics;
+
+        // Collect each financial metric
+        $metricResults = [];
+        foreach ($definitions as $definition) {
+            if ($this->isTimedOut($deadline)) {
+                break;
+            }
+
+            $severity = $definition->required ? Severity::Required : Severity::Optional;
+            $datapointKey = "financials.{$definition->key}";
+
+            $result = $this->datapointCollector->collect(new CollectDatapointRequest(
+                datapointKey: $datapointKey,
+                sourceCandidates: $financialsSources,
+                adapterId: 'chain',
+                severity: $severity,
+                ticker: $request->ticker,
+                unit: $definition->unit,
+            ));
+
+            $metricResults[$definition->key] = $result;
+            $allAttempts = array_merge($allAttempts, $result->sourceAttempts);
+        }
+
+        // Parse the historical data into AnnualFinancials by fiscal year
+        $annualData = $this->buildAnnualFinancials(
+            $metricResults,
+            $request->requirements->historyYears,
+            $request->ticker
+        );
+
         return new FinancialsData(
             historyYears: $request->requirements->historyYears,
-            annualData: [],
+            annualData: $annualData,
         );
+    }
+
+    /**
+     * @param array<string, CollectDatapointResult> $metricResults
+     * @return array<int, AnnualFinancials>
+     */
+    private function buildAnnualFinancials(
+        array $metricResults,
+        int $historyYears,
+        string $ticker
+    ): array {
+        // Group period data by year across all metrics
+        /** @var array<int, array<string, DataPointMoney>> $periodsByYear */
+        $periodsByYear = [];
+
+        foreach ($metricResults as $metricKey => $result) {
+            if (!$result->found) {
+                continue;
+            }
+
+            // Check for historical extraction with period data
+            if ($result->isHistorical() && $result->historicalExtraction !== null && $result->fetchResult !== null) {
+                $datapoints = $this->dataPointFactory->fromHistoricalExtractionByYear(
+                    $result->historicalExtraction,
+                    $result->fetchResult,
+                    $historyYears
+                );
+
+                foreach ($datapoints as $year => $datapoint) {
+                    $periodsByYear[$year][$metricKey] = $datapoint;
+                }
+            }
+        }
+
+        // Build AnnualFinancials for each year
+        $annualData = [];
+
+        // Sort years descending
+        krsort($periodsByYear);
+
+        $count = 0;
+        foreach ($periodsByYear as $year => $yearMetrics) {
+            if ($count >= $historyYears) {
+                break;
+            }
+
+            if (empty($yearMetrics)) {
+                continue;
+            }
+
+            $annualData[$year] = new AnnualFinancials(
+                fiscalYear: $year,
+                revenue: $this->getAsMoney($yearMetrics, 'revenue'),
+                ebitda: $this->getAsMoney($yearMetrics, 'ebitda'),
+                netIncome: $this->getAsMoney($yearMetrics, 'net_income'),
+                netDebt: $this->getAsMoney($yearMetrics, 'net_debt'),
+                freeCashFlow: $this->getAsMoney($yearMetrics, 'free_cash_flow'),
+                additionalMetrics: $this->extractAdditionalFinancialMetrics($yearMetrics),
+            );
+            $count++;
+        }
+
+        return $annualData;
+    }
+
+    /**
+     * @param array<string, DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber> $metrics
+     * @return array<string, DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber>
+     */
+    private function extractAdditionalFinancialMetrics(array $metrics): array
+    {
+        $knownKeys = ['revenue', 'ebitda', 'net_income', 'net_debt', 'free_cash_flow'];
+        $knownLookup = array_fill_keys($knownKeys, true);
+        $additional = [];
+
+        foreach ($metrics as $key => $datapoint) {
+            if (isset($knownLookup[$key])) {
+                continue;
+            }
+            $additional[$key] = $datapoint;
+        }
+
+        return $additional;
     }
 
     /**
@@ -331,7 +479,191 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             return new QuartersData(quarters: []);
         }
 
-        return new QuartersData(quarters: []);
+        $quartersSources = $this->sourceCandidateFactory->forQuarters(
+            $request->ticker,
+            $request->config->listingExchange
+        );
+
+        if (empty($quartersSources)) {
+            return new QuartersData(quarters: []);
+        }
+
+        $definitions = $request->requirements->quarterMetrics;
+
+        // Collect each quarterly metric
+        $metricResults = [];
+        foreach ($definitions as $definition) {
+            if ($this->isTimedOut($deadline)) {
+                break;
+            }
+
+            $severity = $definition->required ? Severity::Required : Severity::Optional;
+            $datapointKey = "quarters.{$definition->key}";
+
+            $result = $this->datapointCollector->collect(new CollectDatapointRequest(
+                datapointKey: $datapointKey,
+                sourceCandidates: $quartersSources,
+                adapterId: 'chain',
+                severity: $severity,
+                ticker: $request->ticker,
+                unit: $definition->unit,
+            ));
+
+            $metricResults[$definition->key] = $result;
+            $allAttempts = array_merge($allAttempts, $result->sourceAttempts);
+        }
+
+        // Parse the historical data into QuarterFinancials
+        $quarters = $this->buildQuarterFinancials(
+            $metricResults,
+            $request->requirements->quartersToFetch,
+            $request->ticker
+        );
+
+        return new QuartersData(quarters: $quarters);
+    }
+
+    /**
+     * @param array<string, CollectDatapointResult> $metricResults
+     * @return array<string, QuarterFinancials>
+     */
+    private function buildQuarterFinancials(
+        array $metricResults,
+        int $quartersToFetch,
+        string $ticker
+    ): array {
+        // Group period data by quarter key (e.g., "2024Q3")
+        /** @var array<string, array<string, DataPointMoney>> $periodsByQuarter */
+        $periodsByQuarter = [];
+        /** @var array<string, DateTimeImmutable> $quarterEndDates */
+        $quarterEndDates = [];
+
+        foreach ($metricResults as $metricKey => $result) {
+            if (!$result->found) {
+                continue;
+            }
+
+            // Check for historical extraction with period data
+            if ($result->isHistorical() && $result->historicalExtraction !== null && $result->fetchResult !== null) {
+                $datapoints = $this->dataPointFactory->fromHistoricalExtractionByQuarter(
+                    $result->historicalExtraction,
+                    $result->fetchResult,
+                    $quartersToFetch
+                );
+
+                foreach ($datapoints as $quarterKey => $datapoint) {
+                    $periodsByQuarter[$quarterKey][$metricKey] = $datapoint;
+                    // Store the actual end date from the datapoint
+                    if ($datapoint->asOf !== null && !isset($quarterEndDates[$quarterKey])) {
+                        $quarterEndDates[$quarterKey] = $datapoint->asOf;
+                    }
+                }
+            }
+        }
+
+        // Build QuarterFinancials for each quarter
+        $quarters = [];
+
+        // Sort by quarter key descending (most recent first)
+        krsort($periodsByQuarter);
+
+        $count = 0;
+        foreach ($periodsByQuarter as $quarterKey => $quarterMetrics) {
+            if ($count >= $quartersToFetch) {
+                break;
+            }
+
+            // Parse quarter key "2024Q3" -> year=2024, quarter=3
+            if (!preg_match('/^(\d{4})Q(\d)$/', $quarterKey, $matches)) {
+                continue;
+            }
+
+            if (empty($quarterMetrics)) {
+                continue;
+            }
+
+            $year = (int) $matches[1];
+            $quarter = (int) $matches[2];
+            $periodEnd = $quarterEndDates[$quarterKey] ?? $this->getQuarterEndDate($year, $quarter);
+
+            $quarters[$quarterKey] = new QuarterFinancials(
+                fiscalYear: $year,
+                fiscalQuarter: $quarter,
+                periodEnd: $periodEnd,
+                revenue: $this->getAsMoney($quarterMetrics, 'revenue'),
+                ebitda: $this->getAsMoney($quarterMetrics, 'ebitda'),
+                netIncome: $this->getAsMoney($quarterMetrics, 'net_income'),
+                freeCashFlow: $this->getAsMoney($quarterMetrics, 'free_cash_flow'),
+                additionalMetrics: $this->extractAdditionalFinancialMetrics($quarterMetrics),
+            );
+            $count++;
+        }
+
+        return $quarters;
+    }
+
+    private function getQuarterEndDate(int $year, int $quarter): DateTimeImmutable
+    {
+        return match ($quarter) {
+            1 => new DateTimeImmutable("{$year}-03-31"),
+            2 => new DateTimeImmutable("{$year}-06-30"),
+            3 => new DateTimeImmutable("{$year}-09-30"),
+            4 => new DateTimeImmutable("{$year}-12-31"),
+            default => new DateTimeImmutable("{$year}-12-31"),
+        };
+    }
+
+    /**
+     * @param list<SourceCandidate> $sources
+     * @param SourceAttempt[] $allAttempts
+     */
+    private function collectOperationalMetrics(
+        CollectCompanyRequest $request,
+        array $sources,
+        array &$allAttempts,
+        float $deadline
+    ): ?OperationalData {
+        $definitions = $request->requirements->operationalMetrics;
+
+        if (empty($definitions)) {
+            return null;
+        }
+
+        $metrics = [];
+        foreach ($definitions as $definition) {
+            if ($this->isTimedOut($deadline)) {
+                break;
+            }
+
+            $severity = $definition->required ? Severity::Required : Severity::Optional;
+            $datapointKey = "operational.{$definition->key}";
+
+            $result = $this->datapointCollector->collect(new CollectDatapointRequest(
+                datapointKey: $datapointKey,
+                sourceCandidates: $sources,
+                adapterId: 'chain',
+                severity: $severity,
+                ticker: $request->ticker,
+                unit: $definition->unit,
+            ));
+
+            if ($result->found && $result->datapoint->value !== null) {
+                $datapoint = $result->datapoint;
+                if ($datapoint instanceof DataPointMoney
+                    || $datapoint instanceof DataPointNumber
+                    || $datapoint instanceof DataPointPercent
+                ) {
+                    $metrics[$definition->key] = $datapoint;
+                }
+            }
+            $allAttempts = array_merge($allAttempts, $result->sourceAttempts);
+        }
+
+        if (empty($metrics)) {
+            return null;
+        }
+
+        return new OperationalData(metrics: $metrics);
     }
 
     private function isTimedOut(float $deadline): bool
