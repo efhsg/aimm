@@ -9,6 +9,7 @@ use app\enums\CollectionStatus;
 use app\handlers\collection\CollectIndustryInterface;
 use app\queries\IndustryConfigQuery;
 use Throwable;
+use Yii;
 use yii\base\Module;
 use yii\console\Controller;
 use yii\console\ExitCode;
@@ -51,6 +52,8 @@ final class CollectController extends Controller
             $this->stderr("Industry config not found: {$id}\n");
             return ExitCode::DATAERR;
         }
+
+        Yii::$app->params['collectionIndustryId'] = $id;
 
         try {
             $result = $this->collector->collect(

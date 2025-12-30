@@ -6,6 +6,10 @@ use yii\caching\FileCache;
 use yii\log\FileTarget;
 
 $params = require __DIR__ . '/params.php';
+$localParamsPath = __DIR__ . '/params-local.php';
+if (file_exists($localParamsPath)) {
+    $params = array_replace_recursive($params, require $localParamsPath);
+}
 $db = require __DIR__ . '/db.php';
 $container = require __DIR__ . (YII_ENV_PROD ? '/container-production.php' : '/container.php');
 

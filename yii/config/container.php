@@ -124,9 +124,18 @@ return [
         BlockedSourceRegistry::class => BlockedSourceRegistry::class,
 
         CachedDataAdapter::class => static function (Container $container): CachedDataAdapter {
-            $industry = 'unknown';
+            $industry = null;
             if (Yii::$app->request instanceof \yii\web\Request) {
-                $industry = Yii::$app->request->getParam('industry', 'unknown');
+                $industry = Yii::$app->request->getParam('industry');
+            }
+            if (!is_string($industry) || $industry === '') {
+                $paramIndustry = Yii::$app->params['collectionIndustryId'] ?? null;
+                if (is_string($paramIndustry) && $paramIndustry !== '') {
+                    $industry = $paramIndustry;
+                }
+            }
+            if (!is_string($industry) || $industry === '') {
+                $industry = 'unknown';
             }
             return new CachedDataAdapter(
                 $container->get(DataPackRepository::class),
