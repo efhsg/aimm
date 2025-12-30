@@ -17,7 +17,13 @@ return [
         'www.morningstar.com',
         'seekingalpha.com',
         'stockanalysis.com',
+        'rigcount.bakerhughes.com',
+        'api.eia.gov',
     ],
+    // Baker Hughes rotates this XLSX URL; override in params-local.php when it changes.
+    'rigCountXlsxUrl' => 'https://rigcount.bakerhughes.com/static-files/ec8abd8d-2b0f-4977-bb6f-8b9814fc8401',
+    'eiaApiKey' => 'DEMO_KEY',
+    'eiaInventorySeriesId' => 'PET.WCRSTUS1.W',
 
     // Rate limiter: 'file' (dev/single-process) or 'database' (production/multi-process)
     'rateLimiter' => 'file',

@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use app\adapters\AdapterChain;
+use app\adapters\BakerHughesRigCountAdapter;
 use app\adapters\BlockedSourceRegistry;
 use app\adapters\BloombergAdapter;
 use app\adapters\CachedDataAdapter;
+use app\adapters\EiaInventoryAdapter;
 use app\adapters\MorningstarAdapter;
 use app\adapters\ReutersAdapter;
 use app\adapters\SeekingAlphaAdapter;
@@ -147,6 +149,8 @@ return [
             return new AdapterChain(
                 adapters: [
                     $container->get(YahooFinanceAdapter::class),
+                    $container->get(BakerHughesRigCountAdapter::class),
+                    $container->get(EiaInventoryAdapter::class),
                     $container->get(StockAnalysisAdapter::class),
                     $container->get(ReutersAdapter::class),
                     $container->get(WsjAdapter::class),
@@ -162,6 +166,8 @@ return [
 
         SourceAdapterInterface::class => AdapterChain::class,
         YahooFinanceAdapter::class => YahooFinanceAdapter::class,
+        BakerHughesRigCountAdapter::class => BakerHughesRigCountAdapter::class,
+        EiaInventoryAdapter::class => EiaInventoryAdapter::class,
         StockAnalysisAdapter::class => StockAnalysisAdapter::class,
         ReutersAdapter::class => ReutersAdapter::class,
         WsjAdapter::class => WsjAdapter::class,
@@ -181,7 +187,14 @@ return [
         },
 
         DataPointFactory::class => DataPointFactory::class,
-        SourceCandidateFactory::class => SourceCandidateFactory::class,
+        SourceCandidateFactory::class => static function (): SourceCandidateFactory {
+            $params = Yii::$app->params;
+            return new SourceCandidateFactory(
+                rigCountXlsxUrl: $params['rigCountXlsxUrl'] ?? null,
+                eiaApiKey: $params['eiaApiKey'] ?? null,
+                eiaInventorySeriesId: $params['eiaInventorySeriesId'] ?? null,
+            );
+        },
         CompanyDataFactory::class => CompanyDataFactory::class,
         IndustryDataPackFactory::class => IndustryDataPackFactory::class,
 

@@ -25,6 +25,21 @@ final class SourceCandidateFactory
     private const KEY_SUPPORTS_FINANCIALS = 'supports_financials';
     private const KEY_SUPPORTS_QUARTERS = 'supports_quarters';
 
+    private const MACRO_KEY_RIG_COUNT = 'rig_count';
+    private const MACRO_KEY_INVENTORY = 'inventory';
+    private const MACRO_KEY_OIL_INVENTORY = 'oil_inventory';
+
+    // Yahoo Finance symbols (single source of truth)
+    private const SYMBOL_WTI = 'CL=F';
+    private const SYMBOL_BRENT = 'BZ=F';
+    private const SYMBOL_NATURAL_GAS = 'NG=F';
+    private const SYMBOL_GOLD = 'GC=F';
+    private const SYMBOL_SP500 = '^GSPC';
+    private const SYMBOL_XLE = 'XLE';
+
+    private const EIA_INVENTORY_SERIES_DEFAULT = 'PET.WCRSTUS1.W';
+    private const EIA_INVENTORY_URL_TEMPLATE = 'https://api.eia.gov/v2/seriesid/{series}?api_key={api_key}';
+
     private const SOURCE_TEMPLATES = [
         'yahoo_finance' => [
             self::KEY_DOMAIN => 'finance.yahoo.com',
@@ -154,6 +169,13 @@ final class SourceCandidateFactory
         'XTSE' => 'TO',
     ];
 
+    public function __construct(
+        private readonly ?string $rigCountXlsxUrl = null,
+        private readonly ?string $eiaApiKey = null,
+        private readonly ?string $eiaInventorySeriesId = null,
+    ) {
+    }
+
     /**
      * Generate prioritized source candidates for a ticker.
      *
@@ -195,11 +217,27 @@ final class SourceCandidateFactory
     {
         $candidates = [];
 
+        $macroKey = trim($macroKey);
+        if ($macroKey === '') {
+            return [];
+        }
+
+        $specialCandidates = $this->buildSpecialMacroCandidates($macroKey);
+        if ($specialCandidates !== null) {
+            return $specialCandidates;
+        }
+
         $symbolMap = [
-            'macro.oil_price' => 'CL=F',
-            'macro.gas_price' => 'NG=F',
-            'macro.gold_price' => 'GC=F',
-            'macro.sp500' => '^GSPC',
+            'macro.oil_price' => self::SYMBOL_WTI,
+            'macro.gas_price' => self::SYMBOL_NATURAL_GAS,
+            'macro.gold_price' => self::SYMBOL_GOLD,
+            'macro.sp500' => self::SYMBOL_SP500,
+            'BRENT' => self::SYMBOL_BRENT,
+            'WTI' => self::SYMBOL_WTI,
+            'GOLD' => self::SYMBOL_GOLD,
+            'XLE' => self::SYMBOL_XLE,
+            'SP500' => self::SYMBOL_SP500,
+            'SPX' => self::SYMBOL_SP500,
         ];
 
         $symbol = $symbolMap[$macroKey] ?? null;
@@ -232,6 +270,84 @@ final class SourceCandidateFactory
         );
 
         return $candidates;
+    }
+
+    /**
+     * @return list<SourceCandidate>|null
+     */
+    private function buildSpecialMacroCandidates(string $macroKey): ?array
+    {
+        if ($macroKey === self::MACRO_KEY_RIG_COUNT) {
+            return $this->buildRigCountCandidates();
+        }
+
+        if ($macroKey === self::MACRO_KEY_INVENTORY || $macroKey === self::MACRO_KEY_OIL_INVENTORY) {
+            return $this->buildInventoryCandidates();
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<SourceCandidate>
+     */
+    private function buildRigCountCandidates(): array
+    {
+        if ($this->rigCountXlsxUrl === null || trim($this->rigCountXlsxUrl) === '') {
+            return [];
+        }
+
+        $candidate = $this->buildDirectCandidate(
+            $this->rigCountXlsxUrl,
+            'baker_hughes_rig_count',
+            1
+        );
+
+        return $candidate === null ? [] : [$candidate];
+    }
+
+    /**
+     * @return list<SourceCandidate>
+     */
+    private function buildInventoryCandidates(): array
+    {
+        $apiKey = $this->eiaApiKey ?? 'DEMO_KEY';
+        if (trim($apiKey) === '') {
+            return [];
+        }
+
+        $seriesId = $this->eiaInventorySeriesId ?? self::EIA_INVENTORY_SERIES_DEFAULT;
+        if (trim($seriesId) === '') {
+            return [];
+        }
+
+        $url = str_replace(
+            ['{series}', '{api_key}'],
+            [urlencode($seriesId), urlencode($apiKey)],
+            self::EIA_INVENTORY_URL_TEMPLATE
+        );
+
+        $candidate = $this->buildDirectCandidate($url, 'eia_inventory', 1);
+
+        return $candidate === null ? [] : [$candidate];
+    }
+
+    private function buildDirectCandidate(
+        string $url,
+        string $adapterId,
+        int $priority
+    ): ?SourceCandidate {
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!is_string($host) || $host === '') {
+            return null;
+        }
+
+        return new SourceCandidate(
+            url: $url,
+            adapterId: $adapterId,
+            priority: $priority,
+            domain: $host,
+        );
     }
 
     /**

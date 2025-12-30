@@ -46,13 +46,34 @@ final class SourceCandidateFactoryTest extends Unit
     public function testMacroCandidatesUseYahooSourcesOnly(): void
     {
         $factory = new SourceCandidateFactory();
-        $candidates = $factory->forMacro('macro.oil_price');
+        $candidates = $factory->forMacro('BRENT');
 
         $this->assertCount(2, $candidates);
         $this->assertSame('yahoo_finance', $candidates[0]->adapterId);
-        $this->assertStringContainsString('CL%3DF', $candidates[0]->url);
+        $this->assertStringContainsString('BZ%3DF', $candidates[0]->url);
 
         $this->assertSame('yahoo_finance_api', $candidates[1]->adapterId);
-        $this->assertStringContainsString('CL%3DF', $candidates[1]->url);
+        $this->assertStringContainsString('BZ%3DF', $candidates[1]->url);
+    }
+
+    public function testMacroCandidatesIncludeRigCountAndInventorySources(): void
+    {
+        $factory = new SourceCandidateFactory(
+            rigCountXlsxUrl: 'https://rigcount.bakerhughes.com/static-files/test.xlsx',
+            eiaApiKey: 'DEMO_KEY',
+            eiaInventorySeriesId: 'PET.WCRSTUS1.W',
+        );
+
+        $rigCandidates = $factory->forMacro('rig_count');
+        $this->assertCount(1, $rigCandidates);
+        $this->assertSame('baker_hughes_rig_count', $rigCandidates[0]->adapterId);
+        $this->assertSame('rigcount.bakerhughes.com', $rigCandidates[0]->domain);
+
+        $inventoryCandidates = $factory->forMacro('inventory');
+        $this->assertCount(1, $inventoryCandidates);
+        $this->assertSame('eia_inventory', $inventoryCandidates[0]->adapterId);
+        $this->assertSame('api.eia.gov', $inventoryCandidates[0]->domain);
+        $this->assertStringContainsString('seriesid/PET.WCRSTUS1.W', $inventoryCandidates[0]->url);
+        $this->assertStringContainsString('api_key=DEMO_KEY', $inventoryCandidates[0]->url);
     }
 }

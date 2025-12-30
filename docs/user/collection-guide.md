@@ -15,6 +15,17 @@ The collection system fetches financial data for configured companies from multi
 
 2. **Configuration**: At least one industry must be configured in the `industry_config` table
 
+   Minimal insert example (replace JSON with your config):
+   ```sql
+   INSERT INTO industry_config (industry_id, name, config_json, is_active)
+   VALUES (
+     'oil-majors',
+     'Oil Majors',
+     '{...}',
+     1
+   );
+   ```
+
 ## Quick Start
 
 ```bash
@@ -46,6 +57,10 @@ Industries are stored in the `industry_config` table with JSON configuration.
 
 ### Configuration Structure
 
+**Schema**: `yii/config/schemas/industry-config.schema.json` (invalid JSON or schema violations fail collection before it starts).
+
+**Important**: `config_json.id` must match `industry_config.industry_id` to keep datapack paths and run logs aligned.
+
 ```json
 {
   "id": "oil-majors",
@@ -76,7 +91,7 @@ Industries are stored in the `industry_config` table with JSON configuration.
     "margin_proxy": null,
     "sector_index": "XLE",
     "required_indicators": ["rig_count"],
-    "optional_indicators": ["oil_inventory"]
+    "optional_indicators": ["inventory"]
   },
   "data_requirements": {
     "history_years": 5,
@@ -119,6 +134,22 @@ Industries are stored in the `industry_config` table with JSON configuration.
 | `sector_index` | Sector ETF or index (e.g., `XLE`, `XLF`) |
 | `required_indicators` | Array of required macro indicators |
 | `optional_indicators` | Array of optional macro indicators |
+
+### Macro Sources
+
+- `commodity_benchmark`, `margin_proxy`, `sector_index`: Yahoo Finance quote data
+- `rig_count`: Baker Hughes North America rig count XLSX
+- `inventory`: U.S. crude oil inventories via EIA API (series `PET.WCRSTUS1.W`)
+
+Configure source credentials/URLs in `yii/config/params-local.php`:
+
+```php
+return [
+    'rigCountXlsxUrl' => 'https://rigcount.bakerhughes.com/static-files/<latest>.xlsx',
+    'eiaApiKey' => 'DEMO_KEY',
+    'eiaInventorySeriesId' => 'PET.WCRSTUS1.W',
+];
+```
 
 #### Data Requirements
 
