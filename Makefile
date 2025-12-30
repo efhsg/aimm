@@ -17,3 +17,6 @@ fix-changed:
 		exit 0; \
 	fi; \
 	./php-cs-fixer fix --using-cache=no --rules=@PSR12 --path-mode=override $$FILES
+
+migrate-test:
+	docker exec -e YII_ENV=test aimm_yii ./yii migrate
