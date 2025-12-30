@@ -15,13 +15,11 @@ git status --porcelain
 
 ### 2. Check rules compliance
 
-Read `docs/rules/coding-standards.md` and `docs/rules/architecture.md`, then read each changed file and verify compliance. Report violations.
+Read and verify compliance with:
+- `docs/rules/coding-standards.md`
+- `docs/rules/architecture.md`
 
-Key checks:
-- No banned folders (`services/`, `helpers/`, `components/`, `utils/`, `misc/`)
-- Type hints on all parameters and return types
-- No magic strings
-- No silent failures
+Report any violations found in changed files.
 
 ### 3. Run linter
 
@@ -61,10 +59,7 @@ git status
 git diff --staged
 ```
 
-Suggest commit message following `docs/rules/commits.md`:
-- Format: `TYPE(scope): description`
-- Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `wip`
-- Example: `feat(handlers): add rate limiting to API requests`
+Suggest commit message per `docs/rules/commits.md`.
 
 Ask user for confirmation before committing.
 
