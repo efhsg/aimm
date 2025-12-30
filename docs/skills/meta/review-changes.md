@@ -49,66 +49,30 @@ Perform a structured code review of staged or unstaged changes against project r
 
 ### 2. Style & Standards
 
-Reference: `docs/rules/coding-standards.md`
+Per `docs/rules/coding-standards.md`, plus:
 
-**Required:**
-- `declare(strict_types=1);` in all PHP files
-- PSR-12 formatting
-- Type hints on all parameters and return types
-- No magic strings (use constants/enums)
-
-**Code style:**
 - No unnecessary curly braces (single-statement blocks)
-- Never fully-qualified class names in method bodies — use imports at top
+- Never fully-qualified class names in method bodies — use imports
 - Prefer early returns over deep nesting
-
-**Comments:**
-- CLASS: Brief intent comment (2-3 lines) explaining purpose
-- FUNCTIONS: PHPDoc only for `@throws` annotations; skip obvious `@param`/`@return` when type hints suffice
+- CLASS: Brief intent comment (2-3 lines)
+- FUNCTIONS: PHPDoc only for `@throws`; skip obvious `@param`/`@return`
 - No commented-out code
 
 ### 3. Architecture
 
-Reference: `docs/rules/architecture.md`
-
-- Uses approved folders: `handlers/`, `queries/`, `validators/`, `transformers/`, `factories/`, `dto/`, `clients/`, `adapters/`, `enums/`, `exceptions/`
-- No banned folders: `services/`, `helpers/`, `utils/`, `components/`, `misc/`
-- Business logic not in controllers — delegate to handlers
-- DTOs used instead of arrays where appropriate
-- Services via DI: `Yii::$container->get(ClassName::class)`
+Per `docs/rules/architecture.md`
 
 ### 4. SOLID/DRY
 
-Apply judiciously:
-- Apply SOLID/DRY only as far as it eliminates duplication or tight coupling
-- Stop when the goal is met — don't over-abstract
-- Three similar lines of code is better than a premature abstraction
-- Don't design for hypothetical future requirements
+Apply judiciously — stop when goal is met, don't over-abstract.
 
 ### 5. Security
 
-Reference: `docs/rules/security.md`
-
-- No credentials or secrets in code
-- User input validated at system boundaries
-- No SQL injection, XSS, or command injection risks
-- Data provenance maintained
+Per `docs/rules/security.md`
 
 ### 6. Tests
 
-Reference: `docs/rules/testing.md`
-
-- New logic has corresponding Codeception unit tests
-- Test names follow pattern: `test{Action}{Condition}` or `test{Action}When{Scenario}`
-- Tests cover happy path and key failure cases
-- No tests for simple getters/setters or framework code
-
-### 7. Yii 2 Conventions
-
-- Console commands delegate logic to handlers
-- DI container usage is explicit and consistent
-- ActiveRecord models use typed properties
-- Migrations use safe methods (`safeUp`/`safeDown`)
+Per `docs/rules/testing.md`
 
 ## Algorithm
 
