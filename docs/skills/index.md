@@ -46,6 +46,7 @@ Repeatable infrastructure tasks.
 | [create-migration](meta/create-migration.md) | Create Yii2 database migrations. Tables for collection logs, rate limiting, job queue. |
 | [review-and-improve-skill](meta/review-and-improve-skill.md) | Review an existing skill doc and rewrite it with tighter contracts and actionable DoD/tests. |
 | [review-design-doc](meta/review-design-doc.md) | Perform a structured, critical review of a design document against stated principles, architectural taxonomy, type-safety, and security constraints. |
+| [review-changes](meta/review-changes.md) | Review code changes for correctness, style, and project compliance. Invoked via `/review-changes` command. |
 
 > **Archived:** One-shot bootstrap docs moved to `docs/bootstrap/`.
 
