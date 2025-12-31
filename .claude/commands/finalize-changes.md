@@ -13,6 +13,8 @@ description: Validate changes, run linter and tests, prepare commit (project)
 git status --porcelain
 ```
 
+- always Ignore unrelated file changes. Leave these files unchanged.
+
 ### 2. Check rules compliance
 
 Read and verify compliance with:

@@ -41,8 +41,15 @@ use app\handlers\collection\CollectIndustryHandler;
 use app\handlers\collection\CollectIndustryInterface;
 use app\handlers\collection\CollectMacroHandler;
 use app\handlers\collection\CollectMacroInterface;
+use app\handlers\industryconfig\CreateIndustryConfigHandler;
+use app\handlers\industryconfig\CreateIndustryConfigInterface;
+use app\handlers\industryconfig\ToggleIndustryConfigHandler;
+use app\handlers\industryconfig\ToggleIndustryConfigInterface;
+use app\handlers\industryconfig\UpdateIndustryConfigHandler;
+use app\handlers\industryconfig\UpdateIndustryConfigInterface;
 use app\queries\CollectionRunRepository;
 use app\queries\DataPackRepository;
+use app\queries\IndustryConfigListQuery;
 use app\queries\IndustryConfigQuery;
 use app\queries\SourceBlockRepository;
 use app\queries\SourceBlockRepositoryInterface;
@@ -225,6 +232,12 @@ return [
             );
         },
 
+        IndustryConfigListQuery::class => static function (Container $container): IndustryConfigListQuery {
+            return new IndustryConfigListQuery(
+                $container->get(SchemaValidatorInterface::class),
+            );
+        },
+
         DataPackAssembler::class => static function (Container $container): DataPackAssembler {
             return new DataPackAssembler(
                 repository: $container->get(DataPackRepository::class),
@@ -270,6 +283,24 @@ return [
                 gateValidator: $container->get(CollectionGateValidatorInterface::class),
                 alertDispatcher: $container->get(AlertDispatcher::class),
                 runRepository: $container->get(CollectionRunRepository::class),
+                logger: Yii::getLogger(),
+            );
+        },
+
+        CreateIndustryConfigInterface::class => static function (): CreateIndustryConfigInterface {
+            return new CreateIndustryConfigHandler(
+                logger: Yii::getLogger(),
+            );
+        },
+
+        UpdateIndustryConfigInterface::class => static function (): UpdateIndustryConfigInterface {
+            return new UpdateIndustryConfigHandler(
+                logger: Yii::getLogger(),
+            );
+        },
+
+        ToggleIndustryConfigInterface::class => static function (): ToggleIndustryConfigInterface {
+            return new ToggleIndustryConfigHandler(
                 logger: Yii::getLogger(),
             );
         },

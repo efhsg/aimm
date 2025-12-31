@@ -13,4 +13,7 @@ $config = require __DIR__ . '/../config/console.php';
 // Override database for testing
 $config['components']['db'] = require __DIR__ . '/../config/db.php';
 
+// Disable schema cache for testing to ensure fresh schema is loaded
+$config['components']['db']['enableSchemaCache'] = false;
+
 new yii\console\Application($config);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use yii\caching\FileCache;
 use yii\log\FileTarget;
+use yii\web\UrlNormalizer;
 
 $params = require __DIR__ . '/params.php';
 $localParamsPath = __DIR__ . '/params-local.php';
@@ -21,9 +22,36 @@ return [
     'aliases' => [
         '@app' => dirname(__DIR__) . '/src',
     ],
+    'viewPath' => dirname(__DIR__) . '/src/views',
     'components' => [
         'request' => [
             'cookieValidationKey' => getenv('COOKIE_VALIDATION_KEY') ?: 'dev-only-change-me',
+            'enableCsrfValidation' => true,
+        ],
+        'session' => [
+            'class' => 'yii\web\Session',
+            'cookieParams' => [
+                'httponly' => true,
+                'secure' => (getenv('YII_ENV') === 'prod'),
+                'sameSite' => 'Lax',
+            ],
+        ],
+        'urlManager' => [
+            'enablePrettyUrl' => true,
+            'showScriptName' => false,
+            'normalizer' => [
+                'class' => UrlNormalizer::class,
+                'collapseSlashes' => true,
+                'normalizeTrailingSlash' => true,
+            ],
+            'rules' => [
+                'industry-config' => 'industry-config/index',
+                'industry-config/create' => 'industry-config/create',
+                'industry-config/view/<industry_id:[a-z0-9_-]+>' => 'industry-config/view',
+                'industry-config/update/<industry_id:[a-z0-9_-]+>' => 'industry-config/update',
+                'industry-config/toggle/<industry_id:[a-z0-9_-]+>' => 'industry-config/toggle',
+                'industry-config/validate-json' => 'industry-config/validate-json',
+            ],
         ],
         'db' => $db,
         'cache' => [

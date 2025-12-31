@@ -2,8 +2,8 @@
 
 **Project:** AIMM (Equity Intelligence Pipeline)  
 **Area:** Web (Yii2)  
-**Status:** Draft  
-**Last updated:** 2025-12-30  
+**Status:** Implemented  
+**Last updated:** 2025-12-31  
 
 ---
 

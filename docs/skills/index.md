@@ -42,6 +42,7 @@ Repeatable infrastructure tasks.
 
 | Skill | Description |
 |-------|-------------|
+| [access-database-from-host](meta/access-database-from-host.md) | Access the `aimm` database from the host machine using `.env` + `yii/config/db.php` rules, without leaking credentials. |
 | [upgrade-php-version](meta/upgrade-php-version.md) | Upgrade PHP version used by the Yii2 runtime (Docker + Composer constraints) and validate the stack. |
 | [create-migration](meta/create-migration.md) | Create Yii2 database migrations. Tables for collection logs, rate limiting, job queue. |
 | [review-and-improve-skill](meta/review-and-improve-skill.md) | Review an existing skill doc and rewrite it with tighter contracts and actionable DoD/tests. |

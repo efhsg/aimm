@@ -27,7 +27,7 @@ final class IndustryConfigTest extends Unit
 
         $this->assertFalse($model->validate());
         $this->assertArrayHasKey('industry_id', $model->getErrors());
-        $this->assertArrayHasKey('name', $model->getErrors());
+        // name is not required - it is derived from config_json by handlers
         $this->assertArrayHasKey('config_json', $model->getErrors());
     }
 

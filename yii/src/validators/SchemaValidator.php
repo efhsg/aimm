@@ -48,41 +48,49 @@ final class SchemaValidator implements SchemaValidatorInterface
         }
 
         $formatter = new ErrorFormatter();
-        $formattedErrors = $formatter->format($result->error(), false);
+
+        try {
+            $formattedErrors = $formatter->format($result->error(), false);
+            $errors = $this->flattenErrors($formattedErrors);
+        } catch (\Throwable $e) {
+            $errors = ['Schema validation failed: ' . $result->error()->keyword()];
+        }
 
         return new ValidationResult(
             valid: false,
-            errors: $this->flattenErrors($formattedErrors),
+            errors: $errors,
         );
     }
 
     /**
-     * @param array<string, list<string>> $errors
+     * @param array<string|int|null, mixed> $errors
      * @return list<string>
      */
     private function flattenErrors(array $errors): array
     {
         $flat = [];
         foreach ($errors as $path => $messages) {
+            $pathStr = $path === null || $path === '' ? '/' : (string) $path;
+
             if (is_string($messages)) {
-                $flat[] = "{$path}: {$messages}";
+                $flat[] = "{$pathStr}: {$messages}";
                 continue;
             }
 
             if (!is_array($messages)) {
-                $flat[] = "{$path}: {$messages}";
+                $flat[] = "{$pathStr}: " . (string) $messages;
                 continue;
             }
 
             foreach ($messages as $message) {
                 if (is_array($message)) {
                     foreach ($message as $nested) {
-                        $flat[] = "{$path}: {$nested}";
+                        $flat[] = "{$pathStr}: {$nested}";
                     }
                     continue;
                 }
 
-                $flat[] = "{$path}: {$message}";
+                $flat[] = "{$pathStr}: {$message}";
             }
         }
 
