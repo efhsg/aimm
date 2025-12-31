@@ -55,6 +55,7 @@ services:
       # Optional: not standard mysql image variables; consumed by docker/init-scripts/init-databases.sh
       MYSQL_ADMIN_USER: ${DB_ADMIN_USER:-}
       MYSQL_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD:-}
+    command: --default-authentication-plugin=mysql_native_password
     ports:
       - "${DB_PORT:-3307}:3306"
     volumes:
