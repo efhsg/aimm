@@ -19,6 +19,8 @@ use app\factories\DataPointFactory;
 use app\factories\SourceCandidateFactory;
 use app\handlers\collection\CollectDatapointInterface;
 use app\handlers\collection\CollectMacroHandler;
+use app\queries\MacroIndicatorQuery;
+use app\queries\PriceHistoryQuery;
 use Codeception\Test\Unit;
 use DateTimeImmutable;
 use yii\log\Logger;
@@ -29,6 +31,8 @@ final class CollectMacroHandlerTest extends Unit
     private SourceCandidateFactory $sourceCandidateFactory;
     private DataPointFactory $dataPointFactory;
     private Logger $logger;
+    private MacroIndicatorQuery $macroQuery;
+    private PriceHistoryQuery $priceQuery;
     private CollectMacroHandler $handler;
 
     protected function _before(): void
@@ -37,12 +41,16 @@ final class CollectMacroHandlerTest extends Unit
         $this->sourceCandidateFactory = new SourceCandidateFactory();
         $this->dataPointFactory = new DataPointFactory();
         $this->logger = $this->createMock(Logger::class);
+        $this->macroQuery = $this->createMock(MacroIndicatorQuery::class);
+        $this->priceQuery = $this->createMock(PriceHistoryQuery::class);
 
         $this->handler = new CollectMacroHandler(
             $this->datapointCollector,
             $this->sourceCandidateFactory,
             $this->dataPointFactory,
             $this->logger,
+            $this->macroQuery,
+            $this->priceQuery
         );
     }
 

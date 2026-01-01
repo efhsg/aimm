@@ -269,6 +269,10 @@ return [
                 sourceCandidateFactory: $container->get(SourceCandidateFactory::class),
                 dataPointFactory: $container->get(DataPointFactory::class),
                 logger: Yii::getLogger(),
+                companyQuery: $container->get(app\queries\CompanyQuery::class),
+                annualQuery: $container->get(app\queries\AnnualFinancialQuery::class),
+                quarterlyQuery: $container->get(app\queries\QuarterlyFinancialQuery::class),
+                valuationQuery: $container->get(app\queries\ValuationSnapshotQuery::class),
             );
         },
 
@@ -278,6 +282,8 @@ return [
                 sourceCandidateFactory: $container->get(SourceCandidateFactory::class),
                 dataPointFactory: $container->get(DataPointFactory::class),
                 logger: Yii::getLogger(),
+                macroQuery: $container->get(app\queries\MacroIndicatorQuery::class),
+                priceQuery: $container->get(app\queries\PriceHistoryQuery::class),
             );
         },
 
@@ -309,6 +315,69 @@ return [
         ToggleIndustryConfigInterface::class => static function (): ToggleIndustryConfigInterface {
             return new ToggleIndustryConfigHandler(
                 logger: Yii::getLogger(),
+            );
+        },
+
+        // Dossier Queries
+        app\queries\CompanyQuery::class => static function () {
+            return new app\queries\CompanyQuery(Yii::$app->db);
+        },
+        app\queries\AnnualFinancialQuery::class => static function () {
+            return new app\queries\AnnualFinancialQuery(Yii::$app->db);
+        },
+        app\queries\QuarterlyFinancialQuery::class => static function () {
+            return new app\queries\QuarterlyFinancialQuery(Yii::$app->db);
+        },
+        app\queries\TtmFinancialQuery::class => static function () {
+            return new app\queries\TtmFinancialQuery(Yii::$app->db);
+        },
+        app\queries\ValuationSnapshotQuery::class => static function () {
+            return new app\queries\ValuationSnapshotQuery(Yii::$app->db);
+        },
+        app\queries\FxRateQuery::class => static function () {
+            return new app\queries\FxRateQuery(Yii::$app->db);
+        },
+        app\queries\PriceHistoryQuery::class => static function () {
+            return new app\queries\PriceHistoryQuery(Yii::$app->db);
+        },
+        app\queries\MacroIndicatorQuery::class => static function () {
+            return new app\queries\MacroIndicatorQuery(Yii::$app->db);
+        },
+        app\queries\CollectionAttemptQuery::class => static function () {
+            return new app\queries\CollectionAttemptQuery(Yii::$app->db);
+        },
+        app\queries\DataGapQuery::class => static function () {
+            return new app\queries\DataGapQuery(Yii::$app->db);
+        },
+
+        // Peer Group Queries
+        app\queries\CollectionPolicyQuery::class => static function () {
+            return new app\queries\CollectionPolicyQuery(Yii::$app->db);
+        },
+        app\queries\PeerGroupQuery::class => static function () {
+            return new app\queries\PeerGroupQuery(Yii::$app->db);
+        },
+        app\queries\PeerGroupMemberQuery::class => static function () {
+            return new app\queries\PeerGroupMemberQuery(Yii::$app->db);
+        },
+
+        // Dossier Transformers
+        app\transformers\CurrencyConverter::class => static function (Container $container) {
+            return new app\transformers\CurrencyConverter(
+                $container->get(app\queries\FxRateQuery::class)
+            );
+        },
+
+        // Dossier Handlers
+        app\handlers\dossier\TtmCalculator::class => static function (Container $container) {
+            return new app\handlers\dossier\TtmCalculator(
+                $container->get(app\queries\QuarterlyFinancialQuery::class),
+                $container->get(app\queries\TtmFinancialQuery::class)
+            );
+        },
+        app\handlers\dossier\RecalculateTtmOnQuarterlyCollected::class => static function (Container $container) {
+            return new app\handlers\dossier\RecalculateTtmOnQuarterlyCollected(
+                $container->get(app\handlers\dossier\TtmCalculator::class)
             );
         },
     ],

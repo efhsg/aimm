@@ -16,6 +16,7 @@ final readonly class AnnualFinancials
 {
     public function __construct(
         public int $fiscalYear,
+        public ?\DateTimeImmutable $periodEndDate = null,
         public ?DataPointMoney $revenue = null,
         public ?DataPointMoney $ebitda = null,
         public ?DataPointMoney $netIncome = null,
@@ -33,6 +34,7 @@ final readonly class AnnualFinancials
     {
         return [
             'fiscal_year' => $this->fiscalYear,
+            'period_end_date' => $this->periodEndDate?->format('Y-m-d'),
             'revenue' => $this->revenue?->toArray(),
             'ebitda' => $this->ebitda?->toArray(),
             'net_income' => $this->netIncome?->toArray(),

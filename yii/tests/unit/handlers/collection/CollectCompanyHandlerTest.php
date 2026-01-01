@@ -25,6 +25,10 @@ use app\factories\DataPointFactory;
 use app\factories\SourceCandidateFactory;
 use app\handlers\collection\CollectCompanyHandler;
 use app\handlers\collection\CollectDatapointInterface;
+use app\queries\AnnualFinancialQuery;
+use app\queries\CompanyQuery;
+use app\queries\QuarterlyFinancialQuery;
+use app\queries\ValuationSnapshotQuery;
 use Codeception\Test\Unit;
 use DateTimeImmutable;
 use yii\log\Logger;
@@ -35,6 +39,10 @@ final class CollectCompanyHandlerTest extends Unit
     private SourceCandidateFactory $sourceCandidateFactory;
     private DataPointFactory $dataPointFactory;
     private Logger $logger;
+    private CompanyQuery $companyQuery;
+    private AnnualFinancialQuery $annualQuery;
+    private QuarterlyFinancialQuery $quarterlyQuery;
+    private ValuationSnapshotQuery $valuationQuery;
     private CollectCompanyHandler $handler;
 
     protected function _before(): void
@@ -44,11 +52,23 @@ final class CollectCompanyHandlerTest extends Unit
         $this->dataPointFactory = new DataPointFactory();
         $this->logger = $this->createMock(Logger::class);
 
+        $this->companyQuery = $this->createMock(CompanyQuery::class);
+        $this->annualQuery = $this->createMock(AnnualFinancialQuery::class);
+        $this->quarterlyQuery = $this->createMock(QuarterlyFinancialQuery::class);
+        $this->valuationQuery = $this->createMock(ValuationSnapshotQuery::class);
+
+        // Default company query to return ID 1
+        $this->companyQuery->method('findOrCreate')->willReturn(1);
+
         $this->handler = new CollectCompanyHandler(
             $this->datapointCollector,
             $this->sourceCandidateFactory,
             $this->dataPointFactory,
             $this->logger,
+            $this->companyQuery,
+            $this->annualQuery,
+            $this->quarterlyQuery,
+            $this->valuationQuery
         );
     }
 

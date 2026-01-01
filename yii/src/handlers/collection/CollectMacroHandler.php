@@ -15,6 +15,10 @@ use app\enums\CollectionStatus;
 use app\enums\Severity;
 use app\factories\DataPointFactory;
 use app\factories\SourceCandidateFactory;
+use app\queries\MacroIndicatorQuery;
+use app\queries\PriceHistoryQuery;
+use DateTimeImmutable;
+use Yii;
 use yii\log\Logger;
 
 /**
@@ -22,6 +26,8 @@ use yii\log\Logger;
  *
  * Gathers commodity benchmarks, margin proxies, sector indices, and
  * additional indicators using CollectDatapointHandler.
+ *
+ * Writes to Company Dossier (macro_indicator, price_history).
  */
 final class CollectMacroHandler implements CollectMacroInterface
 {
@@ -30,6 +36,8 @@ final class CollectMacroHandler implements CollectMacroInterface
         private readonly SourceCandidateFactory $sourceCandidateFactory,
         private readonly DataPointFactory $dataPointFactory,
         private readonly Logger $logger,
+        private readonly MacroIndicatorQuery $macroQuery,
+        private readonly PriceHistoryQuery $priceQuery,
     ) {
     }
 
@@ -72,6 +80,15 @@ final class CollectMacroHandler implements CollectMacroInterface
             $allAttempts
         );
 
+        // Save to Dossier
+        $this->saveToDossier(
+            $request,
+            $commodityBenchmark,
+            $marginProxy,
+            $sectorIndex,
+            $additionalIndicators
+        );
+
         $status = $this->determineStatus(
             $request,
             $commodityBenchmark,
@@ -100,6 +117,88 @@ final class CollectMacroHandler implements CollectMacroInterface
             sourceAttempts: $allAttempts,
             status: $status,
         );
+    }
+
+    private function saveToDossier(
+        CollectMacroRequest $request,
+        ?DataPointMoney $commodity,
+        ?DataPointMoney $margin,
+        ?DataPointNumber $index,
+        array $indicators
+    ): void {
+        $now = new DateTimeImmutable();
+        $dateStr = $now->format('Y-m-d');
+        $transaction = Yii::$app->db->beginTransaction();
+
+        try {
+            // Commodity -> PriceHistory
+            if ($commodity !== null && $commodity->value !== null && $request->requirements->commodityBenchmark) {
+                $exists = $this->priceQuery->findBySymbolAndDate($request->requirements->commodityBenchmark, $now);
+                if (!$exists) {
+                    $this->priceQuery->insert([
+                        'symbol' => $request->requirements->commodityBenchmark,
+                        'symbol_type' => 'commodity',
+                        'price_date' => $dateStr,
+                        'close' => $commodity->value,
+                        'currency' => $commodity->currency,
+                        'source_adapter' => 'web_fetch',
+                        'collected_at' => $now->format('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+
+            // Sector Index -> PriceHistory
+            // Note: Indices are measured in points, not currency. Using 'XXX' (ISO no-currency code).
+            if ($index !== null && $index->value !== null && $request->requirements->sectorIndex) {
+                $exists = $this->priceQuery->findBySymbolAndDate($request->requirements->sectorIndex, $now);
+                if (!$exists) {
+                    $this->priceQuery->insert([
+                        'symbol' => $request->requirements->sectorIndex,
+                        'symbol_type' => 'index',
+                        'price_date' => $dateStr,
+                        'close' => $index->value,
+                        'currency' => 'XXX',
+                        'source_adapter' => 'web_fetch',
+                        'collected_at' => $now->format('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+
+            // Indicators -> MacroIndicator
+            foreach ($indicators as $key => $datapoint) {
+                if ($datapoint->value !== null) {
+                    $exists = $this->macroQuery->findByKeyAndDate($key, $now);
+                    if (!$exists) {
+                        $unit = 'count';
+                        if ($datapoint instanceof DataPointMoney) {
+                            $unit = $datapoint->currency;
+                        } elseif ($datapoint instanceof DataPointNumber) {
+                            $unit = 'number';
+                        }
+
+                        $this->macroQuery->insert([
+                            'indicator_key' => $key,
+                            'indicator_date' => $dateStr,
+                            'value' => $datapoint->value,
+                            'unit' => $unit,
+                            'source_adapter' => 'web_fetch',
+                            'source_url' => $datapoint->sourceUrl,
+                            'collected_at' => $now->format('Y-m-d H:i:s'),
+                        ]);
+                    }
+                }
+            }
+
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            $this->logger->log(
+                ['message' => 'Failed to save macro data', 'error' => $e->getMessage()],
+                Logger::LEVEL_ERROR,
+                'collection'
+            );
+            throw $e;
+        }
     }
 
     /**
