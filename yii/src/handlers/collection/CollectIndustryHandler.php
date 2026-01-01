@@ -10,6 +10,8 @@ use app\dto\CollectIndustryRequest;
 use app\dto\CollectIndustryResult;
 use app\dto\CollectionLog;
 use app\dto\CollectMacroRequest;
+use app\dto\DataRequirements;
+use app\dto\MetricDefinition;
 use app\enums\CollectionStatus;
 use app\exceptions\CollectionException;
 use app\queries\CollectionRunRepository;
@@ -48,6 +50,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
         $datapackId = Uuid::uuid4()->toString();
         $startTime = new DateTimeImmutable();
         $companyCount = count($request->config->companies);
+        $focalTicker = $this->resolveFocalTicker($request);
         $runId = $this->runRepository->create($request->config->id, $datapackId);
 
         $this->logger->log(
@@ -58,6 +61,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                 'company_count' => $companyCount,
                 'batch_size' => $request->batchSize,
                 'memory_management' => $request->enableMemoryManagement,
+                'focal_ticker' => $focalTicker,
             ],
             Logger::LEVEL_INFO,
             'collection'
@@ -74,6 +78,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             $companyStatuses = [];
             $batches = array_chunk($request->config->companies, $request->batchSize);
             $batchNumber = 0;
+            $peerRequirements = $this->buildPeerRequirements($request->config->dataRequirements);
 
             foreach ($batches as $batch) {
                 $batchNumber++;
@@ -91,11 +96,15 @@ final class CollectIndustryHandler implements CollectIndustryInterface
 
                 foreach ($batch as $companyConfig) {
                     try {
+                        $requirements = $companyConfig->ticker === $focalTicker
+                            ? $request->config->dataRequirements
+                            : $peerRequirements;
+
                         $companyResult = $this->companyCollector->collect(
                             new CollectCompanyRequest(
                                 ticker: $companyConfig->ticker,
                                 config: $companyConfig,
-                                requirements: $request->config->dataRequirements,
+                                requirements: $requirements,
                             )
                         );
 
@@ -168,7 +177,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                 );
             }
 
-            $gateResult = $this->gateValidator->validate($dataPack, $request->config);
+            $gateResult = $this->gateValidator->validate($dataPack, $request->config, $focalTicker);
             $this->repository->saveValidation($request->config->id, $datapackId, $gateResult);
             $this->runRepository->recordErrors($runId, $gateResult);
 
@@ -236,6 +245,62 @@ final class CollectIndustryHandler implements CollectIndustryInterface
         }
     }
 
+    private function resolveFocalTicker(CollectIndustryRequest $request): string
+    {
+        $usedFallback = false;
+        $focalTicker = $request->config->resolveFocalTicker($request->focalTicker, $usedFallback);
+
+        if ($focalTicker === null) {
+            return '';
+        }
+
+        if ($usedFallback) {
+            $this->logger->log(
+                sprintf(
+                    'Focal ticker resolved to first company: %s (no explicit focal_ticker configured)',
+                    $focalTicker
+                ),
+                Logger::LEVEL_INFO
+            );
+        }
+
+        return $focalTicker;
+    }
+
+    private function buildPeerRequirements(DataRequirements $requirements): DataRequirements
+    {
+        return new DataRequirements(
+            historyYears: $requirements->historyYears,
+            quartersToFetch: $requirements->quartersToFetch,
+            valuationMetrics: $this->buildPeerMetrics($requirements->valuationMetrics),
+            annualFinancialMetrics: $this->buildPeerMetrics($requirements->annualFinancialMetrics),
+            quarterMetrics: $this->buildPeerMetrics($requirements->quarterMetrics),
+            operationalMetrics: $this->buildPeerMetrics($requirements->operationalMetrics),
+        );
+    }
+
+    /**
+     * Build metric definitions for peer companies.
+     *
+     * - Metrics with required_scope=all remain required for peers
+     * - Metrics with required_scope=focal become optional for peers
+     *
+     * @param list<MetricDefinition> $metrics
+     * @return list<MetricDefinition>
+     */
+    private function buildPeerMetrics(array $metrics): array
+    {
+        return array_map(
+            static fn (MetricDefinition $metric): MetricDefinition => new MetricDefinition(
+                key: $metric->key,
+                unit: $metric->unit,
+                required: $metric->required && $metric->requiredScope === MetricDefinition::SCOPE_ALL,
+                requiredScope: $metric->requiredScope,
+            ),
+            $metrics,
+        );
+    }
+
     private function manageMemory(): void
     {
         $currentUsage = memory_get_usage(true);
@@ -268,10 +333,6 @@ final class CollectIndustryHandler implements CollectIndustryInterface
         CollectionStatus $macroStatus,
         int $totalCompanies
     ): CollectionStatus {
-        if ($macroStatus === CollectionStatus::Failed) {
-            return CollectionStatus::Failed;
-        }
-
         $failedCount = count(array_filter(
             $companyStatuses,
             static fn (CollectionStatus $status): bool =>
@@ -282,7 +343,11 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             return CollectionStatus::Failed;
         }
 
-        if ($failedCount > 0 || in_array(CollectionStatus::Partial, $companyStatuses, true)) {
+        $hasPartialCompany = in_array(CollectionStatus::Partial, $companyStatuses, true);
+        $macroPartialOrFailed = $macroStatus === CollectionStatus::Failed
+            || $macroStatus === CollectionStatus::Partial;
+
+        if ($failedCount > 0 || $hasPartialCompany || $macroPartialOrFailed) {
             return CollectionStatus::Partial;
         }
 

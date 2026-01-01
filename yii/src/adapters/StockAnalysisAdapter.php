@@ -204,8 +204,11 @@ final class StockAnalysisAdapter implements SourceAdapterInterface
 
     private function normalizeLabel(string $label): string
     {
+        $label = preg_replace('/\\([^)]*\\)/', '', $label) ?? $label;
         $label = strtolower(trim($label));
-        return rtrim($label, ':');
+        $label = rtrim($label, ':');
+        $label = preg_replace('/[^a-z0-9]+/', ' ', $label) ?? $label;
+        return trim($label);
     }
 
     private function buildRowSelector(string $label): string

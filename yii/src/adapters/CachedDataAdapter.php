@@ -14,6 +14,7 @@ use app\dto\Extraction;
 use app\dto\ValuationData;
 use app\queries\DataPackRepository;
 use DateTimeImmutable;
+use Yii;
 
 final class CachedDataAdapter implements SourceAdapterInterface
 {
@@ -49,7 +50,17 @@ final class CachedDataAdapter implements SourceAdapterInterface
 
     public function adapt(AdaptRequest $request): AdaptResult
     {
-        $latestPack = $this->repository->getLatest($this->industryId);
+        $industryId = $this->resolveIndustryId();
+        if ($industryId === null) {
+            return new AdaptResult(
+                adapterId: self::ADAPTER_ID,
+                extractions: [],
+                notFound: $request->datapointKeys,
+                parseError: 'Cache adapter requires industry id',
+            );
+        }
+
+        $latestPack = $this->repository->getLatest($industryId);
 
         if ($latestPack === null) {
             return new AdaptResult(
@@ -92,7 +103,7 @@ final class CachedDataAdapter implements SourceAdapterInterface
 
         $extractions = [];
         $notFound = [];
-        $cacheSource = $this->getCacheSource($latestPack->datapackId);
+        $cacheSource = $this->getCacheSource($industryId, $latestPack->datapackId);
 
         foreach ($request->datapointKeys as $key) {
             if (!in_array($key, self::SUPPORTED_KEYS, true)) {
@@ -124,7 +135,7 @@ final class CachedDataAdapter implements SourceAdapterInterface
                 scale: $scale,
                 asOf: $datapoint->asOf,
                 locator: SourceLocator::json(
-                    $this->getCacheLocator($latestPack->datapackId, $ticker, $metric),
+                    $this->getCacheLocator($industryId, $latestPack->datapackId, $ticker, $metric),
                     "Cached from datapack {$latestPack->datapackId} ({$age} days old)",
                 ),
                 cacheSource: $cacheSource,
@@ -142,14 +153,42 @@ final class CachedDataAdapter implements SourceAdapterInterface
         );
     }
 
-    private function getCacheSource(string $datapackId): string
+    private function resolveIndustryId(): ?string
     {
-        return "cache://{$this->industryId}/{$datapackId}";
+        $industry = $this->industryId;
+        if (is_string($industry) && $industry !== '' && $industry !== 'unknown') {
+            return $industry;
+        }
+
+        $app = Yii::$app ?? null;
+        if ($app === null) {
+            return null;
+        }
+
+        $request = $app->request;
+        if ($request instanceof \yii\web\Request) {
+            $industryParam = $request->getParam('industry');
+            if (is_string($industryParam) && $industryParam !== '') {
+                return $industryParam;
+            }
+        }
+
+        $paramIndustry = $app->params['collectionIndustryId'] ?? null;
+        if (is_string($paramIndustry) && $paramIndustry !== '') {
+            return $paramIndustry;
+        }
+
+        return null;
     }
 
-    private function getCacheLocator(string $datapackId, string $ticker, string $metric): string
+    private function getCacheSource(string $industryId, string $datapackId): string
     {
-        return "cache://{$this->industryId}/{$datapackId}/companies/{$ticker}/valuation/{$metric}";
+        return "cache://{$industryId}/{$datapackId}";
+    }
+
+    private function getCacheLocator(string $industryId, string $datapackId, string $ticker, string $metric): string
+    {
+        return "cache://{$industryId}/{$datapackId}/companies/{$ticker}/valuation/{$metric}";
     }
 
     private function getValuationMetric(

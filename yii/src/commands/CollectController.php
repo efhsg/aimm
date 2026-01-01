@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\commands;
 
 use app\dto\CollectIndustryRequest;
+use app\dto\IndustryConfig;
 use app\enums\CollectionStatus;
 use app\handlers\collection\CollectIndustryInterface;
 use app\queries\IndustryConfigQuery;
@@ -24,6 +25,8 @@ final class CollectController extends Controller
     private const HEADER_DURATION = 'Duration';
     private const DURATION_FORMAT = '%.2fs';
 
+    public ?string $focal = null;
+
     public function __construct(
         string $id,
         Module $module,
@@ -33,6 +36,14 @@ final class CollectController extends Controller
         array $config = []
     ) {
         parent::__construct($id, $module, $config);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function options($actionID): array
+    {
+        return array_merge(parent::options($actionID), ['focal']);
     }
 
     public function actionIndustry(string $id): int
@@ -55,9 +66,22 @@ final class CollectController extends Controller
 
         Yii::$app->params['collectionIndustryId'] = $id;
 
+        // Use IndustryConfig's resolution logic which respects:
+        // 1. CLI override (--focal=TICKER)
+        // 2. Config's focal_ticker field
+        // 3. First company as fallback
+        $cliOverride = is_string($this->focal) && $this->focal !== ''
+            ? strtoupper(trim($this->focal))
+            : null;
+        $focalTicker = $config->resolveFocalTicker($cliOverride);
+        Yii::$app->params['collectionFocalTicker'] = $focalTicker;
+
         try {
             $result = $this->collector->collect(
-                new CollectIndustryRequest(config: $config)
+                new CollectIndustryRequest(
+                    config: $config,
+                    focalTicker: $focalTicker,
+                )
             );
         } catch (Throwable $exception) {
             $this->logger->log(

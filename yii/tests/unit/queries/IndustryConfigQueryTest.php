@@ -103,6 +103,89 @@ final class IndustryConfigQueryTest extends Unit
         $this->assertSame('active-industry', $configs[0]->id);
     }
 
+    public function testFindByIdMapsFocalTickerAndRequiredScope(): void
+    {
+        $config = [
+            'id' => 'with-focal',
+            'name' => 'With Focal',
+            'sector' => 'Energy',
+            'focal_ticker' => 'SHEL',
+            'companies' => [
+                [
+                    'ticker' => 'SHEL',
+                    'name' => 'Shell',
+                    'listing_exchange' => 'NYSE',
+                    'listing_currency' => 'USD',
+                    'reporting_currency' => 'USD',
+                    'fy_end_month' => 12,
+                ],
+                [
+                    'ticker' => 'XOM',
+                    'name' => 'ExxonMobil',
+                    'listing_exchange' => 'NYSE',
+                    'listing_currency' => 'USD',
+                    'reporting_currency' => 'USD',
+                    'fy_end_month' => 12,
+                ],
+            ],
+            'macro_requirements' => (object) [],
+            'data_requirements' => [
+                'history_years' => 5,
+                'quarters_to_fetch' => 4,
+                'valuation_metrics' => [
+                    ['key' => 'market_cap', 'unit' => 'currency', 'required' => true, 'required_scope' => 'all'],
+                    ['key' => 'fcf_yield', 'unit' => 'percent', 'required' => true, 'required_scope' => 'focal'],
+                ],
+            ],
+        ];
+
+        $record = $this->createRecord(
+            industryId: 'with-focal',
+            name: 'With Focal',
+            configJson: json_encode($config, JSON_THROW_ON_ERROR)
+        );
+
+        $query = $this->createQuery();
+
+        $result = $query->findById('with-focal');
+
+        $this->assertNotNull($result);
+        $this->assertSame('SHEL', $result->focalTicker);
+        $this->assertCount(2, $result->dataRequirements->valuationMetrics);
+
+        $marketCap = $result->dataRequirements->valuationMetrics[0];
+        $this->assertSame('market_cap', $marketCap->key);
+        $this->assertTrue($marketCap->required);
+        $this->assertSame('all', $marketCap->requiredScope);
+
+        $fcfYield = $result->dataRequirements->valuationMetrics[1];
+        $this->assertSame('fcf_yield', $fcfYield->key);
+        $this->assertTrue($fcfYield->required);
+        $this->assertSame('focal', $fcfYield->requiredScope);
+
+        $record->delete();
+    }
+
+    public function testFindByIdDefaultsRequiredScopeToAll(): void
+    {
+        $this->createRecord(
+            industryId: 'default-scope',
+            name: 'Default Scope',
+            configJson: $this->buildConfigJson('default-scope', 'Default Scope')
+        );
+
+        $query = $this->createQuery();
+
+        $result = $query->findById('default-scope');
+
+        $this->assertNotNull($result);
+        $this->assertNull($result->focalTicker);
+
+        // Metrics without required_scope should default to 'all'
+        $marketCap = $result->dataRequirements->valuationMetrics[0];
+        $this->assertSame('all', $marketCap->requiredScope);
+    }
+
     private function createRecord(
         string $industryId,
         string $name,

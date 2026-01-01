@@ -136,7 +136,7 @@ final class CollectIndustryHandlerTest extends Unit
         $this->assertNotSame('', (string) $run['file_path']);
     }
 
-    public function testFailsOverallWhenMacroFails(): void
+    public function testReturnsPartialWhenMacroFails(): void
     {
         $config = $this->createIndustryConfig(['AAA']);
         $macroResult = new CollectMacroResult(
@@ -182,11 +182,12 @@ final class CollectIndustryHandlerTest extends Unit
             enableMemoryManagement: false,
         ));
 
-        $this->assertSame(CollectionStatus::Failed, $result->overallStatus);
+        // Macro failure degrades to Partial, not Failed (macro is optional)
+        $this->assertSame(CollectionStatus::Partial, $result->overallStatus);
         $this->assertSame([], $alertNotifier->events);
 
         $run = $this->getRunRow();
-        $this->assertSame(CollectionStatus::Failed->value, $run['status']);
+        $this->assertSame(CollectionStatus::Partial->value, $run['status']);
         $this->assertSame(1, (int) $run['companies_total']);
         $this->assertSame(1, (int) $run['companies_success']);
         $this->assertSame(0, (int) $run['companies_failed']);
@@ -313,6 +314,118 @@ final class CollectIndustryHandlerTest extends Unit
             'SELECT COUNT(*) FROM collection_error'
         )->queryScalar();
         $this->assertSame(1, (int) $errorCount);
+    }
+
+    public function testPeerCompaniesReceiveRelaxedRequirementsForFocalScopeMetrics(): void
+    {
+        $config = $this->createIndustryConfigWithFocalScope(['FOCAL', 'PEER1', 'PEER2'], 'FOCAL');
+        $macroResult = new CollectMacroResult(
+            data: new MacroData(),
+            sourceAttempts: [],
+            status: CollectionStatus::Complete,
+        );
+
+        $macroCollector = $this->createMock(CollectMacroInterface::class);
+        $macroCollector->method('collect')->willReturn($macroResult);
+
+        $capturedRequests = [];
+        $companyCollector = $this->createMock(CollectCompanyInterface::class);
+        $companyCollector->method('collect')
+            ->willReturnCallback(function (CollectCompanyRequest $request) use (&$capturedRequests): CollectCompanyResult {
+                $capturedRequests[$request->ticker] = $request;
+
+                return $this->createCompanyResult($request->config, CollectionStatus::Complete);
+            });
+
+        $assembler = new TestDataPackAssembler($this->repository);
+        $gateValidator = $this->createMock(CollectionGateValidatorInterface::class);
+        $gateValidator->method('validate')->willReturn(new GateResult(true, [], []));
+
+        $alertNotifier = new TestAlertNotifier();
+        $alertDispatcher = new AlertDispatcher([$alertNotifier]);
+        $runRepository = $this->createRunRepository();
+
+        $handler = $this->createHandler(
+            $companyCollector,
+            $macroCollector,
+            $this->repository,
+            $assembler,
+            $gateValidator,
+            $alertDispatcher,
+            $runRepository
+        );
+
+        $handler->collect(new CollectIndustryRequest(
+            config: $config,
+            batchSize: 10,
+            enableMemoryManagement: false,
+        ));
+
+        $this->assertCount(3, $capturedRequests);
+
+        // Focal company should have fcf_yield as required (scope=focal means required for focal)
+        $focalFcfYield = $this->findMetric($capturedRequests['FOCAL']->requirements->valuationMetrics, 'fcf_yield');
+        $this->assertNotNull($focalFcfYield, 'fcf_yield metric should exist for focal');
+        $this->assertTrue($focalFcfYield->required, 'fcf_yield should be required for focal company');
+
+        // Peer companies should have fcf_yield as NOT required (scope=focal relaxes for peers)
+        $peer1FcfYield = $this->findMetric($capturedRequests['PEER1']->requirements->valuationMetrics, 'fcf_yield');
+        $this->assertNotNull($peer1FcfYield, 'fcf_yield metric should exist for peer');
+        $this->assertFalse($peer1FcfYield->required, 'fcf_yield should NOT be required for peer company');
+
+        $peer2FcfYield = $this->findMetric($capturedRequests['PEER2']->requirements->valuationMetrics, 'fcf_yield');
+        $this->assertNotNull($peer2FcfYield, 'fcf_yield metric should exist for peer');
+        $this->assertFalse($peer2FcfYield->required, 'fcf_yield should NOT be required for peer company');
+
+        // market_cap with scope=all should remain required for all
+        $peer1MarketCap = $this->findMetric($capturedRequests['PEER1']->requirements->valuationMetrics, 'market_cap');
+        $this->assertNotNull($peer1MarketCap);
+        $this->assertTrue($peer1MarketCap->required, 'market_cap (scope=all) should remain required for peers');
+    }
+
+    /**
+     * @param list<MetricDefinition> $metrics
+     */
+    private function findMetric(array $metrics, string $key): ?MetricDefinition
+    {
+        foreach ($metrics as $metric) {
+            if ($metric->key === $key) {
+                return $metric;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<string> $tickers
+     */
+    private function createIndustryConfigWithFocalScope(array $tickers, string $focalTicker): IndustryConfig
+    {
+        $companies = array_map(
+            fn (string $ticker): CompanyConfig => $this->createCompanyConfig($ticker),
+            $tickers
+        );
+
+        return new IndustryConfig(
+            id: 'energy',
+            name: 'Energy',
+            sector: 'Energy',
+            companies: $companies,
+            macroRequirements: new MacroRequirements(),
+            dataRequirements: new DataRequirements(
+                historyYears: 1,
+                quartersToFetch: 4,
+                valuationMetrics: [
+                    new MetricDefinition('market_cap', MetricDefinition::UNIT_CURRENCY, true, MetricDefinition::SCOPE_ALL),
+                    new MetricDefinition('fcf_yield', MetricDefinition::UNIT_PERCENT, true, MetricDefinition::SCOPE_FOCAL),
+                ],
+                annualFinancialMetrics: [],
+                quarterMetrics: [],
+                operationalMetrics: [],
+            ),
+            focalTicker: $focalTicker,
+        );
     }
 
     /**

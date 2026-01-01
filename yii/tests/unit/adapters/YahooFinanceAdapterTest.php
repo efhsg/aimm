@@ -59,6 +59,42 @@ final class YahooFinanceAdapterTest extends Unit
         $this->assertSame('ratio', $netDebt->unit);
     }
 
+    public function testParsesFreeCashFlowFromHtmlEmbeddedQuoteSummary(): void
+    {
+        $content = $this->loadFixture('yahoo-finance/SHEL-quote-2024-12.html');
+
+        $adapter = new YahooFinanceAdapter();
+        $request = new AdaptRequest(
+            fetchResult: new FetchResult(
+                content: $content,
+                contentType: 'text/html',
+                statusCode: 200,
+                url: 'https://finance.yahoo.com/quote/SHEL',
+                finalUrl: 'https://finance.yahoo.com/quote/SHEL',
+                retrievedAt: new DateTimeImmutable('2024-12-31T00:00:00Z'),
+            ),
+            datapointKeys: [
+                'valuation.free_cash_flow_ttm',
+            ],
+            ticker: 'SHEL',
+        );
+
+        $result = $adapter->adapt($request);
+
+        $this->assertSame([], $result->notFound);
+        $this->assertCount(1, $result->extractions);
+
+        $freeCashFlow = $result->extractions['valuation.free_cash_flow_ttm'];
+        $this->assertSame(17_617_500_160.0, $freeCashFlow->rawValue);
+        $this->assertSame('currency', $freeCashFlow->unit);
+        $this->assertSame('USD', $freeCashFlow->currency);
+        $this->assertSame('units', $freeCashFlow->scale);
+        $this->assertSame(
+            '$.quoteSummary.result[0].financialData.freeCashflow',
+            $freeCashFlow->locator->selector
+        );
+    }
+
     private function loadFixture(string $path): string
     {
         $fullPath = dirname(__DIR__, 2) . '/fixtures/' . $path;

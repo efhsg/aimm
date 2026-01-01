@@ -1,0 +1,26 @@
+[
+  {
+    "symbol": "BZUSD",
+    "name": "Brent Crude Oil",
+    "price": 78.45,
+    "changesPercentage": 0.85,
+    "change": 0.66,
+    "dayLow": 77.50,
+    "dayHigh": 79.20,
+    "yearHigh": 95.50,
+    "yearLow": 68.20,
+    "marketCap": null,
+    "priceAvg50": 76.80,
+    "priceAvg200": 80.25,
+    "exchange": "COMMODITY",
+    "volume": 125000,
+    "avgVolume": 118500,
+    "open": 77.80,
+    "previousClose": 77.79,
+    "eps": null,
+    "pe": null,
+    "earningsAnnouncement": null,
+    "sharesOutstanding": null,
+    "timestamp": 1704067200
+  }
+]

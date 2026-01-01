@@ -45,6 +45,7 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
         ],
         'valuation.free_cash_flow_ttm' => [
             'json_path' => '$.quoteSummary.result[0].financialData.freeCashflow',
+            'currency_path' => '$.quoteSummary.result[0].financialData.financialCurrency',
             'unit' => 'currency',
         ],
         'valuation.price_to_book' => [
@@ -154,21 +155,35 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
             );
         }
 
-        $dom = new DOMDocument();
-        libxml_use_internal_errors(true);
-        $loaded = $dom->loadHTML($request->fetchResult->content, LIBXML_NOERROR);
-        libxml_clear_errors();
+        $embeddedJson = $this->extractEmbeddedQuoteSummaryJson($request->fetchResult->content);
 
-        if (!$loaded) {
-            return new AdaptResult(
-                adapterId: self::ADAPTER_ID,
-                extractions: [],
-                notFound: $request->datapointKeys,
-                parseError: 'Failed to parse HTML'
-            );
+        $needsDom = false;
+        foreach ($request->datapointKeys as $key) {
+            if (isset(self::SELECTORS[$key]['selector'])) {
+                $needsDom = true;
+                break;
+            }
         }
 
-        $xpath = new DOMXPath($dom);
+        $xpath = null;
+        if ($needsDom) {
+            $dom = new DOMDocument();
+            libxml_use_internal_errors(true);
+            $loaded = $dom->loadHTML($request->fetchResult->content, LIBXML_NOERROR);
+            libxml_clear_errors();
+
+            if (!$loaded) {
+                return new AdaptResult(
+                    adapterId: self::ADAPTER_ID,
+                    extractions: [],
+                    notFound: $request->datapointKeys,
+                    parseError: 'Failed to parse HTML'
+                );
+            }
+
+            $xpath = new DOMXPath($dom);
+        }
+
         $extractions = [];
         $notFound = [];
 
@@ -180,16 +195,27 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
 
             $config = self::SELECTORS[$key];
 
-            if (isset($config['selector'])) {
+            if (isset($config['selector']) && $xpath !== null) {
                 $extraction = $this->extractByCssSelector($xpath, $key, $config);
                 if ($extraction !== null) {
                     $extractions[$key] = $extraction;
                 } else {
                     $notFound[] = $key;
                 }
-            } else {
-                $notFound[] = $key;
+                continue;
             }
+
+            if (isset($config['json_path']) && is_array($embeddedJson)) {
+                $extraction = $this->extractValuationJsonField($embeddedJson, $key);
+                if ($extraction !== null) {
+                    $extractions[$key] = $extraction;
+                } else {
+                    $notFound[] = $key;
+                }
+                continue;
+            }
+
+            $notFound[] = $key;
         }
 
         return new AdaptResult(
@@ -640,5 +666,104 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
         }
 
         return $value;
+    }
+
+    /**
+     * Yahoo quote pages often embed a cached quoteSummary JSON response in HTML.
+     * When present, parse and return the decoded JSON (same shape as query1 API).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function extractEmbeddedQuoteSummaryJson(string $html): ?array
+    {
+        $quoteSummaryNeedle = '\\"quoteSummary\\"';
+        $pos = strpos($html, $quoteSummaryNeedle);
+        if ($pos === false) {
+            return null;
+        }
+
+        $prefix = substr($html, 0, $pos);
+        $start = strrpos($prefix, '{"status":');
+        if ($start === false) {
+            return null;
+        }
+
+        $outerJson = $this->extractJsonObjectAt($html, $start);
+        if ($outerJson === null) {
+            return null;
+        }
+
+        $outer = json_decode($outerJson, true);
+        if (!is_array($outer)) {
+            return null;
+        }
+
+        $body = $outer['body'] ?? null;
+        if (!is_string($body) || $body === '') {
+            return null;
+        }
+
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded) || !isset($decoded['quoteSummary'])) {
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    private function extractJsonObjectAt(string $content, int $start): ?string
+    {
+        $length = strlen($content);
+        if ($start < 0 || $start >= $length || $content[$start] !== '{') {
+            return null;
+        }
+
+        $depth = 0;
+        $inString = false;
+        $escaped = false;
+
+        for ($i = $start; $i < $length; $i++) {
+            $ch = $content[$i];
+
+            if ($inString) {
+                if ($escaped) {
+                    $escaped = false;
+                    continue;
+                }
+
+                if ($ch === '\\') {
+                    $escaped = true;
+                    continue;
+                }
+
+                if ($ch === '"') {
+                    $inString = false;
+                }
+
+                continue;
+            }
+
+            if ($ch === '"') {
+                $inString = true;
+                continue;
+            }
+
+            if ($ch === '{') {
+                $depth++;
+                continue;
+            }
+
+            if ($ch === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return substr($content, $start, $i - $start + 1);
+                }
+                if ($depth < 0) {
+                    return null;
+                }
+            }
+        }
+
+        return null;
     }
 }

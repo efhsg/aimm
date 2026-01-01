@@ -16,5 +16,5 @@ interface CollectionGateValidatorInterface
     /**
      * Validate an IndustryDataPack before the analysis phase.
      */
-    public function validate(IndustryDataPack $dataPack, IndustryConfig $config): GateResult;
+    public function validate(IndustryDataPack $dataPack, IndustryConfig $config, ?string $focalTicker = null): GateResult;
 }

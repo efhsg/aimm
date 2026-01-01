@@ -9,6 +9,7 @@ return [
     'macroStalenessThresholdDays' => 10,
     'renderTimeoutSeconds' => 120,
     'allowedSourceDomains' => [
+        'financialmodelingprep.com',
         'finance.yahoo.com',
         'query1.finance.yahoo.com',
         'www.reuters.com',
@@ -19,11 +20,15 @@ return [
         'stockanalysis.com',
         'rigcount.bakerhughes.com',
         'api.eia.gov',
+        'www.ecb.europa.eu',
     ],
     // Baker Hughes rotates this XLSX URL; override in params-local.php when it changes.
     'rigCountXlsxUrl' => 'https://rigcount.bakerhughes.com/static-files/ec8abd8d-2b0f-4977-bb6f-8b9814fc8401',
     'eiaApiKey' => 'DEMO_KEY',
     'eiaInventorySeriesId' => 'PET.WCRSTUS1.W',
+
+    // Financial Modeling Prep API key (set FMP_API_KEY env var)
+    'fmpApiKey' => null,
 
     // Rate limiter: 'file' (dev/single-process) or 'database' (production/multi-process)
     'rateLimiter' => 'file',

@@ -21,6 +21,11 @@
       "minLength": 1,
       "description": "Industry sector classification"
     },
+    "focal_ticker": {
+      "type": "string",
+      "pattern": "^[A-Z0-9.-]+$",
+      "description": "Primary ticker for focal company (must match a company ticker)"
+    },
     "companies": {
       "type": "array",
       "items": { "$ref": "#/$defs/CompanyConfig" },
@@ -180,6 +185,12 @@
           "type": "boolean",
           "default": false,
           "description": "Whether the metric is required"
+        },
+        "required_scope": {
+          "type": "string",
+          "enum": ["all", "focal"],
+          "default": "all",
+          "description": "Scope of requirement: 'all' for all companies, 'focal' for focal ticker only"
         }
       }
     }

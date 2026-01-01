@@ -121,6 +121,42 @@ final class IndustryConfigJsonValidator extends Validator
             );
         }
 
+        $focalTickerError = $this->validateFocalTicker($data);
+        if ($focalTickerError !== null) {
+            return $focalTickerError;
+        }
+
+        return null;
+    }
+
+    private function validateFocalTicker(object $data): ?string
+    {
+        if (!isset($data->focal_ticker)) {
+            return null;
+        }
+
+        if (!is_string($data->focal_ticker)) {
+            return 'focal_ticker must be a string.';
+        }
+
+        if (!isset($data->companies) || !is_array($data->companies)) {
+            return null;
+        }
+
+        $companyTickers = array_map(
+            static fn (object $company): ?string => $company->ticker ?? null,
+            $data->companies
+        );
+        $companyTickers = array_filter($companyTickers, static fn (?string $ticker): bool => $ticker !== null);
+
+        if (!in_array($data->focal_ticker, $companyTickers, true)) {
+            return sprintf(
+                'focal_ticker "%s" must match one of the company tickers: %s.',
+                $data->focal_ticker,
+                implode(', ', $companyTickers)
+            );
+        }
+
         return null;
     }
 }

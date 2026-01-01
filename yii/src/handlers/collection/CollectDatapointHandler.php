@@ -270,6 +270,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
     {
         return $this->webFetchClient->fetch(new FetchRequest(
             url: $candidate->url,
+            headers: $candidate->headers,
         ));
     }
 

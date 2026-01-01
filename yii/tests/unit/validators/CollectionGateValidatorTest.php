@@ -115,6 +115,86 @@ final class CollectionGateValidatorTest extends Unit
         $this->assertContains('MISSING_PROVENANCE', $this->getErrorCodes($result));
     }
 
+    public function testIgnoresRequiredMetricsForPeersWhenRequiredScopeIsFocal(): void
+    {
+        $focalMarketCap = new DataPointMoney(
+            value: 100.0,
+            currency: 'USD',
+            scale: DataScale::Units,
+            asOf: new DateTimeImmutable('2024-01-01'),
+            sourceUrl: 'https://finance.yahoo.com/quote/AAPL',
+            retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            method: CollectionMethod::WebFetch,
+            sourceLocator: SourceLocator::html('td[data-test="MARKET_CAP-value"]', '100'),
+        );
+
+        $peerMarketCap = new DataPointMoney(
+            value: null,
+            currency: 'USD',
+            scale: DataScale::Units,
+            asOf: new DateTimeImmutable('2024-01-01'),
+            sourceUrl: null,
+            retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            method: CollectionMethod::NotFound,
+            attemptedSources: ['https://example.com (not found)'],
+        );
+
+        $validator = $this->createValidator();
+        // Use required_scope=focal so peers are not validated for this metric
+        $result = $validator->validate(
+            $this->createDataPackForCompanies([
+                'AAPL' => $focalMarketCap,
+                'MSFT' => $peerMarketCap,
+            ]),
+            $this->createConfigForCompanies(['AAPL', 'MSFT'], MetricDefinition::SCOPE_FOCAL),
+            'AAPL'
+        );
+
+        $this->assertTrue(
+            $result->passed,
+            'Unexpected errors: ' . implode(', ', $this->getErrorCodes($result))
+        );
+    }
+
+    public function testFailsGateWhenPeerMissesRequiredScopeAllMetric(): void
+    {
+        $focalMarketCap = new DataPointMoney(
+            value: 100.0,
+            currency: 'USD',
+            scale: DataScale::Units,
+            asOf: new DateTimeImmutable('2024-01-01'),
+            sourceUrl: 'https://finance.yahoo.com/quote/AAPL',
+            retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            method: CollectionMethod::WebFetch,
+            sourceLocator: SourceLocator::html('td[data-test="MARKET_CAP-value"]', '100'),
+        );
+
+        $peerMarketCap = new DataPointMoney(
+            value: null,
+            currency: 'USD',
+            scale: DataScale::Units,
+            asOf: new DateTimeImmutable('2024-01-01'),
+            sourceUrl: null,
+            retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            method: CollectionMethod::NotFound,
+            attemptedSources: ['https://example.com (not found)'],
+        );
+
+        $validator = $this->createValidator();
+        // Use required_scope=all (default) so peers ARE validated
+        $result = $validator->validate(
+            $this->createDataPackForCompanies([
+                'AAPL' => $focalMarketCap,
+                'MSFT' => $peerMarketCap,
+            ]),
+            $this->createConfigForCompanies(['AAPL', 'MSFT'], MetricDefinition::SCOPE_ALL),
+            'AAPL'
+        );
+
+        $this->assertFalse($result->passed);
+        $this->assertContains('MISSING_REQUIRED', $this->getErrorCodes($result));
+    }
+
     private function createValidator(): CollectionGateValidator
     {
         $schemaValidator = $this->createMock(SchemaValidatorInterface::class);
@@ -162,6 +242,44 @@ final class CollectionGateValidatorTest extends Unit
         );
     }
 
+    /**
+     * @param array<string, DataPointMoney> $marketCapsByTicker
+     */
+    private function createDataPackForCompanies(array $marketCapsByTicker): IndustryDataPack
+    {
+        $companies = [];
+        foreach ($marketCapsByTicker as $ticker => $marketCap) {
+            $companies[$ticker] = new CompanyData(
+                ticker: $ticker,
+                name: $ticker . ' Inc',
+                listingExchange: 'NASDAQ',
+                listingCurrency: 'USD',
+                reportingCurrency: 'USD',
+                valuation: new ValuationData(marketCap: $marketCap),
+                financials: new FinancialsData(historyYears: 0, annualData: []),
+                quarters: new QuartersData(quarters: []),
+            );
+        }
+
+        $log = new CollectionLog(
+            startedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            completedAt: new DateTimeImmutable('2024-01-01T00:01:00Z'),
+            durationSeconds: 60,
+            companyStatuses: array_fill_keys(array_keys($companies), CollectionStatus::Complete),
+            macroStatus: CollectionStatus::Complete,
+            totalAttempts: 1,
+        );
+
+        return new IndustryDataPack(
+            industryId: 'energy',
+            datapackId: 'dp-123',
+            collectedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            macro: new MacroData(),
+            companies: $companies,
+            collectionLog: $log,
+        );
+    }
+
     private function createConfig(): IndustryConfig
     {
         $requirements = new DataRequirements(
@@ -190,6 +308,52 @@ final class CollectionGateValidatorTest extends Unit
             name: 'Energy',
             sector: 'Energy',
             companies: [$company],
+            macroRequirements: new MacroRequirements(
+                commodityBenchmark: null,
+                marginProxy: null,
+                sectorIndex: null,
+                requiredIndicators: [],
+                optionalIndicators: [],
+            ),
+            dataRequirements: $requirements,
+        );
+    }
+
+    /**
+     * @param list<string> $tickers
+     * @param string $requiredScope Scope for required metrics ('all' or 'focal')
+     */
+    private function createConfigForCompanies(array $tickers, string $requiredScope = MetricDefinition::SCOPE_ALL): IndustryConfig
+    {
+        $requirements = new DataRequirements(
+            historyYears: 0,
+            quartersToFetch: 0,
+            valuationMetrics: [
+                new MetricDefinition('market_cap', MetricDefinition::UNIT_CURRENCY, true, $requiredScope),
+            ],
+            annualFinancialMetrics: [],
+            quarterMetrics: [],
+            operationalMetrics: [],
+        );
+
+        $companies = array_map(
+            static fn (string $ticker): CompanyConfig => new CompanyConfig(
+                ticker: $ticker,
+                name: $ticker . ' Inc',
+                listingExchange: 'NASDAQ',
+                listingCurrency: 'USD',
+                reportingCurrency: 'USD',
+                fyEndMonth: 9,
+                alternativeTickers: null,
+            ),
+            $tickers
+        );
+
+        return new IndustryConfig(
+            id: 'energy',
+            name: 'Energy',
+            sector: 'Energy',
+            companies: $companies,
             macroRequirements: new MacroRequirements(
                 commodityBenchmark: null,
                 marginProxy: null,

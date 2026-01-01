@@ -17,11 +17,13 @@ use app\dto\datapoints\DataPointRatio;
 use app\dto\FinancialsData;
 use app\dto\MetricDefinition;
 use app\dto\OperationalData;
+use app\dto\PeriodValue;
 use app\dto\QuarterFinancials;
 use app\dto\QuartersData;
 use app\dto\SourceAttempt;
 use app\dto\SourceCandidate;
 use app\dto\ValuationData;
+use app\enums\CollectionMethod;
 use app\enums\CollectionStatus;
 use app\enums\Severity;
 use app\factories\DataPointFactory;
@@ -192,12 +194,163 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             $allAttempts = array_merge($allAttempts, $result->sourceAttempts);
         }
 
+        $requiredMetricKeys = $this->getRequiredMetricKeys($definitions);
+
+        $this->ensureFreeCashFlowTtmAvailable(
+            $request,
+            $definitions,
+            $metrics,
+            $allAttempts,
+            $deadline
+        );
+
         $fcfYield = $this->calculateFcfYield(
             $metrics,
             $request->ticker
         );
 
-        return $this->buildValuationData($metrics, $fcfYield);
+        return $this->buildValuationData($metrics, $fcfYield, $requiredMetricKeys);
+    }
+
+    /**
+     * If fcf_yield is required (or free_cash_flow_ttm is configured), try to compute
+     * free_cash_flow_ttm from quarterly cash flow data when direct sources fail.
+     *
+     * @param list<MetricDefinition> $definitions
+     * @param array<string, DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber> $metrics
+     * @param SourceAttempt[] $allAttempts
+     */
+    private function ensureFreeCashFlowTtmAvailable(
+        CollectCompanyRequest $request,
+        array $definitions,
+        array &$metrics,
+        array &$allAttempts,
+        float $deadline
+    ): void {
+        $current = $metrics['free_cash_flow_ttm'] ?? null;
+        if ($current instanceof DataPointMoney && $current->value !== null) {
+            return;
+        }
+
+        $needsTtm = $this->isMetricRequired($definitions, 'free_cash_flow_ttm')
+            || $this->isMetricRequired($definitions, 'fcf_yield');
+
+        if (!$needsTtm) {
+            return;
+        }
+
+        $derived = $this->deriveFreeCashFlowTtmFromQuarterlyFreeCashFlow(
+            $request,
+            $allAttempts,
+            $deadline
+        );
+
+        if ($derived === null) {
+            return;
+        }
+
+        $metrics['free_cash_flow_ttm'] = $derived;
+    }
+
+    /**
+     * @param list<MetricDefinition> $definitions
+     */
+    private function isMetricRequired(array $definitions, string $key): bool
+    {
+        foreach ($definitions as $definition) {
+            if ($definition->key === $key) {
+                return $definition->required;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Use Yahoo quarterly cashflow history to compute TTM free cash flow.
+     *
+     * @param SourceAttempt[] $allAttempts
+     */
+    private function deriveFreeCashFlowTtmFromQuarterlyFreeCashFlow(
+        CollectCompanyRequest $request,
+        array &$allAttempts,
+        float $deadline
+    ): ?DataPointMoney {
+        if ($this->isTimedOut($deadline)) {
+            return null;
+        }
+
+        $quartersSources = $this->sourceCandidateFactory->forQuarters(
+            $request->ticker,
+            $request->config->listingExchange
+        );
+        if (empty($quartersSources)) {
+            return null;
+        }
+
+        $result = $this->datapointCollector->collect(new CollectDatapointRequest(
+            datapointKey: 'quarters.free_cash_flow',
+            sourceCandidates: $quartersSources,
+            adapterId: 'chain',
+            severity: Severity::Required,
+            ticker: $request->ticker,
+            unit: MetricDefinition::UNIT_CURRENCY,
+        ));
+
+        $allAttempts = array_merge($allAttempts, $result->sourceAttempts);
+
+        if (!$result->found || !$result->isHistorical() || $result->historicalExtraction === null) {
+            return null;
+        }
+
+        $periods = $result->historicalExtraction->periods;
+        usort(
+            $periods,
+            static fn (PeriodValue $a, PeriodValue $b): int => $b->endDate <=> $a->endDate
+        );
+
+        $mostRecentFour = array_slice($periods, 0, 4);
+        if (count($mostRecentFour) < 4) {
+            return null;
+        }
+
+        $sum = 0.0;
+        $derivedFrom = [];
+        $sourceUrl = $result->fetchResult?->finalUrl ?? $result->fetchResult?->url;
+        foreach ($mostRecentFour as $period) {
+            $sum += $period->value;
+
+            $year = (int) $period->endDate->format('Y');
+            $month = (int) $period->endDate->format('n');
+            $quarter = (int) ceil($month / 3);
+            $quarterKey = "{$year}Q{$quarter}";
+
+            if ($sourceUrl !== null) {
+                $derivedFrom[] = "{$sourceUrl}#quarters.free_cash_flow({$quarterKey})";
+                continue;
+            }
+
+            $derivedFrom[] = "/companies/{$request->ticker}/quarters/quarters/{$quarterKey}/free_cash_flow";
+        }
+
+        $currency = $result->historicalExtraction->currency;
+        if ($currency === null && $result->datapoint instanceof DataPointMoney) {
+            $currency = $result->datapoint->currency;
+        }
+
+        $datapoint = $this->dataPointFactory->derived(
+            unit: MetricDefinition::UNIT_CURRENCY,
+            value: $sum,
+            derivedFrom: $derivedFrom,
+            formula: 'sum(last_4_quarters.free_cash_flow)',
+            currency: $currency ?? 'USD',
+        );
+
+        if (!$datapoint instanceof DataPointMoney) {
+            return null;
+        }
+
+        return $datapoint;
     }
 
     /**
@@ -251,7 +404,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
      */
     private function buildValuationData(
         array $metrics,
-        ?DataPointPercent $fcfYield
+        ?DataPointPercent $fcfYield,
+        array $requiredMetricKeys
     ): ValuationData {
         $marketCap = $metrics['market_cap'] ?? null;
 
@@ -262,18 +416,19 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             }
         }
 
+        $requiredLookup = array_fill_keys($requiredMetricKeys, true);
         $additionalMetrics = $this->extractAdditionalMetrics($metrics);
 
         return new ValuationData(
             marketCap: $marketCap,
-            fwdPe: $this->getAsRatio($metrics, 'fwd_pe'),
-            trailingPe: $this->getAsRatio($metrics, 'trailing_pe'),
-            evEbitda: $this->getAsRatio($metrics, 'ev_ebitda'),
-            freeCashFlowTtm: $this->getAsMoney($metrics, 'free_cash_flow_ttm'),
-            fcfYield: $fcfYield ?? $this->getAsPercent($metrics, 'fcf_yield'),
-            divYield: $this->getAsPercent($metrics, 'div_yield'),
-            netDebtEbitda: $this->getAsRatio($metrics, 'net_debt_ebitda'),
-            priceToBook: $this->getAsRatio($metrics, 'price_to_book'),
+            fwdPe: $this->getAsRatio($metrics, 'fwd_pe', $requiredLookup['fwd_pe'] ?? false),
+            trailingPe: $this->getAsRatio($metrics, 'trailing_pe', $requiredLookup['trailing_pe'] ?? false),
+            evEbitda: $this->getAsRatio($metrics, 'ev_ebitda', $requiredLookup['ev_ebitda'] ?? false),
+            freeCashFlowTtm: $this->getAsMoney($metrics, 'free_cash_flow_ttm', $requiredLookup['free_cash_flow_ttm'] ?? false),
+            fcfYield: $fcfYield ?? $this->getAsPercent($metrics, 'fcf_yield', $requiredLookup['fcf_yield'] ?? false),
+            divYield: $this->getAsPercent($metrics, 'div_yield', $requiredLookup['div_yield'] ?? false),
+            netDebtEbitda: $this->getAsRatio($metrics, 'net_debt_ebitda', $requiredLookup['net_debt_ebitda'] ?? false),
+            priceToBook: $this->getAsRatio($metrics, 'price_to_book', $requiredLookup['price_to_book'] ?? false),
             additionalMetrics: $additionalMetrics,
         );
     }
@@ -281,37 +436,52 @@ final class CollectCompanyHandler implements CollectCompanyInterface
     /**
      * @param array<string, DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber> $metrics
      */
-    private function getAsRatio(array $metrics, string $key): ?DataPointRatio
+    private function getAsRatio(array $metrics, string $key, bool $allowNotFound = false): ?DataPointRatio
     {
         $datapoint = $metrics[$key] ?? null;
         if (!$datapoint instanceof DataPointRatio) {
             return null;
         }
-        return $datapoint->value !== null ? $datapoint : null;
+
+        if ($datapoint->value !== null) {
+            return $datapoint;
+        }
+
+        return $allowNotFound && $datapoint->method === CollectionMethod::NotFound ? $datapoint : null;
     }
 
     /**
      * @param array<string, DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber> $metrics
      */
-    private function getAsMoney(array $metrics, string $key): ?DataPointMoney
+    private function getAsMoney(array $metrics, string $key, bool $allowNotFound = false): ?DataPointMoney
     {
         $datapoint = $metrics[$key] ?? null;
         if (!$datapoint instanceof DataPointMoney) {
             return null;
         }
-        return $datapoint->value !== null ? $datapoint : null;
+
+        if ($datapoint->value !== null) {
+            return $datapoint;
+        }
+
+        return $allowNotFound && $datapoint->method === CollectionMethod::NotFound ? $datapoint : null;
     }
 
     /**
      * @param array<string, DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber> $metrics
      */
-    private function getAsPercent(array $metrics, string $key): ?DataPointPercent
+    private function getAsPercent(array $metrics, string $key, bool $allowNotFound = false): ?DataPointPercent
     {
         $datapoint = $metrics[$key] ?? null;
         if (!$datapoint instanceof DataPointPercent) {
             return null;
         }
-        return $datapoint->value !== null ? $datapoint : null;
+
+        if ($datapoint->value !== null) {
+            return $datapoint;
+        }
+
+        return $allowNotFound && $datapoint->method === CollectionMethod::NotFound ? $datapoint : null;
     }
 
     /**

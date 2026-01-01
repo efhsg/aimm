@@ -9,10 +9,14 @@ use app\dto\CollectDatapointRequest;
 use app\dto\CollectDatapointResult;
 use app\dto\CompanyConfig;
 use app\dto\datapoints\DataPointMoney;
+use app\dto\datapoints\DataPointPercent;
 use app\dto\datapoints\DataPointRatio;
 use app\dto\datapoints\SourceLocator;
 use app\dto\DataRequirements;
+use app\dto\FetchResult;
+use app\dto\HistoricalExtraction;
 use app\dto\MetricDefinition;
+use app\dto\PeriodValue;
 use app\dto\SourceAttempt;
 use app\enums\CollectionMethod;
 use app\enums\CollectionStatus;
@@ -239,6 +243,97 @@ final class CollectCompanyHandlerTest extends Unit
         $this->assertSame(CollectionMethod::Derived, $result->data->valuation->fcfYield->method);
     }
 
+    public function testKeepsNotFoundDatapointForRequiredFcfYield(): void
+    {
+        $request = $this->createRequest(['market_cap', 'fcf_yield'], []);
+
+        $this->datapointCollector
+            ->method('collect')
+            ->willReturnCallback(function (CollectDatapointRequest $req) {
+                return match ($req->datapointKey) {
+                    'valuation.market_cap' => $this->createFoundResult(
+                        'valuation.market_cap',
+                        $this->createMoneyDatapoint(3_000_000_000_000)
+                    ),
+                    default => $this->createNotFoundResult($req->datapointKey),
+                };
+            });
+
+        $result = $this->handler->collect($request);
+
+        $this->assertSame(CollectionStatus::Partial, $result->status);
+        $this->assertNotNull($result->data->valuation->fcfYield);
+        $this->assertSame(CollectionMethod::NotFound, $result->data->valuation->fcfYield->method);
+        $this->assertNotEmpty($result->data->valuation->fcfYield->attemptedSources);
+    }
+
+    public function testCalculatesFcfYieldFromQuarterlyFreeCashFlowWhenDirectSourcesMissing(): void
+    {
+        $request = $this->createRequest(['market_cap', 'fcf_yield'], []);
+
+        $historicalExtraction = new HistoricalExtraction(
+            datapointKey: 'quarters.free_cash_flow',
+            periods: [
+                new PeriodValue(new DateTimeImmutable('2024-09-30'), 10_000_000_000.0),
+                new PeriodValue(new DateTimeImmutable('2024-06-30'), 10_000_000_000.0),
+                new PeriodValue(new DateTimeImmutable('2024-03-31'), 10_000_000_000.0),
+                new PeriodValue(new DateTimeImmutable('2023-12-31'), 10_000_000_000.0),
+            ],
+            unit: MetricDefinition::UNIT_CURRENCY,
+            currency: 'USD',
+            scale: 'units',
+            locator: SourceLocator::json('cashflowStatementHistoryQuarterly', 'freeCashFlow'),
+        );
+
+        $quartersResult = new CollectDatapointResult(
+            datapointKey: 'quarters.free_cash_flow',
+            datapoint: $this->createMoneyDatapoint(10_000_000_000.0),
+            sourceAttempts: [
+                new SourceAttempt(
+                    url: 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=cashflowStatementHistoryQuarterly',
+                    providerId: 'yahoo_finance_quarters',
+                    attemptedAt: new DateTimeImmutable(),
+                    outcome: 'success',
+                    httpStatus: 200,
+                ),
+            ],
+            found: true,
+            historicalExtraction: $historicalExtraction,
+            fetchResult: new FetchResult(
+                content: '{}',
+                contentType: 'application/json',
+                statusCode: 200,
+                url: 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=cashflowStatementHistoryQuarterly',
+                finalUrl: 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=cashflowStatementHistoryQuarterly',
+                retrievedAt: new DateTimeImmutable(),
+            ),
+        );
+
+        $this->datapointCollector
+            ->method('collect')
+            ->willReturnCallback(function (CollectDatapointRequest $req) use ($quartersResult) {
+                return match ($req->datapointKey) {
+                    'valuation.market_cap' => $this->createFoundResult(
+                        'valuation.market_cap',
+                        $this->createMoneyDatapoint(400_000_000_000.0)
+                    ),
+                    'valuation.fcf_yield' => $this->createNotFoundResult($req->datapointKey),
+                    'quarters.free_cash_flow' => $quartersResult,
+                    default => $this->createNotFoundResult($req->datapointKey),
+                };
+            });
+
+        $result = $this->handler->collect($request);
+
+        $this->assertNotNull($result->data->valuation->freeCashFlowTtm);
+        $this->assertSame(CollectionMethod::Derived, $result->data->valuation->freeCashFlowTtm->method);
+        $this->assertSame(40_000_000_000.0, $result->data->valuation->freeCashFlowTtm->value);
+
+        $this->assertNotNull($result->data->valuation->fcfYield);
+        $this->assertSame(CollectionMethod::Derived, $result->data->valuation->fcfYield->method);
+        $this->assertEqualsWithDelta(10.0, $result->data->valuation->fcfYield->value, 0.01);
+    }
+
     public function testCompanyDataContainsCorrectMetadata(): void
     {
         $request = $this->createRequest(['market_cap'], []);
@@ -352,7 +447,7 @@ final class CollectCompanyHandlerTest extends Unit
 
     private function createFoundResult(
         string $datapointKey,
-        DataPointMoney|DataPointRatio $datapoint
+        DataPointMoney|DataPointRatio|DataPointPercent $datapoint
     ): CollectDatapointResult {
         return new CollectDatapointResult(
             datapointKey: $datapointKey,
@@ -372,7 +467,8 @@ final class CollectCompanyHandlerTest extends Unit
 
     private function createNotFoundResult(string $datapointKey): CollectDatapointResult
     {
-        $unit = str_contains($datapointKey, 'market_cap') ? 'currency' : 'ratio';
+        $metric = explode('.', $datapointKey, 2)[1] ?? $datapointKey;
+        $unit = $this->unitForMetric($metric);
 
         return new CollectDatapointResult(
             datapointKey: $datapointKey,

@@ -18,6 +18,7 @@ final class FileRateLimiter implements RateLimiterInterface
      */
     private const DOMAIN_DELAYS_MS = [
         'finance.yahoo.com' => 2000,
+        'query1.finance.yahoo.com' => 2500,
         'www.reuters.com' => 3000,
         'default' => 1000,
     ];

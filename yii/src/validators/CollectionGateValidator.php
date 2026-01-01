@@ -48,10 +48,11 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     ) {
     }
 
-    public function validate(IndustryDataPack $dataPack, IndustryConfig $config): GateResult
+    public function validate(IndustryDataPack $dataPack, IndustryConfig $config, ?string $focalTicker = null): GateResult
     {
         $errors = [];
         $warnings = [];
+        $focalTicker = $this->resolveFocalTicker($config, $focalTicker);
 
         // 1. Schema validation
         $schemaErrors = $this->validateSchema($dataPack);
@@ -76,19 +77,19 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         $errors = array_merge($errors, $companyErrors);
 
         // 4. Required datapoints (valuation)
-        $requiredErrors = $this->validateRequiredDatapoints($dataPack, $config);
+        $requiredErrors = $this->validateRequiredDatapoints($dataPack, $config, $focalTicker);
         $errors = array_merge($errors, $requiredErrors);
 
         // 5. Required financial metrics
-        $financialErrors = $this->validateRequiredFinancials($dataPack, $config);
+        $financialErrors = $this->validateRequiredFinancials($dataPack, $config, $focalTicker);
         $errors = array_merge($errors, $financialErrors);
 
         // 6. Required quarter metrics
-        $quarterErrors = $this->validateRequiredQuarters($dataPack, $config);
+        $quarterErrors = $this->validateRequiredQuarters($dataPack, $config, $focalTicker);
         $errors = array_merge($errors, $quarterErrors);
 
         // 7. Required operational metrics
-        $operationalErrors = $this->validateRequiredOperational($dataPack, $config);
+        $operationalErrors = $this->validateRequiredOperational($dataPack, $config, $focalTicker);
         $errors = array_merge($errors, $operationalErrors);
 
         // 8. Provenance validation
@@ -107,6 +108,11 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
             errors: $errors,
             warnings: $warnings,
         );
+    }
+
+    private function resolveFocalTicker(IndustryConfig $config, ?string $focalTicker): ?string
+    {
+        return $config->resolveFocalTicker($focalTicker);
     }
 
     /**
@@ -156,13 +162,22 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     /**
      * @return list<GateError>
      */
-    private function validateRequiredDatapoints(IndustryDataPack $dataPack, IndustryConfig $config): array
+    private function validateRequiredDatapoints(IndustryDataPack $dataPack, IndustryConfig $config, ?string $focalTicker): array
     {
         $errors = [];
-        $requiredMetrics = $this->filterRequiredMetrics($config->dataRequirements->valuationMetrics);
+        $requiredMetricDefs = $this->filterRequiredMetricDefinitions($config->dataRequirements->valuationMetrics);
 
         foreach ($dataPack->companies as $ticker => $company) {
-            foreach ($requiredMetrics as $metric) {
+            foreach ($requiredMetricDefs as $metricDef) {
+                // Skip if scope=focal and this is not the focal ticker
+                if ($metricDef->requiredScope === MetricDefinition::SCOPE_FOCAL
+                    && $focalTicker !== null
+                    && $ticker !== $focalTicker
+                ) {
+                    continue;
+                }
+
+                $metric = $metricDef->key;
                 $datapoint = $this->getValuationMetric($company, $metric);
 
                 if ($datapoint === null) {
@@ -201,12 +216,12 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     /**
      * @return list<GateError>
      */
-    private function validateRequiredFinancials(IndustryDataPack $dataPack, IndustryConfig $config): array
+    private function validateRequiredFinancials(IndustryDataPack $dataPack, IndustryConfig $config, ?string $focalTicker): array
     {
         $errors = [];
-        $requiredMetrics = $this->filterRequiredMetrics($config->dataRequirements->annualFinancialMetrics);
+        $requiredMetricDefs = $this->filterRequiredMetricDefinitions($config->dataRequirements->annualFinancialMetrics);
 
-        if (empty($requiredMetrics)) {
+        if (empty($requiredMetricDefs)) {
             return $errors;
         }
 
@@ -215,7 +230,17 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         $startYear = $currentYear - $historyYears + 1;
 
         foreach ($dataPack->companies as $ticker => $company) {
-            foreach ($requiredMetrics as $metric) {
+            foreach ($requiredMetricDefs as $metricDef) {
+                // Skip if scope=focal and this is not the focal ticker
+                if ($metricDef->requiredScope === MetricDefinition::SCOPE_FOCAL
+                    && $focalTicker !== null
+                    && $ticker !== $focalTicker
+                ) {
+                    continue;
+                }
+
+                $metric = $metricDef->key;
+
                 // Check at least one year of data exists
                 $hasData = false;
                 for ($year = $currentYear; $year >= $startYear; $year--) {
@@ -247,19 +272,28 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     /**
      * @return list<GateError>
      */
-    private function validateRequiredQuarters(IndustryDataPack $dataPack, IndustryConfig $config): array
+    private function validateRequiredQuarters(IndustryDataPack $dataPack, IndustryConfig $config, ?string $focalTicker): array
     {
         $errors = [];
-        $requiredMetrics = $this->filterRequiredMetrics($config->dataRequirements->quarterMetrics);
+        $requiredMetricDefs = $this->filterRequiredMetricDefinitions($config->dataRequirements->quarterMetrics);
 
-        if (empty($requiredMetrics)) {
+        if (empty($requiredMetricDefs)) {
             return $errors;
         }
 
         $quartersToFetch = $config->dataRequirements->quartersToFetch;
 
         foreach ($dataPack->companies as $ticker => $company) {
-            foreach ($requiredMetrics as $metric) {
+            foreach ($requiredMetricDefs as $metricDef) {
+                // Skip if scope=focal and this is not the focal ticker
+                if ($metricDef->requiredScope === MetricDefinition::SCOPE_FOCAL
+                    && $focalTicker !== null
+                    && $ticker !== $focalTicker
+                ) {
+                    continue;
+                }
+
+                $metric = $metricDef->key;
                 $foundCount = 0;
                 foreach ($company->quarters->quarters as $quarter) {
                     $value = $this->getQuarterMetric($quarter, $metric);
@@ -290,18 +324,35 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     /**
      * @return list<GateError>
      */
-    private function validateRequiredOperational(IndustryDataPack $dataPack, IndustryConfig $config): array
+    private function validateRequiredOperational(IndustryDataPack $dataPack, IndustryConfig $config, ?string $focalTicker): array
     {
         $errors = [];
-        $requiredMetrics = $this->filterRequiredMetrics($config->dataRequirements->operationalMetrics);
+        $requiredMetricDefs = $this->filterRequiredMetricDefinitions($config->dataRequirements->operationalMetrics);
 
-        if (empty($requiredMetrics)) {
+        if (empty($requiredMetricDefs)) {
             return $errors;
         }
 
         foreach ($dataPack->companies as $ticker => $company) {
+            // Filter metrics applicable to this ticker based on scope
+            $applicableMetrics = [];
+            foreach ($requiredMetricDefs as $metricDef) {
+                // Skip if scope=focal and this is not the focal ticker
+                if ($metricDef->requiredScope === MetricDefinition::SCOPE_FOCAL
+                    && $focalTicker !== null
+                    && $ticker !== $focalTicker
+                ) {
+                    continue;
+                }
+                $applicableMetrics[] = $metricDef->key;
+            }
+
+            if (empty($applicableMetrics)) {
+                continue;
+            }
+
             if ($company->operational === null) {
-                foreach ($requiredMetrics as $metric) {
+                foreach ($applicableMetrics as $metric) {
                     $errors[] = new GateError(
                         code: self::ERROR_MISSING_REQUIRED_OPERATIONAL,
                         message: "Required operational metric {$metric} is missing for {$ticker}",
@@ -311,7 +362,7 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
                 continue;
             }
 
-            foreach ($requiredMetrics as $metric) {
+            foreach ($applicableMetrics as $metric) {
                 $datapoint = $company->operational->getMetric($metric);
                 if ($datapoint === null || $datapoint->value === null) {
                     $errors[] = new GateError(
@@ -860,6 +911,20 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         }
 
         return $required;
+    }
+
+    /**
+     * Returns required metric definitions with their full metadata (including requiredScope).
+     *
+     * @param list<MetricDefinition> $metrics
+     * @return list<MetricDefinition>
+     */
+    private function filterRequiredMetricDefinitions(array $metrics): array
+    {
+        return array_values(array_filter(
+            $metrics,
+            static fn (MetricDefinition $metric): bool => $metric->required
+        ));
     }
 
     /**

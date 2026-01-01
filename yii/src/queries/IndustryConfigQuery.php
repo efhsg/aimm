@@ -21,6 +21,7 @@ final class IndustryConfigQuery
     private const KEY_ID = 'id';
     private const KEY_NAME = 'name';
     private const KEY_SECTOR = 'sector';
+    private const KEY_FOCAL_TICKER = 'focal_ticker';
     private const KEY_COMPANIES = 'companies';
     private const KEY_MACRO_REQUIREMENTS = 'macro_requirements';
     private const KEY_DATA_REQUIREMENTS = 'data_requirements';
@@ -44,6 +45,7 @@ final class IndustryConfigQuery
     private const KEY_ANNUAL_FINANCIAL_METRICS = 'annual_financial_metrics';
     private const KEY_QUARTER_METRICS = 'quarter_metrics';
     private const KEY_OPERATIONAL_METRICS = 'operational_metrics';
+    private const KEY_REQUIRED_SCOPE = 'required_scope';
 
     public function __construct(
         private readonly SchemaValidatorInterface $schemaValidator,
@@ -136,6 +138,7 @@ final class IndustryConfigQuery
         $companies = $this->mapCompanies($data[self::KEY_COMPANIES]);
         $macroRequirements = $this->mapMacroRequirements($data[self::KEY_MACRO_REQUIREMENTS]);
         $dataRequirements = $this->mapDataRequirements($data[self::KEY_DATA_REQUIREMENTS]);
+        $focalTicker = $data[self::KEY_FOCAL_TICKER] ?? null;
 
         return new IndustryConfigDto(
             id: $data[self::KEY_ID],
@@ -144,6 +147,7 @@ final class IndustryConfigQuery
             companies: $companies,
             macroRequirements: $macroRequirements,
             dataRequirements: $dataRequirements,
+            focalTicker: $focalTicker,
         );
     }
 
@@ -217,6 +221,7 @@ final class IndustryConfigQuery
                 key: $metric['key'],
                 unit: $metric['unit'],
                 required: $metric['required'] ?? false,
+                requiredScope: $metric[self::KEY_REQUIRED_SCOPE] ?? MetricDefinition::SCOPE_ALL,
             ),
             $metrics
         );

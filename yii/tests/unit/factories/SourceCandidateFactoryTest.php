@@ -17,15 +17,13 @@ final class SourceCandidateFactoryTest extends Unit
         $factory = new SourceCandidateFactory();
         $candidates = $factory->forTicker('AAPL', 'NASDAQ');
 
-        // Now includes Yahoo (4 variants), StockAnalysis, Reuters, WSJ, Bloomberg, Morningstar, SeekingAlpha
-        $this->assertGreaterThanOrEqual(10, count($candidates));
+        // Yahoo (2 variants), StockAnalysis, Reuters, WSJ, Bloomberg, Morningstar, SeekingAlpha
+        $this->assertGreaterThanOrEqual(8, count($candidates));
 
         // Check that all expected adapters are present
         $adapterIds = array_map(static fn ($c) => $c->adapterId, $candidates);
         $this->assertContains('yahoo_finance', $adapterIds);
         $this->assertContains('yahoo_finance_api', $adapterIds);
-        $this->assertContains('yahoo_finance_financials', $adapterIds);
-        $this->assertContains('yahoo_finance_quarters', $adapterIds);
         $this->assertContains('stockanalysis', $adapterIds);
         $this->assertContains('reuters', $adapterIds);
         $this->assertContains('wsj', $adapterIds);
@@ -54,6 +52,26 @@ final class SourceCandidateFactoryTest extends Unit
 
         $this->assertSame('yahoo_finance_api', $candidates[1]->adapterId);
         $this->assertStringContainsString('BZ%3DF', $candidates[1]->url);
+    }
+
+    public function testMacroCandidatesResolveSnakeCaseKeys(): void
+    {
+        $factory = new SourceCandidateFactory();
+
+        // brent_crude should resolve to BZ=F
+        $brentCandidates = $factory->forMacro('brent_crude');
+        $this->assertCount(2, $brentCandidates);
+        $this->assertStringContainsString('BZ%3DF', $brentCandidates[0]->url);
+
+        // wti_crude should resolve to CL=F
+        $wtiCandidates = $factory->forMacro('wti_crude');
+        $this->assertCount(2, $wtiCandidates);
+        $this->assertStringContainsString('CL%3DF', $wtiCandidates[0]->url);
+
+        // natural_gas should resolve to NG=F
+        $gasCandidates = $factory->forMacro('natural_gas');
+        $this->assertCount(2, $gasCandidates);
+        $this->assertStringContainsString('NG%3DF', $gasCandidates[0]->url);
     }
 
     public function testMacroCandidatesIncludeRigCountAndInventorySources(): void

@@ -73,6 +73,52 @@ final class StockAnalysisAdapterTest extends Unit
         $this->assertSame('percent', $divYield->unit);
     }
 
+    public function testParsesFcfYieldAndFreeCashFlowWhenLabelsContainTtmSuffix(): void
+    {
+        $content = <<<HTML
+<html>
+  <body>
+    <table>
+      <tr><th>FCF Yield (TTM)</th><td>6.50%</td></tr>
+      <tr><th>Free Cash Flow (TTM)</th><td>$12.3B</td></tr>
+    </table>
+  </body>
+</html>
+HTML;
+
+        $adapter = new StockAnalysisAdapter();
+        $request = new AdaptRequest(
+            fetchResult: new FetchResult(
+                content: $content,
+                contentType: 'text/html',
+                statusCode: 200,
+                url: 'https://stockanalysis.com/stocks/test/',
+                finalUrl: 'https://stockanalysis.com/stocks/test/',
+                retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            ),
+            datapointKeys: [
+                'valuation.fcf_yield',
+                'valuation.free_cash_flow_ttm',
+            ],
+            ticker: 'TEST',
+        );
+
+        $result = $adapter->adapt($request);
+
+        $this->assertSame([], $result->notFound);
+        $this->assertCount(2, $result->extractions);
+
+        $fcfYield = $result->extractions['valuation.fcf_yield'];
+        $this->assertSame(6.5, $fcfYield->rawValue);
+        $this->assertSame('percent', $fcfYield->unit);
+
+        $freeCashFlow = $result->extractions['valuation.free_cash_flow_ttm'];
+        $this->assertSame(12.3, $freeCashFlow->rawValue);
+        $this->assertSame('currency', $freeCashFlow->unit);
+        $this->assertSame('USD', $freeCashFlow->currency);
+        $this->assertSame('billions', $freeCashFlow->scale);
+    }
+
     private function loadFixture(string $path): string
     {
         $fullPath = dirname(__DIR__, 2) . '/fixtures/' . $path;

@@ -7,7 +7,9 @@ use app\adapters\BakerHughesRigCountAdapter;
 use app\adapters\BlockedSourceRegistry;
 use app\adapters\BloombergAdapter;
 use app\adapters\CachedDataAdapter;
+use app\adapters\EcbAdapter;
 use app\adapters\EiaInventoryAdapter;
+use app\adapters\FmpAdapter;
 use app\adapters\MorningstarAdapter;
 use app\adapters\ReutersAdapter;
 use app\adapters\SeekingAlphaAdapter;
@@ -155,9 +157,11 @@ return [
         AdapterChain::class => static function (Container $container): AdapterChain {
             return new AdapterChain(
                 adapters: [
+                    $container->get(FmpAdapter::class),
                     $container->get(YahooFinanceAdapter::class),
                     $container->get(BakerHughesRigCountAdapter::class),
                     $container->get(EiaInventoryAdapter::class),
+                    $container->get(EcbAdapter::class),
                     $container->get(StockAnalysisAdapter::class),
                     $container->get(ReutersAdapter::class),
                     $container->get(WsjAdapter::class),
@@ -172,9 +176,11 @@ return [
         },
 
         SourceAdapterInterface::class => AdapterChain::class,
+        FmpAdapter::class => FmpAdapter::class,
         YahooFinanceAdapter::class => YahooFinanceAdapter::class,
         BakerHughesRigCountAdapter::class => BakerHughesRigCountAdapter::class,
         EiaInventoryAdapter::class => EiaInventoryAdapter::class,
+        EcbAdapter::class => EcbAdapter::class,
         StockAnalysisAdapter::class => StockAnalysisAdapter::class,
         ReutersAdapter::class => ReutersAdapter::class,
         WsjAdapter::class => WsjAdapter::class,
@@ -200,6 +206,7 @@ return [
                 rigCountXlsxUrl: $params['rigCountXlsxUrl'] ?? null,
                 eiaApiKey: $params['eiaApiKey'] ?? null,
                 eiaInventorySeriesId: $params['eiaInventorySeriesId'] ?? null,
+                fmpApiKey: $params['fmpApiKey'] ?? null,
             );
         },
         CompanyDataFactory::class => CompanyDataFactory::class,

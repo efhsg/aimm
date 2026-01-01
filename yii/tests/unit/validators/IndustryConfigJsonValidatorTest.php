@@ -185,6 +185,89 @@ final class IndustryConfigJsonValidatorTest extends Unit
         $this->assertStringContainsString('syntax', strtolower($result[0]));
     }
 
+    public function testRejectsFocalTickerNotInCompanies(): void
+    {
+        $json = json_encode([
+            'id' => 'industry_oil',
+            'name' => 'Oil Industry',
+            'sector' => 'Energy',
+            'focal_ticker' => 'UNKNOWN',
+            'companies' => [
+                ['ticker' => 'XOM', 'name' => 'ExxonMobil', 'listing_exchange' => 'NYSE', 'listing_currency' => 'USD', 'reporting_currency' => 'USD', 'fy_end_month' => 12],
+                ['ticker' => 'CVX', 'name' => 'Chevron', 'listing_exchange' => 'NYSE', 'listing_currency' => 'USD', 'reporting_currency' => 'USD', 'fy_end_month' => 12],
+            ],
+            'macro_requirements' => [],
+            'data_requirements' => ['history_years' => 5, 'quarters_to_fetch' => 4, 'valuation_metrics' => []],
+        ]);
+
+        $schemaValidator = $this->createMock(SchemaValidatorInterface::class);
+        $schemaValidator->method('validate')->willReturn(
+            new ValidationResult(valid: true, errors: [])
+        );
+
+        $model = $this->createModel('industry_oil', $json);
+
+        $validator = $this->createValidator($schemaValidator);
+        $validator->validateAttribute($model, 'config_json');
+
+        $this->assertTrue($model->hasErrors('config_json'));
+        $this->assertStringContainsString('focal_ticker', strtolower($model->getFirstError('config_json')));
+    }
+
+    public function testAcceptsValidFocalTicker(): void
+    {
+        $json = json_encode([
+            'id' => 'industry_oil',
+            'name' => 'Oil Industry',
+            'sector' => 'Energy',
+            'focal_ticker' => 'XOM',
+            'companies' => [
+                ['ticker' => 'XOM', 'name' => 'ExxonMobil', 'listing_exchange' => 'NYSE', 'listing_currency' => 'USD', 'reporting_currency' => 'USD', 'fy_end_month' => 12],
+                ['ticker' => 'CVX', 'name' => 'Chevron', 'listing_exchange' => 'NYSE', 'listing_currency' => 'USD', 'reporting_currency' => 'USD', 'fy_end_month' => 12],
+            ],
+            'macro_requirements' => [],
+            'data_requirements' => ['history_years' => 5, 'quarters_to_fetch' => 4, 'valuation_metrics' => []],
+        ]);
+
+        $schemaValidator = $this->createMock(SchemaValidatorInterface::class);
+        $schemaValidator->method('validate')->willReturn(
+            new ValidationResult(valid: true, errors: [])
+        );
+
+        $model = $this->createModel('industry_oil', $json);
+
+        $validator = $this->createValidator($schemaValidator);
+        $validator->validateAttribute($model, 'config_json');
+
+        $this->assertFalse($model->hasErrors('config_json'));
+    }
+
+    public function testAcceptsConfigWithoutFocalTicker(): void
+    {
+        $json = json_encode([
+            'id' => 'industry_oil',
+            'name' => 'Oil Industry',
+            'sector' => 'Energy',
+            'companies' => [
+                ['ticker' => 'XOM', 'name' => 'ExxonMobil', 'listing_exchange' => 'NYSE', 'listing_currency' => 'USD', 'reporting_currency' => 'USD', 'fy_end_month' => 12],
+            ],
+            'macro_requirements' => [],
+            'data_requirements' => ['history_years' => 5, 'quarters_to_fetch' => 4, 'valuation_metrics' => []],
+        ]);
+
+        $schemaValidator = $this->createMock(SchemaValidatorInterface::class);
+        $schemaValidator->method('validate')->willReturn(
+            new ValidationResult(valid: true, errors: [])
+        );
+
+        $model = $this->createModel('industry_oil', $json);
+
+        $validator = $this->createValidator($schemaValidator);
+        $validator->validateAttribute($model, 'config_json');
+
+        $this->assertFalse($model->hasErrors('config_json'));
+    }
+
     private function createValidator(?SchemaValidatorInterface $schemaValidator = null): IndustryConfigJsonValidator
     {
         if ($schemaValidator === null) {

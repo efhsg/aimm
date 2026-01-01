@@ -133,6 +133,102 @@ final class IndustryConfigTest extends Unit
         $this->assertNull($array['alternative_tickers']);
     }
 
+    public function testFocalTickerIncludedInToArrayWhenSet(): void
+    {
+        $config = $this->createIndustryConfigWithFocalTicker('SHEL');
+        $array = $config->toArray();
+
+        $this->assertArrayHasKey('focal_ticker', $array);
+        $this->assertSame('SHEL', $array['focal_ticker']);
+    }
+
+    public function testFocalTickerExcludedFromToArrayWhenNull(): void
+    {
+        $config = $this->createIndustryConfig();
+        $array = $config->toArray();
+
+        $this->assertArrayNotHasKey('focal_ticker', $array);
+    }
+
+    public function testResolveFocalTickerReturnsOverrideWhenValid(): void
+    {
+        $config = $this->createIndustryConfigWithFocalTicker('SHEL');
+
+        $result = $config->resolveFocalTicker('XOM');
+
+        $this->assertSame('XOM', $result);
+    }
+
+    public function testResolveFocalTickerReturnsConfigFocalWhenNoOverride(): void
+    {
+        $config = $this->createIndustryConfigWithFocalTicker('SHEL');
+
+        $result = $config->resolveFocalTicker(null);
+
+        $this->assertSame('SHEL', $result);
+    }
+
+    public function testResolveFocalTickerReturnsFirstCompanyWhenNoFocalConfigured(): void
+    {
+        $config = $this->createIndustryConfig();
+        $usedFallback = false;
+
+        $result = $config->resolveFocalTicker(null, $usedFallback);
+
+        $this->assertSame('SHEL', $result);
+        $this->assertTrue($usedFallback, 'Should indicate fallback was used');
+    }
+
+    public function testResolveFocalTickerIgnoresInvalidOverride(): void
+    {
+        $config = $this->createIndustryConfigWithFocalTicker('SHEL');
+
+        $result = $config->resolveFocalTicker('INVALID_TICKER');
+
+        $this->assertSame('SHEL', $result, 'Should fall back to config focal when override is invalid');
+    }
+
+    private function createIndustryConfigWithFocalTicker(string $focalTicker): IndustryConfig
+    {
+        return new IndustryConfig(
+            id: 'oil-majors',
+            name: 'Oil Majors',
+            sector: 'Energy',
+            companies: [
+                new CompanyConfig(
+                    ticker: 'SHEL',
+                    name: 'Shell plc',
+                    listingExchange: 'LSE',
+                    listingCurrency: 'GBP',
+                    reportingCurrency: 'USD',
+                    fyEndMonth: 12,
+                ),
+                new CompanyConfig(
+                    ticker: 'XOM',
+                    name: 'Exxon Mobil',
+                    listingExchange: 'NYSE',
+                    listingCurrency: 'USD',
+                    reportingCurrency: 'USD',
+                    fyEndMonth: 12,
+                ),
+            ],
+            macroRequirements: new MacroRequirements(
+                commodityBenchmark: 'brent_crude',
+            ),
+            dataRequirements: new DataRequirements(
+                historyYears: 5,
+                quartersToFetch: 8,
+                valuationMetrics: [
+                    new MetricDefinition('market_cap', MetricDefinition::UNIT_CURRENCY, true),
+                ],
+                annualFinancialMetrics: [],
+                quarterMetrics: [],
+                operationalMetrics: [],
+            ),
+            focalTicker: $focalTicker,
+        );
+    }
+
     private function createIndustryConfig(): IndustryConfig
     {
         return new IndustryConfig(

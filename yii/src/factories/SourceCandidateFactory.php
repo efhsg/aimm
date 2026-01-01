@@ -40,6 +40,25 @@ final class SourceCandidateFactory
     private const EIA_INVENTORY_SERIES_DEFAULT = 'PET.WCRSTUS1.W';
     private const EIA_INVENTORY_URL_TEMPLATE = 'https://api.eia.gov/v2/seriesid/{series}?api_key={api_key}';
 
+    // FMP API URL templates (API key passed via header, not URL)
+    private const FMP_QUOTE_URL = 'https://financialmodelingprep.com/api/v3/quote/{ticker}';
+    private const FMP_KEY_METRICS_URL = 'https://financialmodelingprep.com/api/v3/key-metrics/{ticker}';
+    private const FMP_RATIOS_URL = 'https://financialmodelingprep.com/api/v3/ratios/{ticker}';
+    private const FMP_INCOME_STATEMENT_URL = 'https://financialmodelingprep.com/api/v3/income-statement/{ticker}?period={period}';
+    private const FMP_CASH_FLOW_URL = 'https://financialmodelingprep.com/api/v3/cash-flow-statement/{ticker}?period={period}';
+    private const FMP_BALANCE_SHEET_URL = 'https://financialmodelingprep.com/api/v3/balance-sheet-statement/{ticker}?period={period}';
+
+    // FMP API header for authentication
+    private const FMP_API_HEADER = 'X-API-KEY';
+
+    // ECB FX rate URL
+    private const ECB_FX_RATES_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml';
+
+    // FMP commodity/index symbols
+    private const FMP_SYMBOL_BRENT = 'BZUSD';
+    private const FMP_SYMBOL_WTI = 'CLUSD';
+    private const FMP_SYMBOL_XLE = 'XLE';
+
     private const SOURCE_TEMPLATES = [
         'yahoo_finance' => [
             self::KEY_DOMAIN => 'finance.yahoo.com',
@@ -173,11 +192,15 @@ final class SourceCandidateFactory
         private readonly ?string $rigCountXlsxUrl = null,
         private readonly ?string $eiaApiKey = null,
         private readonly ?string $eiaInventorySeriesId = null,
+        private readonly ?string $fmpApiKey = null,
     ) {
     }
 
     /**
      * Generate prioritized source candidates for a ticker.
+     *
+     * Per the Hybrid Strategy: Yahoo handles valuation (free, sufficient for daily updates).
+     * FMP is reserved for financials/quarters to save API credits.
      *
      * @return list<SourceCandidate>
      */
@@ -185,7 +208,18 @@ final class SourceCandidateFactory
     {
         $candidates = [];
 
+        // Note: FMP candidates are NOT added here for valuation.
+        // Per design doc: "Yahoo for valuation to save credits".
+        // FMP should only be used for financials/quarters via forFinancials()/forQuarters().
+
         foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
+            // forTicker() is used for single-point valuation scraping and must not include
+            // the dedicated financials/quarters API endpoints (those are handled via
+            // forFinancials()/forQuarters()) to avoid unnecessary requests and blocks.
+            if (($config[self::KEY_SUPPORTS_FINANCIALS] ?? false) || ($config[self::KEY_SUPPORTS_QUARTERS] ?? false)) {
+                continue;
+            }
+
             $url = $this->buildUrl($config, $ticker, $exchange);
             if ($url === null) {
                 continue;
@@ -211,6 +245,9 @@ final class SourceCandidateFactory
     /**
      * Generate source candidates for macro/commodity data.
      *
+     * Per the Hybrid Strategy: Yahoo handles commodity prices (free, daily updates).
+     * ECB handles FX rates.
+     *
      * @return list<SourceCandidate>
      */
     public function forMacro(string $macroKey): array
@@ -222,18 +259,33 @@ final class SourceCandidateFactory
             return [];
         }
 
+        // Handle ECB FX rates
+        if ($macroKey === 'macro.fx_rates') {
+            return $this->buildEcbCandidates();
+        }
+
         $specialCandidates = $this->buildSpecialMacroCandidates($macroKey);
         if ($specialCandidates !== null) {
             return $specialCandidates;
         }
+
+        // Note: FMP candidates are NOT added here for macro data.
+        // Per design doc: "Yahoo for valuation [and commodity prices] to save credits".
+        // FMP should only be used for financials/quarters.
 
         $symbolMap = [
             'macro.oil_price' => self::SYMBOL_WTI,
             'macro.gas_price' => self::SYMBOL_NATURAL_GAS,
             'macro.gold_price' => self::SYMBOL_GOLD,
             'macro.sp500' => self::SYMBOL_SP500,
+            'macro.commodity_benchmark' => self::SYMBOL_BRENT,
+            'macro.margin_proxy' => self::SYMBOL_BRENT,
+            'macro.sector_index' => self::SYMBOL_XLE,
+            'brent_crude' => self::SYMBOL_BRENT,
             'BRENT' => self::SYMBOL_BRENT,
             'WTI' => self::SYMBOL_WTI,
+            'wti_crude' => self::SYMBOL_WTI,
+            'natural_gas' => self::SYMBOL_NATURAL_GAS,
             'GOLD' => self::SYMBOL_GOLD,
             'XLE' => self::SYMBOL_XLE,
             'SP500' => self::SYMBOL_SP500,
@@ -242,7 +294,7 @@ final class SourceCandidateFactory
 
         $symbol = $symbolMap[$macroKey] ?? null;
         if ($symbol === null) {
-            return [];
+            return $candidates;
         }
 
         foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
@@ -270,6 +322,23 @@ final class SourceCandidateFactory
         );
 
         return $candidates;
+    }
+
+    /**
+     * Build ECB source candidates for FX rates.
+     *
+     * @return list<SourceCandidate>
+     */
+    private function buildEcbCandidates(): array
+    {
+        return [
+            new SourceCandidate(
+                url: self::ECB_FX_RATES_URL,
+                adapterId: 'ecb',
+                priority: 1,
+                domain: 'www.ecb.europa.eu',
+            ),
+        ];
     }
 
     /**
@@ -353,12 +422,20 @@ final class SourceCandidateFactory
     /**
      * Generate source candidates for annual financials data.
      *
+     * Per the Hybrid Strategy: FMP handles historical financials (20+ years).
+     * Yahoo is fallback if FMP fails.
+     *
      * @return list<SourceCandidate>
      */
     public function forFinancials(string $ticker, ?string $exchange = null): array
     {
         $candidates = [];
 
+        // Add FMP candidates first (priority 1) - primary source for financials
+        $fmpCandidates = $this->buildFmpFinancialsCandidates($ticker, 'annual');
+        $candidates = array_merge($candidates, $fmpCandidates);
+
+        // Add Yahoo as fallback (priority 2+)
         foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
             if (!($config[self::KEY_SUPPORTS_FINANCIALS] ?? false)) {
                 continue;
@@ -369,10 +446,16 @@ final class SourceCandidateFactory
                 continue;
             }
 
+            // Yahoo gets higher priority number (lower priority) as FMP fallback
+            $priority = $config[self::KEY_PRIORITY];
+            if ($this->fmpApiKey !== null) {
+                $priority += 5;
+            }
+
             $candidates[] = new SourceCandidate(
                 url: $url,
                 adapterId: $adapterId,
-                priority: $config[self::KEY_PRIORITY],
+                priority: $priority,
                 domain: $config[self::KEY_DOMAIN],
             );
         }
@@ -389,12 +472,20 @@ final class SourceCandidateFactory
     /**
      * Generate source candidates for quarterly financials data.
      *
+     * Per the Hybrid Strategy: FMP handles historical quarters (20+ years).
+     * Yahoo is fallback if FMP fails.
+     *
      * @return list<SourceCandidate>
      */
     public function forQuarters(string $ticker, ?string $exchange = null): array
     {
         $candidates = [];
 
+        // Add FMP candidates first (priority 1) - primary source for quarters
+        $fmpCandidates = $this->buildFmpFinancialsCandidates($ticker, 'quarter');
+        $candidates = array_merge($candidates, $fmpCandidates);
+
+        // Add Yahoo as fallback (priority 2+)
         foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
             if (!($config[self::KEY_SUPPORTS_QUARTERS] ?? false)) {
                 continue;
@@ -405,10 +496,16 @@ final class SourceCandidateFactory
                 continue;
             }
 
+            // Yahoo gets higher priority number (lower priority) as FMP fallback
+            $priority = $config[self::KEY_PRIORITY];
+            if ($this->fmpApiKey !== null) {
+                $priority += 5;
+            }
+
             $candidates[] = new SourceCandidate(
                 url: $url,
                 adapterId: $adapterId,
-                priority: $config[self::KEY_PRIORITY],
+                priority: $priority,
                 domain: $config[self::KEY_DOMAIN],
             );
         }
@@ -488,5 +585,82 @@ final class SourceCandidateFactory
         }
 
         return self::REUTERS_EXCHANGE_SUFFIX_MAP[$exchange] ?? null;
+    }
+
+    /**
+     * Build FMP candidates for financial statements.
+     *
+     * API key is passed via header (X-API-KEY), not in URL, to avoid credential exposure in logs.
+     *
+     * @return list<SourceCandidate>
+     */
+    private function buildFmpFinancialsCandidates(string $ticker, string $period): array
+    {
+        if ($this->fmpApiKey === null || $this->fmpApiKey === '') {
+            return [];
+        }
+
+        $candidates = [];
+        $upperTicker = strtoupper($ticker);
+        $headers = [self::FMP_API_HEADER => $this->fmpApiKey];
+
+        // Income statement
+        $incomeUrl = $this->buildFmpUrl(
+            str_replace('{period}', $period, self::FMP_INCOME_STATEMENT_URL),
+            $upperTicker
+        );
+        if ($incomeUrl !== null) {
+            $candidates[] = new SourceCandidate(
+                url: $incomeUrl,
+                adapterId: 'fmp',
+                priority: 1,
+                domain: 'financialmodelingprep.com',
+                headers: $headers,
+            );
+        }
+
+        // Cash flow statement
+        $cashFlowUrl = $this->buildFmpUrl(
+            str_replace('{period}', $period, self::FMP_CASH_FLOW_URL),
+            $upperTicker
+        );
+        if ($cashFlowUrl !== null) {
+            $candidates[] = new SourceCandidate(
+                url: $cashFlowUrl,
+                adapterId: 'fmp',
+                priority: 1,
+                domain: 'financialmodelingprep.com',
+                headers: $headers,
+            );
+        }
+
+        // Balance sheet (for net debt derivation)
+        $balanceUrl = $this->buildFmpUrl(
+            str_replace('{period}', $period, self::FMP_BALANCE_SHEET_URL),
+            $upperTicker
+        );
+        if ($balanceUrl !== null) {
+            $candidates[] = new SourceCandidate(
+                url: $balanceUrl,
+                adapterId: 'fmp',
+                priority: 1,
+                domain: 'financialmodelingprep.com',
+                headers: $headers,
+            );
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * Build FMP URL without API key (key is passed via header).
+     */
+    private function buildFmpUrl(string $template, string $ticker): ?string
+    {
+        if ($this->fmpApiKey === null || $this->fmpApiKey === '') {
+            return null;
+        }
+
+        return str_replace('{ticker}', urlencode($ticker), $template);
     }
 }
