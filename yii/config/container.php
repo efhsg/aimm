@@ -43,16 +43,35 @@ use app\handlers\collection\CollectIndustryHandler;
 use app\handlers\collection\CollectIndustryInterface;
 use app\handlers\collection\CollectMacroHandler;
 use app\handlers\collection\CollectMacroInterface;
-use app\handlers\industryconfig\CreateIndustryConfigHandler;
-use app\handlers\industryconfig\CreateIndustryConfigInterface;
-use app\handlers\industryconfig\ToggleIndustryConfigHandler;
-use app\handlers\industryconfig\ToggleIndustryConfigInterface;
-use app\handlers\industryconfig\UpdateIndustryConfigHandler;
-use app\handlers\industryconfig\UpdateIndustryConfigInterface;
+use app\handlers\collectionpolicy\CreateCollectionPolicyHandler;
+use app\handlers\collectionpolicy\CreateCollectionPolicyInterface;
+use app\handlers\collectionpolicy\DeleteCollectionPolicyHandler;
+use app\handlers\collectionpolicy\DeleteCollectionPolicyInterface;
+use app\handlers\collectionpolicy\SetDefaultPolicyHandler;
+use app\handlers\collectionpolicy\SetDefaultPolicyInterface;
+use app\handlers\collectionpolicy\UpdateCollectionPolicyHandler;
+use app\handlers\collectionpolicy\UpdateCollectionPolicyInterface;
+use app\handlers\peergroup\AddMembersHandler;
+use app\handlers\peergroup\AddMembersInterface;
+use app\handlers\peergroup\CollectPeerGroupHandler;
+use app\handlers\peergroup\CollectPeerGroupInterface;
+use app\handlers\peergroup\CreatePeerGroupHandler;
+use app\handlers\peergroup\CreatePeerGroupInterface;
+use app\handlers\peergroup\RemoveMemberHandler;
+use app\handlers\peergroup\RemoveMemberInterface;
+use app\handlers\peergroup\SetFocalHandler;
+use app\handlers\peergroup\SetFocalInterface;
+use app\handlers\peergroup\TogglePeerGroupHandler;
+use app\handlers\peergroup\TogglePeerGroupInterface;
+use app\handlers\peergroup\UpdatePeerGroupHandler;
+use app\handlers\peergroup\UpdatePeerGroupInterface;
+use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
+use app\queries\CompanyQuery;
 use app\queries\DataPackRepository;
-use app\queries\IndustryConfigListQuery;
-use app\queries\IndustryConfigQuery;
+use app\queries\PeerGroupListQuery;
+use app\queries\PeerGroupMemberQuery;
+use app\queries\PeerGroupQuery;
 use app\queries\SourceBlockRepository;
 use app\queries\SourceBlockRepositoryInterface;
 use app\transformers\DataPackAssembler;
@@ -137,7 +156,7 @@ return [
         CachedDataAdapter::class => static function (Container $container): CachedDataAdapter {
             $industry = null;
             if (Yii::$app->request instanceof \yii\web\Request) {
-                $industry = Yii::$app->request->getParam('industry');
+                $industry = Yii::$app->request->get('industry');
             }
             if (!is_string($industry) || $industry === '') {
                 $paramIndustry = Yii::$app->params['collectionIndustryId'] ?? null;
@@ -233,18 +252,6 @@ return [
             );
         },
 
-        IndustryConfigQuery::class => static function (Container $container): IndustryConfigQuery {
-            return new IndustryConfigQuery(
-                $container->get(SchemaValidatorInterface::class),
-            );
-        },
-
-        IndustryConfigListQuery::class => static function (Container $container): IndustryConfigListQuery {
-            return new IndustryConfigListQuery(
-                $container->get(SchemaValidatorInterface::class),
-            );
-        },
-
         DataPackAssembler::class => static function (Container $container): DataPackAssembler {
             return new DataPackAssembler(
                 repository: $container->get(DataPackRepository::class),
@@ -300,21 +307,93 @@ return [
             );
         },
 
-        CreateIndustryConfigInterface::class => static function (): CreateIndustryConfigInterface {
-            return new CreateIndustryConfigHandler(
-                logger: Yii::getLogger(),
+        CreateCollectionPolicyInterface::class => static function (Container $container): CreateCollectionPolicyInterface {
+            return new CreateCollectionPolicyHandler(
+                $container->get(CollectionPolicyQuery::class),
+                Yii::getLogger(),
             );
         },
 
-        UpdateIndustryConfigInterface::class => static function (): UpdateIndustryConfigInterface {
-            return new UpdateIndustryConfigHandler(
-                logger: Yii::getLogger(),
+        UpdateCollectionPolicyInterface::class => static function (Container $container): UpdateCollectionPolicyInterface {
+            return new UpdateCollectionPolicyHandler(
+                $container->get(CollectionPolicyQuery::class),
+                Yii::getLogger(),
             );
         },
 
-        ToggleIndustryConfigInterface::class => static function (): ToggleIndustryConfigInterface {
-            return new ToggleIndustryConfigHandler(
-                logger: Yii::getLogger(),
+        DeleteCollectionPolicyInterface::class => static function (Container $container): DeleteCollectionPolicyInterface {
+            return new DeleteCollectionPolicyHandler(
+                $container->get(CollectionPolicyQuery::class),
+                Yii::$app->db,
+                Yii::getLogger(),
+            );
+        },
+
+        SetDefaultPolicyInterface::class => static function (Container $container): SetDefaultPolicyInterface {
+            return new SetDefaultPolicyHandler(
+                $container->get(CollectionPolicyQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        CreatePeerGroupInterface::class => static function (Container $container): CreatePeerGroupInterface {
+            return new CreatePeerGroupHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        UpdatePeerGroupInterface::class => static function (Container $container): UpdatePeerGroupInterface {
+            return new UpdatePeerGroupHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        TogglePeerGroupInterface::class => static function (Container $container): TogglePeerGroupInterface {
+            return new TogglePeerGroupHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        AddMembersInterface::class => static function (Container $container): AddMembersInterface {
+            return new AddMembersHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                $container->get(CompanyQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        RemoveMemberInterface::class => static function (Container $container): RemoveMemberInterface {
+            return new RemoveMemberHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        SetFocalInterface::class => static function (Container $container): SetFocalInterface {
+            return new SetFocalHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        CollectPeerGroupInterface::class => static function (Container $container): CollectPeerGroupInterface {
+            return new CollectPeerGroupHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                $container->get(CollectionPolicyQuery::class),
+                $container->get(CompanyQuery::class),
+                $container->get(CollectIndustryInterface::class),
+                $container->get(CollectionRunRepository::class),
+                Yii::getLogger(),
             );
         },
 
@@ -359,6 +438,9 @@ return [
         },
         app\queries\PeerGroupMemberQuery::class => static function () {
             return new app\queries\PeerGroupMemberQuery(Yii::$app->db);
+        },
+        PeerGroupListQuery::class => static function (): PeerGroupListQuery {
+            return new PeerGroupListQuery(Yii::$app->db);
         },
 
         // Dossier Transformers

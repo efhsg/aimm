@@ -45,12 +45,30 @@ return [
                 'normalizeTrailingSlash' => true,
             ],
             'rules' => [
-                'industry-config' => 'industry-config/index',
-                'industry-config/create' => 'industry-config/create',
-                'industry-config/view/<industry_id:[a-z0-9_-]+>' => 'industry-config/view',
-                'industry-config/update/<industry_id:[a-z0-9_-]+>' => 'industry-config/update',
-                'industry-config/toggle/<industry_id:[a-z0-9_-]+>' => 'industry-config/toggle',
-                'industry-config/validate-json' => 'industry-config/validate-json',
+                // Peer Group
+                'peer-group' => 'peer-group/index',
+                'peer-group/create' => 'peer-group/create',
+                'peer-group/<slug:[a-z0-9-]+>' => 'peer-group/view',
+                'peer-group/<slug:[a-z0-9-]+>/edit' => 'peer-group/update',
+                'peer-group/<slug:[a-z0-9-]+>/toggle' => 'peer-group/toggle',
+                'peer-group/<slug:[a-z0-9-]+>/add-members' => 'peer-group/add-members',
+                'peer-group/<slug:[a-z0-9-]+>/remove-member' => 'peer-group/remove-member',
+                'peer-group/<slug:[a-z0-9-]+>/set-focal' => 'peer-group/set-focal',
+                'peer-group/<slug:[a-z0-9-]+>/collect' => 'peer-group/collect',
+
+                // Collection Run
+                'collection-run/<id:\d+>' => 'collection-run/view',
+                'collection-run/<id:\d+>/status' => 'collection-run/status',
+
+                // Collection Policy
+                'collection-policy' => 'collection-policy/index',
+                'collection-policy/create' => 'collection-policy/create',
+                'collection-policy/<slug:[a-z0-9-]+>' => 'collection-policy/view',
+                'collection-policy/<slug:[a-z0-9-]+>/edit' => 'collection-policy/update',
+                'collection-policy/<slug:[a-z0-9-]+>/delete' => 'collection-policy/delete',
+                'collection-policy/<slug:[a-z0-9-]+>/export' => 'collection-policy/export',
+                'collection-policy/<slug:[a-z0-9-]+>/set-default' => 'collection-policy/set-default',
+                'collection-policy/validate-json' => 'collection-policy/validate-json',
             ],
         ],
         'db' => $db,

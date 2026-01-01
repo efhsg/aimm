@@ -7,7 +7,7 @@ namespace app\dto;
 /**
  * Configuration for an industry collection.
  *
- * Note: This is a DTO, distinct from the ActiveRecord model app\models\IndustryConfig.
+ * Built from peer group + collection policy for use by collection handlers.
  */
 final readonly class IndustryConfig
 {

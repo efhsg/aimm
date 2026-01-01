@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace app\commands;
 
-use app\dto\CollectIndustryRequest;
-use app\dto\IndustryConfig;
+use app\dto\peergroup\CollectPeerGroupRequest;
 use app\enums\CollectionStatus;
-use app\handlers\collection\CollectIndustryInterface;
-use app\queries\IndustryConfigQuery;
+use app\handlers\peergroup\CollectPeerGroupInterface;
+use app\queries\PeerGroupQuery;
 use Throwable;
 use Yii;
 use yii\base\Module;
@@ -19,7 +18,7 @@ use yii\log\Logger;
 final class CollectController extends Controller
 {
     private const LOG_CATEGORY = 'collection';
-    private const HEADER_INDUSTRY = 'Industry';
+    private const HEADER_GROUP = 'Peer Group';
     private const HEADER_DATAPACK = 'Datapack ID';
     private const HEADER_STATUS = 'Status';
     private const HEADER_DURATION = 'Duration';
@@ -30,8 +29,8 @@ final class CollectController extends Controller
     public function __construct(
         string $id,
         Module $module,
-        private CollectIndustryInterface $collector,
-        private IndustryConfigQuery $industryConfigQuery,
+        private CollectPeerGroupInterface $collector,
+        private PeerGroupQuery $peerGroupQuery,
         private Logger $logger,
         array $config = []
     ) {
@@ -46,84 +45,90 @@ final class CollectController extends Controller
         return array_merge(parent::options($actionID), ['focal']);
     }
 
-    public function actionIndustry(string $id): int
+    /**
+     * Collect data for a peer group.
+     *
+     * @param string $slug The peer group slug
+     */
+    public function actionPeerGroup(string $slug): int
     {
         $startedAt = microtime(true);
-        $config = $this->industryConfigQuery->findById($id);
+        $group = $this->peerGroupQuery->findBySlug($slug);
 
-        if ($config === null) {
+        if ($group === null) {
             $this->logger->log(
                 [
-                    'message' => 'Industry config not found',
-                    'industry' => $id,
+                    'message' => 'Peer group not found',
+                    'slug' => $slug,
                 ],
                 Logger::LEVEL_WARNING,
                 self::LOG_CATEGORY
             );
-            $this->stderr("Industry config not found: {$id}\n");
+            $this->stderr("Peer group not found: {$slug}\n");
             return ExitCode::DATAERR;
         }
 
-        Yii::$app->params['collectionIndustryId'] = $id;
+        Yii::$app->params['collectionIndustryId'] = $slug;
 
-        // Use IndustryConfig's resolution logic which respects:
-        // 1. CLI override (--focal=TICKER)
-        // 2. Config's focal_ticker field
-        // 3. First company as fallback
         $cliOverride = is_string($this->focal) && $this->focal !== ''
             ? strtoupper(trim($this->focal))
             : null;
-        $focalTicker = $config->resolveFocalTicker($cliOverride);
-        Yii::$app->params['collectionFocalTicker'] = $focalTicker;
+        Yii::$app->params['collectionFocalTicker'] = $cliOverride;
 
         try {
             $result = $this->collector->collect(
-                new CollectIndustryRequest(
-                    config: $config,
-                    focalTicker: $focalTicker,
+                new CollectPeerGroupRequest(
+                    groupId: (int) $group['id'],
+                    actorUsername: 'cli',
+                    focalTickerOverride: $cliOverride,
                 )
             );
         } catch (Throwable $exception) {
             $this->logger->log(
                 [
-                    'message' => 'Industry collection failed',
-                    'industry' => $id,
+                    'message' => 'Peer group collection failed',
+                    'slug' => $slug,
                     'error' => $exception->getMessage(),
                 ],
                 Logger::LEVEL_ERROR,
                 self::LOG_CATEGORY
             );
-            $this->stderr('Industry collection failed: ' . $exception->getMessage() . "\n");
+            $this->stderr('Peer group collection failed: ' . $exception->getMessage() . "\n");
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        if (!$result->success) {
+            $this->stderr('Collection failed: ' . implode(', ', $result->errors) . "\n");
             return ExitCode::UNSPECIFIED_ERROR;
         }
 
         $duration = microtime(true) - $startedAt;
         $this->stdout($this->renderSummaryTable(
-            $config->id,
-            $result->datapackId,
-            $result->overallStatus->value,
+            $slug,
+            $result->datapackId ?? 'N/A',
+            $result->status?->value ?? 'unknown',
             $duration
         ));
 
-        return $result->overallStatus === CollectionStatus::Complete
+        return $result->status === CollectionStatus::Complete
             ? ExitCode::OK
             : ExitCode::UNSPECIFIED_ERROR;
     }
 
     private function renderSummaryTable(
-        string $industryId,
+        string $groupSlug,
         string $datapackId,
         string $status,
         float $durationSeconds
     ): string {
         $headers = [
-            self::HEADER_INDUSTRY,
+            self::HEADER_GROUP,
             self::HEADER_DATAPACK,
             self::HEADER_STATUS,
             self::HEADER_DURATION,
         ];
         $values = [
-            $industryId,
+            $groupSlug,
             $datapackId,
             $status,
             sprintf(self::DURATION_FORMAT, $durationSeconds),

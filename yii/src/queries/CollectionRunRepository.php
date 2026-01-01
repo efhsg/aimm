@@ -101,6 +101,16 @@ final class CollectionRunRepository
     /**
      * @return array<string, mixed>|null
      */
+    public function findById(int $id): ?array
+    {
+        return $this->db->createCommand(
+            'SELECT * FROM {{%collection_run}} WHERE id = :id',
+        )->bindValue(':id', $id)->queryOne() ?: null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
     public function findByDatapackId(string $datapackId): ?array
     {
         return $this->db->createCommand(
@@ -153,5 +163,57 @@ final class CollectionRunRepository
         }
 
         return null;
+    }
+
+    /**
+     * Get errors and warnings for a collection run.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getErrors(int $runId): array
+    {
+        return $this->db->createCommand(
+            'SELECT * FROM {{%collection_error}}
+             WHERE collection_run_id = :run_id
+             ORDER BY severity ASC, id ASC',
+        )
+            ->bindValue(':run_id', $runId)
+            ->queryAll();
+    }
+
+    /**
+     * List collection runs for a peer group.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listByPeerGroup(int $peerGroupId, int $limit = 20): array
+    {
+        return $this->db->createCommand(
+            'SELECT cr.* FROM {{%collection_run}} cr
+             JOIN {{%industry_peer_group}} pg ON cr.industry_id = pg.slug
+             WHERE pg.id = :group_id
+             ORDER BY cr.started_at DESC
+             LIMIT :limit',
+        )
+            ->bindValue(':group_id', $peerGroupId)
+            ->bindValue(':limit', $limit)
+            ->queryAll();
+    }
+
+    /**
+     * Check if a peer group has a running collection.
+     */
+    public function hasRunningCollection(int $peerGroupId): bool
+    {
+        $count = $this->db->createCommand(
+            'SELECT COUNT(*) FROM {{%collection_run}} cr
+             JOIN {{%industry_peer_group}} pg ON cr.industry_id = pg.slug
+             WHERE pg.id = :group_id AND cr.status = :status',
+        )
+            ->bindValue(':group_id', $peerGroupId)
+            ->bindValue(':status', 'running')
+            ->queryScalar();
+
+        return (int) $count > 0;
     }
 }

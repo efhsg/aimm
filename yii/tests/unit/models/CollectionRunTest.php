@@ -6,31 +6,39 @@ namespace tests\unit\models;
 
 use app\models\CollectionError;
 use app\models\CollectionRun;
-use app\models\IndustryConfig;
 use app\models\query\CollectionRunQuery;
+use app\queries\PeerGroupQuery;
 use Codeception\Test\Unit;
 use Ramsey\Uuid\Uuid;
+use Yii;
 
 /**
  * @covers \app\models\CollectionRun
  */
 final class CollectionRunTest extends Unit
 {
-    private IndustryConfig $industryConfig;
+    private PeerGroupQuery $peerGroupQuery;
+    private int $peerGroupId;
 
     protected function _before(): void
     {
+        $this->peerGroupQuery = new PeerGroupQuery(Yii::$app->db);
+
         // Clean up before each test
         CollectionError::deleteAll();
         CollectionRun::deleteAll();
-        IndustryConfig::deleteAll();
+        Yii::$app->db->createCommand()->delete('industry_peer_group')->execute();
 
-        // Create required industry config
-        $this->industryConfig = new IndustryConfig();
-        $this->industryConfig->industry_id = 'test-industry';
-        $this->industryConfig->name = 'Test Industry';
-        $this->industryConfig->config_json = 'companies: []';
-        $this->industryConfig->save();
+        // Create required peer group
+        $this->peerGroupId = $this->peerGroupQuery->insert([
+            'slug' => 'test-industry',
+            'name' => 'Test Industry',
+            'sector' => 'Energy',
+            'is_active' => 1,
+            'created_by' => 'test',
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
     }
 
     public function testValidationRequiresRequiredFields(): void
@@ -129,6 +137,17 @@ final class CollectionRunTest extends Unit
 
     public function testQueryChainingFiltersCorrectly(): void
     {
+        // Create second peer group for filter testing
+        $this->peerGroupQuery->insert([
+            'slug' => 'other-industry',
+            'name' => 'Other Industry',
+            'sector' => 'Energy',
+            'is_active' => 1,
+            'created_by' => 'test',
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
+
         $completePassed = new CollectionRun();
         $completePassed->industry_id = 'test-industry';
         $completePassed->datapack_id = Uuid::uuid4()->toString();
@@ -199,19 +218,6 @@ final class CollectionRunTest extends Unit
         $this->assertNotNull($run->completed_at);
     }
 
-    public function testBelongsToIndustryConfig(): void
-    {
-        $run = new CollectionRun();
-        $run->industry_id = 'test-industry';
-        $run->datapack_id = Uuid::uuid4()->toString();
-        $run->save();
-
-        $config = $run->industryConfig;
-
-        $this->assertInstanceOf(IndustryConfig::class, $config);
-        $this->assertSame('test-industry', $config->industry_id);
-    }
-
     public function testHasManyCollectionErrors(): void
     {
         $run = new CollectionRun();
@@ -233,10 +239,10 @@ final class CollectionRunTest extends Unit
         $this->assertInstanceOf(CollectionError::class, $errors[0]);
     }
 
-    public function testDeletingIndustryConfigCascadesToRunsAndErrors(): void
+    public function testDeletingPeerGroupCascadesToRunsAndErrors(): void
     {
         $run = new CollectionRun();
-        $run->industry_id = $this->industryConfig->industry_id;
+        $run->industry_id = 'test-industry';
         $run->datapack_id = Uuid::uuid4()->toString();
         $run->save();
 
@@ -250,7 +256,8 @@ final class CollectionRunTest extends Unit
         $this->assertSame(1, CollectionRun::find()->count());
         $this->assertSame(1, CollectionError::find()->count());
 
-        $this->industryConfig->delete();
+        // Delete peer group - should cascade to runs and errors
+        Yii::$app->db->createCommand()->delete('industry_peer_group', ['id' => $this->peerGroupId])->execute();
 
         $this->assertSame(0, CollectionRun::find()->count());
         $this->assertSame(0, CollectionError::find()->count());

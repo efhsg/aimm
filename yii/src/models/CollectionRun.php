@@ -27,7 +27,6 @@ use yii\db\ActiveRecord;
  * @property int|null $file_size_bytes
  * @property int|null $duration_seconds
  *
- * @property-read IndustryConfig $industryConfig
  * @property-read CollectionError[] $collectionErrors
  */
 final class CollectionRun extends ActiveRecord
@@ -65,7 +64,6 @@ final class CollectionRun extends ActiveRecord
             [['file_path'], 'string', 'max' => 512],
             [['file_size_bytes', 'duration_seconds'], 'integer'],
             [['started_at', 'completed_at'], 'safe'],
-            [['industry_id'], 'exist', 'targetClass' => IndustryConfig::class, 'targetAttribute' => 'industry_id'],
         ];
     }
 
@@ -88,11 +86,6 @@ final class CollectionRun extends ActiveRecord
             'file_size_bytes' => 'File Size (bytes)',
             'duration_seconds' => 'Duration (seconds)',
         ];
-    }
-
-    public function getIndustryConfig(): ActiveQuery
-    {
-        return $this->hasOne(IndustryConfig::class, ['industry_id' => 'industry_id']);
     }
 
     public function getCollectionErrors(): ActiveQuery

@@ -5,16 +5,13 @@ declare(strict_types=1);
 namespace tests\unit\commands;
 
 use app\commands\CollectController;
-use app\dto\CollectIndustryRequest;
-use app\dto\CollectIndustryResult;
 use app\dto\GateResult;
+use app\dto\peergroup\CollectPeerGroupRequest;
+use app\dto\peergroup\CollectPeerGroupResult;
 use app\enums\CollectionStatus;
-use app\handlers\collection\CollectIndustryInterface;
-use app\models\IndustryConfig as IndustryConfigRecord;
-use app\queries\IndustryConfigQuery;
-use app\validators\SchemaValidator;
+use app\handlers\peergroup\CollectPeerGroupInterface;
+use app\queries\PeerGroupQuery;
 use Codeception\Test\Unit;
-use JsonException;
 use RuntimeException;
 use Yii;
 use yii\base\Module;
@@ -24,37 +21,45 @@ use yii\log\Logger;
 final class CollectControllerTest extends Unit
 {
     private Module $module;
-    private IndustryConfigQuery $query;
+    private PeerGroupQuery $peerGroupQuery;
+    private int $groupId;
 
     protected function setUp(): void
     {
         parent::setUp();
-        IndustryConfigRecord::deleteAll();
         $this->module = Yii::$app;
-        $this->query = $this->createQuery();
+        $this->peerGroupQuery = new PeerGroupQuery(Yii::$app->db);
+
+        // Clean up
+        Yii::$app->db->createCommand()->delete('industry_peer_group')->execute();
+
+        // Create test peer group
+        $this->groupId = $this->peerGroupQuery->insert([
+            'slug' => 'energy',
+            'name' => 'Energy',
+            'sector' => 'Energy',
+            'is_active' => 1,
+            'created_by' => 'test',
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
     }
 
     protected function tearDown(): void
     {
-        IndustryConfigRecord::deleteAll();
+        Yii::$app->db->createCommand()->delete('industry_peer_group')->execute();
         parent::tearDown();
     }
 
-    public function testActionIndustryReturnsOkOnSuccess(): void
+    public function testActionPeerGroupReturnsOkOnSuccess(): void
     {
-        $this->createRecord(
-            industryId: 'energy',
-            name: 'Energy',
-            configJson: $this->buildConfigJson('energy', 'Energy')
-        );
-
-        $collector = $this->createMock(CollectIndustryInterface::class);
+        $collector = $this->createMock(CollectPeerGroupInterface::class);
         $collector->expects($this->once())
             ->method('collect')
             ->with($this->callback(
-                static fn (CollectIndustryRequest $request): bool => $request->config->id === 'energy'
+                fn (CollectPeerGroupRequest $request): bool => $request->groupId === $this->groupId
             ))
-            ->willReturn($this->createResult('energy', CollectionStatus::Complete));
+            ->willReturn($this->createResult(CollectionStatus::Complete));
 
         $logger = $this->createMock(Logger::class);
         $logger->method('log');
@@ -63,18 +68,18 @@ final class CollectControllerTest extends Unit
             'collect',
             $this->module,
             $collector,
-            $this->query,
+            $this->peerGroupQuery,
             $logger
         );
 
-        $exitCode = $controller->actionIndustry('energy');
+        $exitCode = $controller->actionPeerGroup('energy');
 
         $this->assertSame(ExitCode::OK, $exitCode);
     }
 
-    public function testActionIndustryReturnsDataErrWhenConfigMissing(): void
+    public function testActionPeerGroupReturnsDataErrWhenGroupMissing(): void
     {
-        $collector = $this->createMock(CollectIndustryInterface::class);
+        $collector = $this->createMock(CollectPeerGroupInterface::class);
         $collector->expects($this->never())->method('collect');
 
         $logger = $this->createMock(Logger::class);
@@ -84,24 +89,18 @@ final class CollectControllerTest extends Unit
             'collect',
             $this->module,
             $collector,
-            $this->query,
+            $this->peerGroupQuery,
             $logger
         );
 
-        $exitCode = $controller->actionIndustry('missing');
+        $exitCode = $controller->actionPeerGroup('missing');
 
         $this->assertSame(ExitCode::DATAERR, $exitCode);
     }
 
-    public function testActionIndustryReturnsErrorWhenCollectorFails(): void
+    public function testActionPeerGroupReturnsErrorWhenCollectorFails(): void
     {
-        $this->createRecord(
-            industryId: 'energy',
-            name: 'Energy',
-            configJson: $this->buildConfigJson('energy', 'Energy')
-        );
-
-        $collector = $this->createMock(CollectIndustryInterface::class);
+        $collector = $this->createMock(CollectPeerGroupInterface::class);
         $collector->method('collect')->willThrowException(new RuntimeException('boom'));
 
         $logger = $this->createMock(Logger::class);
@@ -111,89 +110,22 @@ final class CollectControllerTest extends Unit
             'collect',
             $this->module,
             $collector,
-            $this->query,
+            $this->peerGroupQuery,
             $logger
         );
 
-        $exitCode = $controller->actionIndustry('energy');
+        $exitCode = $controller->actionPeerGroup('energy');
 
         $this->assertSame(ExitCode::UNSPECIFIED_ERROR, $exitCode);
     }
 
-    private function createRecord(
-        string $industryId,
-        string $name,
-        string $configJson
-    ): IndustryConfigRecord {
-        $record = new IndustryConfigRecord();
-        $record->industry_id = $industryId;
-        $record->name = $name;
-        $record->config_json = $configJson;
-        $record->is_active = true;
-        $record->save();
-
-        return $record;
-    }
-
-    private function createResult(string $industryId, CollectionStatus $status): CollectIndustryResult
+    private function createResult(CollectionStatus $status): CollectPeerGroupResult
     {
-        return new CollectIndustryResult(
-            industryId: $industryId,
+        return CollectPeerGroupResult::success(
+            runId: 1,
             datapackId: 'dp-123',
-            dataPackPath: '/tmp/datapack.json',
+            status: $status,
             gateResult: new GateResult(true, [], []),
-            overallStatus: $status,
-            companyStatuses: ['AAA' => $status],
         );
-    }
-
-    private function createQuery(): IndustryConfigQuery
-    {
-        return new IndustryConfigQuery(
-            new SchemaValidator(Yii::$app->basePath . '/config/schemas')
-        );
-    }
-
-    private function buildConfigJson(string $id, string $name): string
-    {
-        $config = [
-            'id' => $id,
-            'name' => $name,
-            'sector' => 'Energy',
-            'companies' => [
-                [
-                    'ticker' => 'AAA',
-                    'name' => 'AAA Corp',
-                    'listing_exchange' => 'NYSE',
-                    'listing_currency' => 'USD',
-                    'reporting_currency' => 'USD',
-                    'fy_end_month' => 12,
-                    'alternative_tickers' => null,
-                ],
-            ],
-            'macro_requirements' => [
-                'commodity_benchmark' => 'BRENT',
-                'margin_proxy' => null,
-                'sector_index' => 'XLE',
-                'required_indicators' => [],
-                'optional_indicators' => [],
-            ],
-            'data_requirements' => [
-                'history_years' => 1,
-                'quarters_to_fetch' => 4,
-                'valuation_metrics' => [
-                    ['key' => 'market_cap', 'unit' => 'currency', 'required' => true],
-                ],
-                'annual_financial_metrics' => [],
-                'quarter_metrics' => [],
-                'operational_metrics' => [],
-            ],
-        ];
-
-        try {
-            return json_encode($config, JSON_THROW_ON_ERROR);
-        } catch (JsonException $exception) {
-            throw new RuntimeException($exception->getMessage(), 0, $exception);
-        }
     }
 }

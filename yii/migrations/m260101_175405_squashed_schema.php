@@ -53,21 +53,6 @@ class m260101_175405_squashed_schema extends Migration
 
         $this->createIndex('datapack_id', '{{%collection_run}}', ['datapack_id'], true);
 
-        // Table: industry_config
-        $this->createTable('{{%industry_config}}', [
-            'id' => $this->primaryKey(),
-            'industry_id' => $this->string(64)->notNull(),
-            'name' => $this->string(255)->notNull(),
-            'config_json' => $this->text()->notNull(),
-            'is_active' => $this->tinyInteger()->notNull()->defaultValue(1),
-            'created_at' => $this->timestamp()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
-            'updated_at' => $this->timestamp()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
-            'created_by' => $this->string(255)->defaultValue(null),
-            'updated_by' => $this->string(255)->defaultValue(null),
-        ]);
-
-        $this->createIndex('industry_id', '{{%industry_config}}', ['industry_id'], true);
-
         // Table: source_block
         $this->createTable('{{%source_block}}', [
             'id' => $this->primaryKey(),
@@ -151,6 +136,7 @@ class m260101_175405_squashed_schema extends Migration
             'optional_indicators' => $this->json()->defaultValue(null),
             'is_default_for_sector' => $this->string(100)->defaultValue(null),
             'created_by' => $this->string(100)->defaultValue(null),
+            'updated_by' => $this->string(100)->defaultValue(null),
             'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
             'updated_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
         ]);
@@ -218,6 +204,7 @@ class m260101_175405_squashed_schema extends Migration
             'policy_id' => $this->bigInteger()->defaultValue(null)->unsigned(),
             'is_active' => $this->tinyInteger()->notNull()->defaultValue(1),
             'created_by' => $this->string(100)->defaultValue(null),
+            'updated_by' => $this->string(100)->defaultValue(null),
             'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
             'updated_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
         ]);
@@ -369,8 +356,8 @@ class m260101_175405_squashed_schema extends Migration
             'fk-collection_run-industry_id',
             '{{%collection_run}}',
             ['industry_id'],
-            '{{%industry_config}}',
-            ['industry_id'],
+            '{{%industry_peer_group}}',
+            ['slug'],
             'CASCADE',
             'CASCADE'
         );
@@ -486,6 +473,5 @@ class m260101_175405_squashed_schema extends Migration
         $this->dropTable('{{%source_block}}');
         $this->dropTable('{{%collection_error}}');
         $this->dropTable('{{%collection_run}}');
-        $this->dropTable('{{%industry_config}}');
     }
 }
