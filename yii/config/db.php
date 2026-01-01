@@ -17,5 +17,4 @@ return [
     'username' => getenv('DB_USER') ?: 'aimm',
     'password' => getenv('DB_PASSWORD') ?: '',
     'charset' => 'utf8mb4',
-    'tablePrefix' => 'aimm_',
 ];
