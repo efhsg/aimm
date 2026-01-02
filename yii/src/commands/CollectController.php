@@ -24,7 +24,10 @@ final class CollectController extends Controller
     private const HEADER_DURATION = 'Duration';
     private const DURATION_FORMAT = '%.2fs';
 
-    public ?string $focal = null;
+    /**
+     * Comma-separated list of additional focal tickers.
+     */
+    public ?string $focals = null;
 
     public function __construct(
         string $id,
@@ -42,7 +45,17 @@ final class CollectController extends Controller
      */
     public function options($actionID): array
     {
-        return array_merge(parent::options($actionID), ['focal']);
+        return array_merge(parent::options($actionID), ['focals']);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function optionAliases(): array
+    {
+        return array_merge(parent::optionAliases(), [
+            'focal' => 'focals', // Deprecated: use --focals instead
+        ]);
     }
 
     /**
@@ -70,17 +83,15 @@ final class CollectController extends Controller
 
         Yii::$app->params['collectionIndustryId'] = $slug;
 
-        $cliOverride = is_string($this->focal) && $this->focal !== ''
-            ? strtoupper(trim($this->focal))
-            : null;
-        Yii::$app->params['collectionFocalTicker'] = $cliOverride;
+        $additionalFocals = $this->parseAdditionalFocals($this->focals);
+        Yii::$app->params['collectionFocalTickers'] = $additionalFocals;
 
         try {
             $result = $this->collector->collect(
                 new CollectPeerGroupRequest(
                     groupId: (int) $group['id'],
                     actorUsername: 'cli',
-                    focalTickerOverride: $cliOverride,
+                    additionalFocals: $additionalFocals,
                 )
             );
         } catch (Throwable $exception) {
@@ -163,5 +174,29 @@ final class CollectController extends Controller
         }
 
         return '| ' . implode(' | ', $cells) . " |\n";
+    }
+
+    /**
+     * Parse comma-separated focals string into normalized array.
+     *
+     * @return list<string>
+     */
+    private function parseAdditionalFocals(?string $focals): array
+    {
+        if ($focals === null || $focals === '') {
+            return [];
+        }
+
+        $tickers = explode(',', $focals);
+        $normalized = [];
+
+        foreach ($tickers as $ticker) {
+            $ticker = strtoupper(trim($ticker));
+            if ($ticker !== '') {
+                $normalized[] = $ticker;
+            }
+        }
+
+        return array_values(array_unique($normalized));
     }
 }
