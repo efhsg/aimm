@@ -17,12 +17,21 @@ $this->title = 'AIMM Dashboard';
 ?>
 
 <div class="dashboard">
-    <h1 class="page-title">Dashboard</h1>
-    <p class="page-subtitle">Equity Intelligence Pipeline</p>
+    <div class="dashboard__header">
+        <div>
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle">Equity Intelligence Pipeline Overview</p>
+        </div>
+        <div class="system-status-badge">
+            <span class="status-dot"></span>
+            System Operational
+        </div>
+    </div>
 
-    <div class="dashboard__cards">
-        <a href="<?= Url::to(['/peer-group/index']) ?>" class="dashboard__card">
-            <div class="dashboard__card-icon">
+    <div class="dashboard__grid">
+        <!-- Active Peer Groups -->
+        <a href="<?= Url::to(['/peer-group/index']) ?>" class="stat-card">
+            <div class="stat-card__icon bg-brand-light">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                     <circle cx="9" cy="7" r="4"/>
@@ -30,15 +39,16 @@ $this->title = 'AIMM Dashboard';
                     <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
             </div>
-            <div class="dashboard__card-content">
-                <div class="dashboard__card-value"><?= $peerGroupCounts['active'] ?></div>
-                <div class="dashboard__card-label">Active Peer Groups</div>
-                <div class="dashboard__card-detail"><?= $peerGroupCounts['total'] ?> total</div>
+            <div class="stat-card__content">
+                <div class="stat-card__label">Active Peer Groups</div>
+                <div class="stat-card__value"><?= $peerGroupCounts['active'] ?></div>
+                <div class="stat-card__meta">of <?= $peerGroupCounts['total'] ?> total groups</div>
             </div>
         </a>
 
-        <a href="<?= Url::to(['/collection-policy/index']) ?>" class="dashboard__card">
-            <div class="dashboard__card-icon">
+        <!-- Collection Policies -->
+        <a href="<?= Url::to(['/collection-policy/index']) ?>" class="stat-card">
+            <div class="stat-card__icon bg-brand-accent">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                     <polyline points="14 2 14 8 20 8"/>
@@ -47,105 +57,109 @@ $this->title = 'AIMM Dashboard';
                     <polyline points="10 9 9 9 8 9"/>
                 </svg>
             </div>
-            <div class="dashboard__card-content">
-                <div class="dashboard__card-value"><?= $policyCount ?></div>
-                <div class="dashboard__card-label">Collection Policies</div>
-                <div class="dashboard__card-detail">Data requirements</div>
+            <div class="stat-card__content">
+                <div class="stat-card__label">Collection Policies</div>
+                <div class="stat-card__value"><?= $policyCount ?></div>
+                <div class="stat-card__meta">Active definitions</div>
             </div>
         </a>
 
-        <a href="<?= Url::to(['/collection-run/index']) ?>" class="dashboard__card">
-            <div class="dashboard__card-icon">
+        <!-- Collection Runs -->
+        <a href="<?= Url::to(['/collection-run/index']) ?>" class="stat-card">
+            <div class="stat-card__icon bg-viz-1">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                 </svg>
             </div>
-            <div class="dashboard__card-content">
-                <div class="dashboard__card-value"><?= $runStats['total'] ?></div>
-                <div class="dashboard__card-label">Collection Runs</div>
-                <div class="dashboard__card-detail">
+            <div class="stat-card__content">
+                <div class="stat-card__label">Collection Runs</div>
+                <div class="stat-card__value"><?= $runStats['total'] ?></div>
+                <div class="stat-card__meta">
                     <?php if ($runStats['running'] > 0): ?>
-                        <span class="badge badge--info"><?= $runStats['running'] ?> running</span>
-                    <?php endif; ?>
-                    <?php if ($runStats['failed'] > 0): ?>
-                        <span class="badge badge--error"><?= $runStats['failed'] ?> failed</span>
-                    <?php endif; ?>
-                    <?php if ($runStats['complete'] > 0): ?>
-                        <span class="badge badge--success"><?= $runStats['complete'] ?> complete</span>
+                        <span class="text-info"><?= $runStats['running'] ?> active</span>
+                    <?php elseif ($runStats['failed'] > 0): ?>
+                        <span class="text-error"><?= $runStats['failed'] ?> issues</span>
+                    <?php else: ?>
+                        <span class="text-success">All systems normal</span>
                     <?php endif; ?>
                 </div>
             </div>
         </a>
 
-        <div class="dashboard__card dashboard__card--status">
-            <div class="dashboard__card-icon dashboard__card-icon--success">
+        <!-- System Health -->
+        <div class="stat-card stat-card--health">
+            <div class="stat-card__icon bg-success">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
                     <polyline points="22 4 12 14.01 9 11.01"/>
                 </svg>
             </div>
-            <div class="dashboard__card-content">
-                <div class="dashboard__card-value">Healthy</div>
-                <div class="dashboard__card-label">System Status</div>
-                <div class="dashboard__card-detail">All services operational</div>
+            <div class="stat-card__content">
+                <div class="stat-card__label">Pipeline Health</div>
+                <div class="stat-card__value">100%</div>
+                <div class="stat-card__meta">All services operational</div>
             </div>
         </div>
     </div>
 
     <?php if (!empty($recentRuns)): ?>
-    <div class="dashboard__section">
-        <div class="dashboard__section-header">
-            <h2 class="dashboard__section-title">Recent Collection Runs</h2>
-            <a href="<?= Url::to(['/collection-run/index']) ?>" class="btn btn--secondary btn--sm">View All</a>
+    <div class="content-card">
+        <div class="content-card__header">
+            <h2 class="content-card__title">Recent Activity</h2>
+            <a href="<?= Url::to(['/collection-run/index']) ?>" class="btn btn--secondary btn--sm">View All Runs</a>
         </div>
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Industry</th>
-                    <th>Status</th>
-                    <th>Started</th>
-                    <th>Duration</th>
-                    <th>Companies</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($recentRuns as $run): ?>
-                <tr>
-                    <td>
-                        <a href="<?= Url::to(['/collection-run/view', 'id' => $run['id']]) ?>">
-                            <?= Html::encode($run['industry_id']) ?>
-                        </a>
-                    </td>
-                    <td>
-                        <?php
-                        $statusClass = match($run['status']) {
-                            'complete' => 'badge--success',
-                            'failed' => 'badge--error',
-                            'running' => 'badge--info',
-                            default => 'badge--default',
-                        };
-                    ?>
-                        <span class="badge <?= $statusClass ?>"><?= Html::encode($run['status']) ?></span>
-                    </td>
-                    <td><?= Html::encode($run['started_at']) ?></td>
-                    <td>
-                        <?php if ($run['duration_seconds']): ?>
-                            <?= (int)$run['duration_seconds'] ?>s
-                        <?php else: ?>
-                            -
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if ($run['companies_total']): ?>
-                            <?= (int)$run['companies_success'] ?>/<?= (int)$run['companies_total'] ?>
-                        <?php else: ?>
-                            -
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Industry / Target</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                        <th class="text-right">Duration</th>
+                        <th class="text-right">Coverage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($recentRuns as $run): ?>
+                    <tr>
+                        <td class="font-medium">
+                            <a href="<?= Url::to(['/collection-run/view', 'id' => $run['id']]) ?>" class="link-reset">
+                                <?= Html::encode($run['industry_id']) ?>
+                            </a>
+                        </td>
+                        <td>
+                            <?php
+                            $statusClass = match($run['status']) {
+                                'complete' => 'badge--success',
+                                'failed' => 'badge--error',
+                                'running' => 'badge--info',
+                                default => 'badge--default',
+                            };
+                        ?>
+                            <span class="badge <?= $statusClass ?>"><?= Html::encode(ucfirst($run['status'])) ?></span>
+                        </td>
+                        <td class="text-secondary"><?= Html::encode($run['started_at']) ?></td>
+                        <td class="text-right font-mono">
+                            <?php if ($run['duration_seconds']): ?>
+                                <?= (int)$run['duration_seconds'] ?>s
+                            <?php else: ?>
+                                -
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-right font-mono">
+                            <?php if ($run['companies_total']): ?>
+                                <span class="<?= $run['companies_success'] === $run['companies_total'] ? 'text-success' : '' ?>">
+                                    <?= (int)$run['companies_success'] ?>/<?= (int)$run['companies_total'] ?>
+                                </span>
+                            <?php else: ?>
+                                -
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
     <?php endif; ?>
 </div>
@@ -153,119 +167,225 @@ $this->title = 'AIMM Dashboard';
 <style>
 .dashboard {
     padding: var(--space-6) 0;
+    max-width: var(--container-xl);
+    margin: 0 auto;
+}
+
+.dashboard__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: var(--space-8);
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: var(--space-6);
 }
 
 .page-title {
-    font-size: var(--font-size-3xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-3xl);
+    font-weight: var(--font-bold);
+    color: var(--brand-primary);
     margin: 0 0 var(--space-2) 0;
+    letter-spacing: -0.02em;
 }
 
 .page-subtitle {
-    font-size: var(--font-size-lg);
+    font-size: var(--text-lg);
     color: var(--text-secondary);
-    margin: 0 0 var(--space-8) 0;
+    margin: 0;
 }
 
-.dashboard__cards {
+.system-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-success-light);
+    color: var(--color-success);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background-color: currentColor;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.dashboard__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: var(--space-6);
     margin-bottom: var(--space-10);
 }
 
-.dashboard__card {
+.stat-card {
     display: flex;
     align-items: flex-start;
     gap: var(--space-4);
     padding: var(--space-6);
-    background: var(--surface-primary);
+    background: var(--bg-surface);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
     text-decoration: none;
     color: inherit;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: all var(--duration-fast) var(--easing-default);
+    box-shadow: var(--shadow-sm);
 }
 
-.dashboard__card:hover {
+.stat-card:hover {
+    transform: translateY(-2px);
     border-color: var(--brand-primary);
     box-shadow: var(--shadow-md);
 }
 
-.dashboard__card--status {
+.stat-card--health {
     cursor: default;
+    background: var(--bg-elevated);
 }
 
-.dashboard__card--status:hover {
+.stat-card--health:hover {
+    transform: none;
     border-color: var(--border-default);
-    box-shadow: none;
+    box-shadow: var(--shadow-sm);
 }
 
-.dashboard__card-icon {
+.stat-card__icon {
     flex-shrink: 0;
     width: 48px;
     height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--surface-secondary);
     border-radius: var(--radius-md);
-    color: var(--brand-primary);
+    color: var(--text-inverse);
 }
 
-.dashboard__card-icon svg {
+.bg-brand-light { background-color: var(--brand-light); }
+.bg-brand-accent { background-color: var(--brand-accent); }
+.bg-viz-1 { background-color: var(--viz-1); }
+.bg-success { background-color: var(--color-success); }
+
+.stat-card__icon svg {
     width: 24px;
     height: 24px;
 }
 
-.dashboard__card-icon--success {
-    background: var(--success-bg);
-    color: var(--success-text);
-}
-
-.dashboard__card-content {
+.stat-card__content {
     flex: 1;
     min-width: 0;
 }
 
-.dashboard__card-value {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--text-primary);
-    line-height: 1.2;
-}
-
-.dashboard__card-label {
-    font-size: var(--font-size-sm);
+.stat-card__label {
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
     color: var(--text-secondary);
-    margin-top: var(--space-1);
+    margin-bottom: var(--space-1);
 }
 
-.dashboard__card-detail {
-    font-size: var(--font-size-xs);
+.stat-card__value {
+    font-size: var(--text-3xl);
+    font-weight: var(--font-bold);
+    color: var(--brand-primary);
+    line-height: 1.1;
+    margin-bottom: var(--space-2);
+}
+
+.stat-card__meta {
+    font-size: var(--text-xs);
     color: var(--text-tertiary);
-    margin-top: var(--space-2);
+    font-family: var(--font-mono);
 }
 
-.dashboard__section {
-    background: var(--surface-primary);
+.content-card {
+    background: var(--bg-surface);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.content-card__header {
     padding: var(--space-6);
-}
-
-.dashboard__section-header {
+    border-bottom: 1px solid var(--border-subtle);
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    margin-bottom: var(--space-4);
+    align-items: center;
 }
 
-.dashboard__section-title {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
+.content-card__title {
+    font-size: var(--text-lg);
+    font-weight: var(--font-semibold);
     color: var(--text-primary);
     margin: 0;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.table th {
+    text-align: left;
+    padding: var(--space-3) var(--space-6);
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+    font-weight: var(--font-medium);
+    text-transform: uppercase;
+    font-size: var(--text-xs);
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.table td {
+    padding: var(--space-4) var(--space-6);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.table tr:hover td {
+    background-color: var(--bg-elevated);
+}
+
+.text-right { text-align: right; }
+.font-medium { font-weight: var(--font-medium); }
+.font-mono { font-family: var(--font-mono); }
+.text-secondary { color: var(--text-secondary); }
+.text-success { color: var(--color-success); }
+.text-error { color: var(--color-error); }
+.text-info { color: var(--color-info); }
+.link-reset {
+    color: inherit;
+    text-decoration: none;
+}
+.link-reset:hover {
+    color: var(--brand-primary);
+    text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+    .dashboard__header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-4);
+    }
 }
 </style>
