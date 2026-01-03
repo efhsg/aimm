@@ -10,6 +10,17 @@ Document the complete AIMM equity intelligence pipeline for internal operators, 
 ## Layout Variants
 Two versions are defined to compare scope.
 
+### Version Selection Guide
+Choose the version based on deployment context:
+
+| Context | Recommended | Rationale |
+|---------|-------------|-----------|
+| New team member onboarding | Version A | Focused scope reduces cognitive load |
+| Day-to-day operations | Version B | Admin UI docs needed for peer group and run management |
+| External documentation (future) | Version A | Admin UI is internal-only |
+
+**Deployment:** Versions are defined at build time via documentation generator config (e.g., VitePress sidebar config). A single deployment serves one version. To switch, rebuild with the alternate config.
+
 ### Version A: Pipeline and Artifacts Only
 **Global Navigation**
 - **Primary**
@@ -229,6 +240,11 @@ These pages document the internal admin interface for pipeline inputs and run mo
 
 ### 11) Admin UI Overview
 **Goal:** Provide a concise map of operational entities and how they connect to the pipeline.
+- **Access Control**
+  - Authentication: HTTP Basic Auth via `AdminAuthFilter`.
+  - Credentials: Environment variables `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
+  - Authorization: All authenticated users have full access (no role-based restrictions).
+  - Audit: All create/update operations log `created_by`/`updated_by` with username.
 - **Entities**
   - Peer Groups (focal + peers)
   - Collection Policies (data requirements + macro rules)
