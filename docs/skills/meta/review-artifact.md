@@ -27,6 +27,9 @@ Evaluate designs or analyses for correctness, completeness, clarity, risk, and f
 
 - `artifactContent`: The design or analysis content to review (inline text or file path)
 - `artifactType`: Type of artifact — `design` | `analysis` | `auto` (default: `auto`)
+  - `design`: Documents proposing architecture, components, or implementation approaches
+  - `analysis`: Documents evaluating data, trade-offs, or existing systems
+  - `auto`: Infer type from content—treat as `design` if it proposes new structures or behaviors, otherwise `analysis`
 - `reviewObjectives`: Specific goals or constraints to audit against (optional)
 - `areasOfConcern`: Specific topics to focus on (optional)
 
@@ -131,43 +134,46 @@ If no artifact is identifiable, request it before proceeding.
 
 ## 3. Strengths
 
-- (none or list)
+- (bullet list, or omit section if none)
 
 ## 4. Issues & Gaps
 
 ### Critical
 
-- (none or list)
+- (bullet list, or omit subsection if none)
 
 ### High
 
 | Issue | Impact | Evidence |
 |-------|--------|----------|
-| (none) | | |
 | Description | How it affects the goal | Quote or section reference |
+
+(omit table if none)
 
 ### Medium
 
 | Issue | Impact | Evidence |
 |-------|--------|----------|
-| (none) | | |
-| ... | ... | ... |
+| Description | How it affects the goal | Quote or section reference |
+
+(omit table if none)
 
 ### Low
 
-- (none or list)
+- (bullet list, or omit subsection if none)
 
 ## 5. Assumptions & Inferences
 
-- ASSUMED (by author): (none or list)
-- INFERRED (by reviewer): (none or list)
+- ASSUMED (by author): (bullet list, or state "none identified")
+- INFERRED (by reviewer): (bullet list, or state "none")
 
 ## 6. Risks
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| (none) | | | |
 | Description | Low/Medium/High | Low/Medium/High | Suggested action |
+
+(omit table if none)
 
 ## 7. Recommendations (Prioritized)
 
@@ -180,6 +186,60 @@ If no artifact is identifiable, request it before proceeding.
 Refuse the review only if:
 - No design or analysis content is provided after requesting it
 - The task requests implementation instead of review
+
+## Example
+
+**Input artifact** (inline):
+
+```
+<artifact>
+## Cache Layer Design
+
+Add Redis caching to reduce API latency.
+
+### Approach
+- Cache all GET responses for 1 hour
+- Use request URL as cache key
+- Invalidate on any POST/PUT/DELETE
+
+### Components
+- CacheMiddleware in handlers/
+</artifact>
+```
+
+**Review output** (abbreviated):
+
+```
+## 1. Restated Goal
+
+Add a Redis caching layer to reduce API response latency.
+
+## 2. Summary Verdict
+
+The design addresses the core goal but lacks detail on cache invalidation
+granularity and error handling. Recommend revising to address High issues
+before implementation.
+
+## 4. Issues & Gaps
+
+### High
+
+| Issue | Impact | Evidence |
+|-------|--------|----------|
+| Over-broad invalidation | Any write clears entire cache, negating benefits | "Invalidate on any POST/PUT/DELETE" |
+| No TTL justification | 1-hour TTL may serve stale data for time-sensitive endpoints | "Cache all GET responses for 1 hour" |
+
+## 5. Assumptions & Inferences
+
+- ASSUMED (by author): Redis is already available in the infrastructure
+- INFERRED (by reviewer): "handlers/" placement implies CacheMiddleware is a handler, not middleware
+
+## 7. Recommendations (Prioritized)
+
+1. **[High]** Define per-resource invalidation rules instead of global invalidation
+2. **[High]** Specify TTL by endpoint type (e.g., 5 min for prices, 1 hour for static data)
+3. **[Medium]** Clarify whether CacheMiddleware is a Yii filter or a handler
+```
 
 ## Definition of Done
 
