@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "docs:install": "npm --prefix site install",
+    "docs:dev": "npm --prefix site run dev",
+    "docs:build": "npm --prefix site run build",
+    "docs:preview": "npm --prefix site run preview"
+  }
+}

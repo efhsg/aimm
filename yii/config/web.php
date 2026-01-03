@@ -18,7 +18,7 @@ return [
     'id' => 'aimm-web',
     'basePath' => dirname(__DIR__),
     'controllerNamespace' => 'app\\controllers',
-    'defaultRoute' => 'health/index',
+    'defaultRoute' => 'dashboard/index',
     'aliases' => [
         '@app' => dirname(__DIR__) . '/src',
     ],
@@ -45,33 +45,37 @@ return [
                 'normalizeTrailingSlash' => true,
             ],
             'rules' => [
-                // Peer Group
-                'peer-group' => 'peer-group/index',
-                'peer-group/create' => 'peer-group/create',
-                'peer-group/<slug:[a-z0-9-]+>' => 'peer-group/view',
-                'peer-group/<slug:[a-z0-9-]+>/edit' => 'peer-group/update',
-                'peer-group/<slug:[a-z0-9-]+>/toggle' => 'peer-group/toggle',
-                'peer-group/<slug:[a-z0-9-]+>/add-members' => 'peer-group/add-members',
-                'peer-group/<slug:[a-z0-9-]+>/remove-member' => 'peer-group/remove-member',
-                'peer-group/<slug:[a-z0-9-]+>/set-focal' => 'peer-group/set-focal',
-                'peer-group/<slug:[a-z0-9-]+>/add-focal' => 'peer-group/add-focal',
-                'peer-group/<slug:[a-z0-9-]+>/remove-focal' => 'peer-group/remove-focal',
-                'peer-group/<slug:[a-z0-9-]+>/clear-focals' => 'peer-group/clear-focals',
-                'peer-group/<slug:[a-z0-9-]+>/collect' => 'peer-group/collect',
+                // Health check
+                'health' => 'health/index',
 
-                // Collection Run
-                'collection-run/<id:\d+>' => 'collection-run/view',
-                'collection-run/<id:\d+>/status' => 'collection-run/status',
+                // Admin: Peer Group
+                'admin/peer-group' => 'peer-group/index',
+                'admin/peer-group/create' => 'peer-group/create',
+                'admin/peer-group/<slug:[a-z0-9-]+>' => 'peer-group/view',
+                'admin/peer-group/<slug:[a-z0-9-]+>/edit' => 'peer-group/update',
+                'admin/peer-group/<slug:[a-z0-9-]+>/toggle' => 'peer-group/toggle',
+                'admin/peer-group/<slug:[a-z0-9-]+>/add-members' => 'peer-group/add-members',
+                'admin/peer-group/<slug:[a-z0-9-]+>/remove-member' => 'peer-group/remove-member',
+                'admin/peer-group/<slug:[a-z0-9-]+>/set-focal' => 'peer-group/set-focal',
+                'admin/peer-group/<slug:[a-z0-9-]+>/add-focal' => 'peer-group/add-focal',
+                'admin/peer-group/<slug:[a-z0-9-]+>/remove-focal' => 'peer-group/remove-focal',
+                'admin/peer-group/<slug:[a-z0-9-]+>/clear-focals' => 'peer-group/clear-focals',
+                'admin/peer-group/<slug:[a-z0-9-]+>/collect' => 'peer-group/collect',
 
-                // Collection Policy
-                'collection-policy' => 'collection-policy/index',
-                'collection-policy/create' => 'collection-policy/create',
-                'collection-policy/<slug:[a-z0-9-]+>' => 'collection-policy/view',
-                'collection-policy/<slug:[a-z0-9-]+>/edit' => 'collection-policy/update',
-                'collection-policy/<slug:[a-z0-9-]+>/delete' => 'collection-policy/delete',
-                'collection-policy/<slug:[a-z0-9-]+>/export' => 'collection-policy/export',
-                'collection-policy/<slug:[a-z0-9-]+>/set-default' => 'collection-policy/set-default',
-                'collection-policy/validate-json' => 'collection-policy/validate-json',
+                // Admin: Collection Run
+                'admin/collection-run' => 'collection-run/index',
+                'admin/collection-run/<id:\d+>' => 'collection-run/view',
+                'admin/collection-run/<id:\d+>/status' => 'collection-run/status',
+
+                // Admin: Collection Policy
+                'admin/collection-policy' => 'collection-policy/index',
+                'admin/collection-policy/create' => 'collection-policy/create',
+                'admin/collection-policy/<slug:[a-z0-9-]+>' => 'collection-policy/view',
+                'admin/collection-policy/<slug:[a-z0-9-]+>/edit' => 'collection-policy/update',
+                'admin/collection-policy/<slug:[a-z0-9-]+>/delete' => 'collection-policy/delete',
+                'admin/collection-policy/<slug:[a-z0-9-]+>/export' => 'collection-policy/export',
+                'admin/collection-policy/<slug:[a-z0-9-]+>/set-default' => 'collection-policy/set-default',
+                'admin/collection-policy/validate-json' => 'collection-policy/validate-json',
             ],
         ],
         'db' => $db,
