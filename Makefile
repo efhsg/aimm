@@ -1,4 +1,4 @@
-.PHONY: fix fix-file fix-changed
+.PHONY: fix fix-file fix-changed docs-install docs-dev docs-build docs-preview
 
 fix:
 	./php-cs-fixer fix --using-cache=no --rules=@PSR12 --path-mode=override yii/src
@@ -20,3 +20,15 @@ fix-changed:
 
 migrate-test:
 	docker exec -e YII_ENV=test aimm_yii ./yii migrate
+
+docs-install:
+	npm run docs:install
+
+docs-dev:
+	npm run docs:dev
+
+docs-build:
+	npm run docs:build
+
+docs-preview:
+	npm run docs:preview
