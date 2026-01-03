@@ -22,6 +22,18 @@ final class FmpAdapter implements SourceAdapterInterface
     private const ADAPTER_ID = 'fmp';
 
     /**
+     * Supported endpoint path segments keyed by adapter type.
+     */
+    private const ENDPOINT_SEGMENTS = [
+        'quote' => 'quote',
+        'key-metrics' => 'key-metrics',
+        'ratios' => 'ratios',
+        'income-statement' => 'income-statement',
+        'cash-flow-statement' => 'cash-flow-statement',
+        'balance-sheet-statement' => 'balance-sheet-statement',
+    ];
+
+    /**
      * Quote endpoint field mappings (scalar values).
      */
     private const QUOTE_FIELDS = [
@@ -160,23 +172,16 @@ final class FmpAdapter implements SourceAdapterInterface
 
     private function detectEndpointType(string $url): string
     {
-        if (str_contains($url, '/quote/')) {
-            return 'quote';
+        $path = parse_url($url, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            return 'unknown';
         }
-        if (str_contains($url, '/key-metrics/')) {
-            return 'key-metrics';
-        }
-        if (str_contains($url, '/ratios/')) {
-            return 'ratios';
-        }
-        if (str_contains($url, '/income-statement/')) {
-            return 'income-statement';
-        }
-        if (str_contains($url, '/cash-flow-statement/')) {
-            return 'cash-flow-statement';
-        }
-        if (str_contains($url, '/balance-sheet-statement/')) {
-            return 'balance-sheet-statement';
+
+        foreach (self::ENDPOINT_SEGMENTS as $segment => $type) {
+            $pattern = sprintf('~/%s(/|$)~', preg_quote($segment, '~'));
+            if (preg_match($pattern, $path) === 1) {
+                return $type;
+            }
         }
 
         return 'unknown';

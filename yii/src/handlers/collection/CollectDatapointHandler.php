@@ -6,6 +6,7 @@ namespace app\handlers\collection;
 
 use app\adapters\SourceAdapterInterface;
 use app\clients\FetchRequest;
+use app\clients\UrlSanitizer;
 use app\clients\WebFetchClientInterface;
 use app\dto\AdaptRequest;
 use app\dto\CollectDatapointRequest;
@@ -81,12 +82,18 @@ final class CollectDatapointHandler implements CollectDatapointInterface
         SourceCandidate $candidate
     ): SourceAttempt {
         $attemptedAt = new DateTimeImmutable();
+        $safeUrl = UrlSanitizer::sanitize($candidate->url);
+
+        $cachedFetchResult = $this->getCachedFetchResult($request, $candidate);
+        if ($cachedFetchResult !== null) {
+            return $this->handleFetchResult($request, $candidate, $cachedFetchResult, $attemptedAt, $safeUrl);
+        }
 
         if ($this->webFetchClient->isRateLimited($candidate->domain)) {
             $this->logger->log(
                 [
                     'message' => 'Source rate limited, skipping',
-                    'url' => $candidate->url,
+                    'url' => $safeUrl,
                     'domain' => $candidate->domain,
                 ],
                 Logger::LEVEL_INFO,
@@ -94,7 +101,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             );
 
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: self::OUTCOME_RATE_LIMITED,
@@ -106,7 +113,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             $fetchResult = $this->fetch($candidate);
         } catch (RateLimitException $e) {
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: self::OUTCOME_RATE_LIMITED,
@@ -114,7 +121,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             );
         } catch (BlockedException $e) {
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: self::OUTCOME_BLOCKED,
@@ -126,7 +133,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
                 : self::OUTCOME_NETWORK_ERROR;
 
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: $reason,
@@ -136,7 +143,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             $this->logger->log(
                 [
                     'message' => 'Unexpected fetch error',
-                    'url' => $candidate->url,
+                    'url' => $safeUrl,
                     'error' => $e->getMessage(),
                 ],
                 Logger::LEVEL_ERROR,
@@ -144,7 +151,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             );
 
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: self::OUTCOME_NETWORK_ERROR,
@@ -152,9 +159,21 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             );
         }
 
+        $this->storeFetchResultInCache($request, $candidate, $fetchResult);
+
+        return $this->handleFetchResult($request, $candidate, $fetchResult, $attemptedAt, $safeUrl);
+    }
+
+    private function handleFetchResult(
+        CollectDatapointRequest $request,
+        SourceCandidate $candidate,
+        FetchResult $fetchResult,
+        DateTimeImmutable $attemptedAt,
+        string $safeUrl
+    ): SourceAttempt {
         if ($fetchResult->statusCode >= 400) {
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: self::OUTCOME_HTTP_ERROR,
@@ -173,7 +192,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             $this->logger->log(
                 [
                     'message' => 'Adapter parse error',
-                    'url' => $candidate->url,
+                    'url' => $safeUrl,
                     'error' => $e->getMessage(),
                 ],
                 Logger::LEVEL_WARNING,
@@ -181,7 +200,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             );
 
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: self::OUTCOME_PARSE_FAILED,
@@ -199,7 +218,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
                 [
                     'message' => 'Successfully extracted historical datapoint',
                     'datapoint_key' => $request->datapointKey,
-                    'url' => $candidate->url,
+                    'url' => $safeUrl,
                     'period_count' => $historicalExtraction->getPeriodCount(),
                 ],
                 Logger::LEVEL_INFO,
@@ -207,7 +226,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             );
 
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: self::OUTCOME_SUCCESS,
@@ -220,7 +239,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
 
         if ($extraction === null) {
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: self::OUTCOME_NOT_IN_PAGE,
@@ -231,7 +250,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
 
         if ($request->asOfMin !== null && !$this->isFresh($extraction, $request->asOfMin)) {
             return new SourceAttempt(
-                url: $candidate->url,
+                url: $safeUrl,
                 providerId: $candidate->adapterId,
                 attemptedAt: $attemptedAt,
                 outcome: self::OUTCOME_STALE,
@@ -250,7 +269,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             [
                 'message' => 'Successfully extracted datapoint',
                 'datapoint_key' => $request->datapointKey,
-                'url' => $candidate->url,
+                'url' => $safeUrl,
                 'value' => $extraction->rawValue,
             ],
             Logger::LEVEL_INFO,
@@ -258,7 +277,7 @@ final class CollectDatapointHandler implements CollectDatapointInterface
         );
 
         return new SourceAttempt(
-            url: $candidate->url,
+            url: $safeUrl,
             providerId: $candidate->adapterId,
             attemptedAt: $attemptedAt,
             outcome: self::OUTCOME_SUCCESS,
@@ -272,6 +291,29 @@ final class CollectDatapointHandler implements CollectDatapointInterface
             url: $candidate->url,
             headers: $candidate->headers,
         ));
+    }
+
+    private function getCachedFetchResult(
+        CollectDatapointRequest $request,
+        SourceCandidate $candidate
+    ): ?FetchResult {
+        if ($request->fmpResponseCache === null) {
+            return null;
+        }
+
+        return $request->fmpResponseCache->get($candidate->url);
+    }
+
+    private function storeFetchResultInCache(
+        CollectDatapointRequest $request,
+        SourceCandidate $candidate,
+        FetchResult $fetchResult
+    ): void {
+        if ($request->fmpResponseCache === null) {
+            return;
+        }
+
+        $request->fmpResponseCache->set($candidate->url, $fetchResult);
     }
 
     private function isFresh(Extraction $extraction, DateTimeImmutable $asOfMin): bool

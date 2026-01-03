@@ -20,6 +20,7 @@ final class FileRateLimiter implements RateLimiterInterface
         'finance.yahoo.com' => 2000,
         'query1.finance.yahoo.com' => 2500,
         'www.reuters.com' => 3000,
+        'financialmodelingprep.com' => 3000, // FMP free tier has 300 reqs/min = 200ms, but be conservative
         'default' => 1000,
     ];
 

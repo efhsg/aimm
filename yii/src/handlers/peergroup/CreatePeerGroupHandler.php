@@ -132,7 +132,8 @@ final class CreatePeerGroupHandler implements CreatePeerGroupInterface
     {
         $groupId = (int) $row['id'];
         $memberCount = $this->memberQuery->countByGroup($groupId);
-        $focal = $this->memberQuery->findFocalByGroup($groupId);
+        $focals = $this->memberQuery->findFocalsByGroup($groupId);
+        $focalTickers = array_column($focals, 'ticker');
 
         return new PeerGroupResponse(
             id: $groupId,
@@ -144,7 +145,8 @@ final class CreatePeerGroupHandler implements CreatePeerGroupInterface
             policyName: null,
             isActive: (bool) $row['is_active'],
             memberCount: $memberCount,
-            focalTicker: $focal['ticker'] ?? null,
+            focalCount: count($focalTickers),
+            focalTickers: $focalTickers,
             lastRunStatus: null,
             lastRunAt: null,
             createdAt: new DateTimeImmutable($row['created_at']),

@@ -27,22 +27,34 @@ INSERT INTO collection_policy (
     5,
     8,
     JSON_ARRAY(
-        JSON_OBJECT('key','market_cap','unit','currency','required',1,'required_scope','all'),
-        JSON_OBJECT('key','trailing_pe','unit','ratio','required',1,'required_scope','all'),
-        JSON_OBJECT('key','div_yield','unit','percent','required',1,'required_scope','all'),
-        JSON_OBJECT('key','free_cash_flow_ttm','unit','currency','required',0),
-        JSON_OBJECT('key','fcf_yield','unit','percent','required',1,'required_scope','focal')
+        JSON_OBJECT('key','market_cap','unit','currency','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','fwd_pe','unit','ratio','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','ev_ebitda','unit','ratio','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','trailing_pe','unit','ratio','required',FALSE),
+        JSON_OBJECT('key','fcf_yield','unit','percent','required',TRUE,'required_scope','focal'),
+        JSON_OBJECT('key','div_yield','unit','percent','required',TRUE,'required_scope','all')
     ),
-    NULL,
-    NULL,
     JSON_ARRAY(
-        JSON_OBJECT('key','total_production_kboed','unit','number','required',0),
-        JSON_OBJECT('key','lng_liquefaction_volumes','unit','number','required',0)
+        JSON_OBJECT('key','revenue','unit','currency','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','ebitda','unit','currency','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','net_income','unit','currency','required',TRUE,'required_scope','focal'),
+        JSON_OBJECT('key','free_cash_flow','unit','currency','required',TRUE,'required_scope','focal'),
+        JSON_OBJECT('key','net_debt','unit','currency','required',FALSE)
+    ),
+    JSON_ARRAY(
+        JSON_OBJECT('key','revenue','unit','currency','required',TRUE,'required_scope','focal'),
+        JSON_OBJECT('key','ebitda','unit','currency','required',FALSE),
+        JSON_OBJECT('key','net_income','unit','currency','required',FALSE),
+        JSON_OBJECT('key','free_cash_flow','unit','currency','required',FALSE)
+    ),
+    JSON_ARRAY(
+        JSON_OBJECT('key','total_production_kboed','unit','number','required',FALSE),
+        JSON_OBJECT('key','lng_liquefaction_volumes','unit','number','required',FALSE)
     ),
     'BRENT',
     'GLOBAL_REFINING_MARGIN',
-    NULL,
-    JSON_ARRAY('Natural Gas Henry Hub','TTF Gas Price','Carbon Price (ETS)'),
+    'XLE',
+    JSON_ARRAY('natural_gas', 'brent_crude'),
     NULL,
     NULL,
     'admin',

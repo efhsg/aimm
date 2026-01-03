@@ -14,6 +14,9 @@ use yii\log\Logger;
 
 /**
  * Handler for setting the focal company in a peer group.
+ *
+ * @deprecated Use AddFocalHandler + ClearFocalsHandler for multi-focal support.
+ *             This handler clears all existing focals before setting the new one.
  */
 final class SetFocalHandler implements SetFocalInterface
 {

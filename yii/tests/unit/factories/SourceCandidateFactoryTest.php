@@ -6,6 +6,7 @@ namespace tests\unit\factories;
 
 use app\factories\SourceCandidateFactory;
 use Codeception\Test\Unit;
+use yii\log\Logger;
 
 /**
  * @covers \app\factories\SourceCandidateFactory
@@ -93,5 +94,87 @@ final class SourceCandidateFactoryTest extends Unit
         $this->assertSame('api.eia.gov', $inventoryCandidates[0]->domain);
         $this->assertStringContainsString('seriesid/PET.WCRSTUS1.W', $inventoryCandidates[0]->url);
         $this->assertStringContainsString('api_key=DEMO_KEY', $inventoryCandidates[0]->url);
+    }
+
+    public function testFinancialsMetricUsesIncomeStatementOnly(): void
+    {
+        $factory = new SourceCandidateFactory(fmpApiKey: 'DEMO_KEY');
+        $candidates = $factory->forFinancialsMetric(
+            ticker: 'XOM',
+            metricKey: 'financials.revenue',
+            exchange: 'NYSE'
+        );
+
+        $fmpCandidates = array_values(array_filter(
+            $candidates,
+            static fn ($candidate): bool => $candidate->adapterId === 'fmp'
+        ));
+
+        $this->assertCount(1, $fmpCandidates);
+        $this->assertStringContainsString('income-statement', $fmpCandidates[0]->url);
+        $this->assertStringContainsString('period=annual', $fmpCandidates[0]->url);
+    }
+
+    public function testQuartersMetricUsesCashFlowStatement(): void
+    {
+        $factory = new SourceCandidateFactory(fmpApiKey: 'DEMO_KEY');
+        $candidates = $factory->forQuartersMetric(
+            ticker: 'XOM',
+            metricKey: 'quarters.free_cash_flow',
+            exchange: 'NYSE'
+        );
+
+        $fmpCandidates = array_values(array_filter(
+            $candidates,
+            static fn ($candidate): bool => $candidate->adapterId === 'fmp'
+        ));
+
+        $this->assertCount(1, $fmpCandidates);
+        $this->assertStringContainsString('cash-flow-statement', $fmpCandidates[0]->url);
+        $this->assertStringContainsString('period=quarter', $fmpCandidates[0]->url);
+    }
+
+    public function testUnknownMetricDefaultsToAllStatementsAndLogsWarning(): void
+    {
+        $logger = $this->createMock(Logger::class);
+        $logger->expects($this->once())
+            ->method('log')
+            ->with(
+                $this->arrayHasKey('message'),
+                Logger::LEVEL_WARNING,
+                'collection'
+            );
+
+        $factory = new SourceCandidateFactory(
+            fmpApiKey: 'DEMO_KEY',
+            logger: $logger
+        );
+        $candidates = $factory->forFinancialsMetric(
+            ticker: 'XOM',
+            metricKey: 'financials.unknown_metric',
+            exchange: 'NYSE'
+        );
+
+        $fmpCandidates = array_values(array_filter(
+            $candidates,
+            static fn ($candidate): bool => $candidate->adapterId === 'fmp'
+        ));
+
+        $this->assertCount(3, $fmpCandidates);
+        $priorities = [];
+        foreach ($fmpCandidates as $candidate) {
+            if (str_contains($candidate->url, 'income-statement')) {
+                $priorities[] = $candidate->priority;
+            }
+            if (str_contains($candidate->url, 'cash-flow-statement')) {
+                $priorities[] = $candidate->priority;
+            }
+            if (str_contains($candidate->url, 'balance-sheet-statement')) {
+                $priorities[] = $candidate->priority;
+            }
+        }
+
+        sort($priorities);
+        $this->assertSame([1, 2, 3], $priorities);
     }
 }

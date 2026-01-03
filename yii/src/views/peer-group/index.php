@@ -117,7 +117,7 @@ $this->title = 'Peer Groups';
                             ]) ?>
                         </th>
                         <th>Members</th>
-                        <th>Focal</th>
+                        <th>Focals</th>
                         <th>Policy</th>
                         <th>Status</th>
                         <th>Last Run</th>
@@ -135,8 +135,10 @@ $this->title = 'Peer Groups';
                             <td><?= Html::encode($group->sector) ?></td>
                             <td><?= $group->memberCount ?></td>
                             <td>
-                                <?php if ($group->focalTicker !== null): ?>
-                                    <span class="badge badge--info"><?= Html::encode($group->focalTicker) ?></span>
+                                <?php if ($group->focalCount > 0): ?>
+                                    <?php foreach ($group->focalTickers as $ticker): ?>
+                                        <span class="badge badge--info"><?= Html::encode($ticker) ?></span>
+                                    <?php endforeach; ?>
                                 <?php else: ?>
                                     <span class="text-muted">-</span>
                                 <?php endif; ?>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\factories;
 
 use app\dto\SourceCandidate;
+use yii\log\Logger;
 
 /**
  * Factory for generating prioritized source candidates for a ticker.
@@ -40,16 +41,39 @@ final class SourceCandidateFactory
     private const EIA_INVENTORY_SERIES_DEFAULT = 'PET.WCRSTUS1.W';
     private const EIA_INVENTORY_URL_TEMPLATE = 'https://api.eia.gov/v2/seriesid/{series}?api_key={api_key}';
 
-    // FMP API URL templates (API key passed via header, not URL)
-    private const FMP_QUOTE_URL = 'https://financialmodelingprep.com/api/v3/quote/{ticker}';
-    private const FMP_KEY_METRICS_URL = 'https://financialmodelingprep.com/api/v3/key-metrics/{ticker}';
-    private const FMP_RATIOS_URL = 'https://financialmodelingprep.com/api/v3/ratios/{ticker}';
-    private const FMP_INCOME_STATEMENT_URL = 'https://financialmodelingprep.com/api/v3/income-statement/{ticker}?period={period}';
-    private const FMP_CASH_FLOW_URL = 'https://financialmodelingprep.com/api/v3/cash-flow-statement/{ticker}?period={period}';
-    private const FMP_BALANCE_SHEET_URL = 'https://financialmodelingprep.com/api/v3/balance-sheet-statement/{ticker}?period={period}';
-
-    // FMP API header for authentication
-    private const FMP_API_HEADER = 'X-API-KEY';
+    // FMP API URL templates (stable API, key passed as query param)
+    private const FMP_QUOTE_URL = 'https://financialmodelingprep.com/stable/quote?symbol={ticker}';
+    private const FMP_KEY_METRICS_URL = 'https://financialmodelingprep.com/stable/key-metrics?symbol={ticker}';
+    private const FMP_RATIOS_URL = 'https://financialmodelingprep.com/stable/ratios?symbol={ticker}';
+    private const FMP_INCOME_STATEMENT_URL = 'https://financialmodelingprep.com/stable/income-statement?symbol={ticker}&period={period}';
+    private const FMP_CASH_FLOW_URL = 'https://financialmodelingprep.com/stable/cash-flow-statement?symbol={ticker}&period={period}';
+    private const FMP_BALANCE_SHEET_URL = 'https://financialmodelingprep.com/stable/balance-sheet-statement?symbol={ticker}&period={period}';
+    private const FMP_DOMAIN = 'financialmodelingprep.com';
+    private const FMP_PERIOD_ANNUAL = 'annual';
+    private const FMP_PERIOD_QUARTER = 'quarter';
+    private const FMP_STATEMENT_TEMPLATES = [
+        'income-statement' => self::FMP_INCOME_STATEMENT_URL,
+        'cash-flow-statement' => self::FMP_CASH_FLOW_URL,
+        'balance-sheet-statement' => self::FMP_BALANCE_SHEET_URL,
+    ];
+    private const FMP_STATEMENT_PRIORITIES = [
+        'income-statement' => 1,
+        'cash-flow-statement' => 2,
+        'balance-sheet-statement' => 3,
+    ];
+    private const FMP_FINANCIALS_STATEMENT_MAP = [
+        'financials.revenue' => ['income-statement'],
+        'financials.ebitda' => ['income-statement'],
+        'financials.net_income' => ['income-statement'],
+        'financials.free_cash_flow' => ['cash-flow-statement'],
+        'financials.net_debt' => ['balance-sheet-statement'],
+        'quarters.revenue' => ['income-statement'],
+        'quarters.ebitda' => ['income-statement'],
+        'quarters.net_income' => ['income-statement'],
+        'quarters.free_cash_flow' => ['cash-flow-statement'],
+    ];
+    private const LOG_UNKNOWN_STATEMENT_METRIC =
+        'Unknown financials metric for statement mapping, defaulting to all statements';
 
     // ECB FX rate URL
     private const ECB_FX_RATES_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml';
@@ -193,6 +217,7 @@ final class SourceCandidateFactory
         private readonly ?string $eiaApiKey = null,
         private readonly ?string $eiaInventorySeriesId = null,
         private readonly ?string $fmpApiKey = null,
+        private readonly ?Logger $logger = null,
     ) {
     }
 
@@ -432,7 +457,7 @@ final class SourceCandidateFactory
         $candidates = [];
 
         // Add FMP candidates first (priority 1) - primary source for financials
-        $fmpCandidates = $this->buildFmpFinancialsCandidates($ticker, 'annual');
+        $fmpCandidates = $this->buildFmpFinancialsCandidates($ticker, self::FMP_PERIOD_ANNUAL);
         $candidates = array_merge($candidates, $fmpCandidates);
 
         // Add Yahoo as fallback (priority 2+)
@@ -470,6 +495,92 @@ final class SourceCandidateFactory
     }
 
     /**
+     * Generate source candidates for a specific financials metric.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forFinancialsMetric(
+        string $ticker,
+        string $metricKey,
+        ?string $exchange = null,
+        string $period = self::FMP_PERIOD_ANNUAL
+    ): array {
+        $candidates = [];
+
+        $statementTypes = self::FMP_FINANCIALS_STATEMENT_MAP[$metricKey] ?? null;
+        if ($statementTypes === null) {
+            $statementTypes = array_keys(self::FMP_STATEMENT_PRIORITIES);
+            $this->logger?->log(
+                [
+                    'message' => self::LOG_UNKNOWN_STATEMENT_METRIC,
+                    'metric_key' => $metricKey,
+                    'period' => $period,
+                ],
+                Logger::LEVEL_WARNING,
+                'collection'
+            );
+        }
+
+        $fmpCandidates = $this->buildFmpFinancialsCandidates($ticker, $period, $statementTypes);
+        $candidates = array_merge($candidates, $fmpCandidates);
+
+        $supportsKey = $period === self::FMP_PERIOD_QUARTER
+            ? self::KEY_SUPPORTS_QUARTERS
+            : self::KEY_SUPPORTS_FINANCIALS;
+
+        // Add Yahoo as fallback (priority 2+)
+        foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
+            if (!($config[$supportsKey] ?? false)) {
+                continue;
+            }
+
+            $url = $this->buildUrl($config, $ticker, $exchange);
+            if ($url === null) {
+                continue;
+            }
+
+            // Yahoo gets higher priority number (lower priority) as FMP fallback
+            $priority = $config[self::KEY_PRIORITY];
+            if ($this->fmpApiKey !== null) {
+                $priority += 5;
+            }
+
+            $candidates[] = new SourceCandidate(
+                url: $url,
+                adapterId: $adapterId,
+                priority: $priority,
+                domain: $config[self::KEY_DOMAIN],
+            );
+        }
+
+        usort(
+            $candidates,
+            static fn (SourceCandidate $a, SourceCandidate $b): int =>
+            $a->priority <=> $b->priority
+        );
+
+        return $candidates;
+    }
+
+    /**
+     * Generate source candidates for a specific quarterly metric.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forQuartersMetric(
+        string $ticker,
+        string $metricKey,
+        ?string $exchange = null
+    ): array {
+        return $this->forFinancialsMetric(
+            ticker: $ticker,
+            metricKey: $metricKey,
+            exchange: $exchange,
+            period: self::FMP_PERIOD_QUARTER
+        );
+    }
+
+    /**
      * Generate source candidates for quarterly financials data.
      *
      * Per the Hybrid Strategy: FMP handles historical quarters (20+ years).
@@ -482,7 +593,7 @@ final class SourceCandidateFactory
         $candidates = [];
 
         // Add FMP candidates first (priority 1) - primary source for quarters
-        $fmpCandidates = $this->buildFmpFinancialsCandidates($ticker, 'quarter');
+        $fmpCandidates = $this->buildFmpFinancialsCandidates($ticker, self::FMP_PERIOD_QUARTER);
         $candidates = array_merge($candidates, $fmpCandidates);
 
         // Add Yahoo as fallback (priority 2+)
@@ -590,62 +701,43 @@ final class SourceCandidateFactory
     /**
      * Build FMP candidates for financial statements.
      *
-     * API key is passed via header (X-API-KEY), not in URL, to avoid credential exposure in logs.
-     *
+     * @param list<string>|null $statementTypes
      * @return list<SourceCandidate>
      */
-    private function buildFmpFinancialsCandidates(string $ticker, string $period): array
-    {
+    private function buildFmpFinancialsCandidates(
+        string $ticker,
+        string $period,
+        ?array $statementTypes = null
+    ): array {
         if ($this->fmpApiKey === null || $this->fmpApiKey === '') {
             return [];
         }
 
         $candidates = [];
         $upperTicker = strtoupper($ticker);
-        $headers = [self::FMP_API_HEADER => $this->fmpApiKey];
+        $statementTypes = $statementTypes ?? array_keys(self::FMP_STATEMENT_PRIORITIES);
 
-        // Income statement
-        $incomeUrl = $this->buildFmpUrl(
-            str_replace('{period}', $period, self::FMP_INCOME_STATEMENT_URL),
-            $upperTicker
-        );
-        if ($incomeUrl !== null) {
-            $candidates[] = new SourceCandidate(
-                url: $incomeUrl,
-                adapterId: 'fmp',
-                priority: 1,
-                domain: 'financialmodelingprep.com',
-                headers: $headers,
+        foreach ($statementTypes as $statementType) {
+            $template = self::FMP_STATEMENT_TEMPLATES[$statementType] ?? null;
+            if ($template === null) {
+                continue;
+            }
+
+            $url = $this->buildFmpUrl(
+                str_replace('{period}', $period, $template),
+                $upperTicker
             );
-        }
+            if ($url === null) {
+                continue;
+            }
 
-        // Cash flow statement
-        $cashFlowUrl = $this->buildFmpUrl(
-            str_replace('{period}', $period, self::FMP_CASH_FLOW_URL),
-            $upperTicker
-        );
-        if ($cashFlowUrl !== null) {
-            $candidates[] = new SourceCandidate(
-                url: $cashFlowUrl,
-                adapterId: 'fmp',
-                priority: 1,
-                domain: 'financialmodelingprep.com',
-                headers: $headers,
-            );
-        }
+            $priority = self::FMP_STATEMENT_PRIORITIES[$statementType] ?? 1;
 
-        // Balance sheet (for net debt derivation)
-        $balanceUrl = $this->buildFmpUrl(
-            str_replace('{period}', $period, self::FMP_BALANCE_SHEET_URL),
-            $upperTicker
-        );
-        if ($balanceUrl !== null) {
             $candidates[] = new SourceCandidate(
-                url: $balanceUrl,
+                url: $url,
                 adapterId: 'fmp',
-                priority: 1,
-                domain: 'financialmodelingprep.com',
-                headers: $headers,
+                priority: $priority,
+                domain: self::FMP_DOMAIN,
             );
         }
 
@@ -653,7 +745,7 @@ final class SourceCandidateFactory
     }
 
     /**
-     * Build FMP URL without API key (key is passed via header).
+     * Build FMP URL with API key as query parameter.
      */
     private function buildFmpUrl(string $template, string $ticker): ?string
     {
@@ -661,6 +753,8 @@ final class SourceCandidateFactory
             return null;
         }
 
-        return str_replace('{ticker}', urlencode($ticker), $template);
+        $url = str_replace('{ticker}', urlencode($ticker), $template);
+
+        return $url . '&apikey=' . urlencode($this->fmpApiKey);
     }
 }

@@ -13,6 +13,7 @@ final readonly class IndustryConfig
 {
     /**
      * @param CompanyConfig[] $companies
+     * @param list<string> $focalTickers Tickers of companies that should receive full requirements during collection
      */
     public function __construct(
         public string $id,
@@ -21,44 +22,8 @@ final readonly class IndustryConfig
         public array $companies,
         public MacroRequirements $macroRequirements,
         public DataRequirements $dataRequirements,
-        public ?string $focalTicker = null,
+        public array $focalTickers = [],
     ) {
-    }
-
-    /**
-     * Resolves the focal ticker with consistent priority across all consumers.
-     *
-     * Priority:
-     * 1. Explicit override (CLI --focal parameter)
-     * 2. Config focal_ticker
-     * 3. First company in the list
-     *
-     * @param string|null $override Explicit override (e.g., from CLI)
-     * @param bool $usedFallback Output parameter: true if first-company fallback was used
-     */
-    public function resolveFocalTicker(?string $override = null, bool &$usedFallback = false): ?string
-    {
-        $usedFallback = false;
-        $configuredTickers = array_map(static fn ($c): string => $c->ticker, $this->companies);
-
-        // Priority 1: Explicit override
-        if (is_string($override) && $override !== '' && in_array($override, $configuredTickers, true)) {
-            return $override;
-        }
-
-        // Priority 2: Config focal_ticker
-        if (is_string($this->focalTicker) && $this->focalTicker !== '' && in_array($this->focalTicker, $configuredTickers, true)) {
-            return $this->focalTicker;
-        }
-
-        // Priority 3: First company (fallback)
-        $firstCompany = $this->companies[0] ?? null;
-        if ($firstCompany !== null) {
-            $usedFallback = true;
-            return $firstCompany->ticker;
-        }
-
-        return null;
     }
 
     /**
@@ -78,8 +43,8 @@ final readonly class IndustryConfig
             'data_requirements' => $this->dataRequirements->toArray(),
         ];
 
-        if ($this->focalTicker !== null) {
-            $result['focal_ticker'] = $this->focalTicker;
+        if (!empty($this->focalTickers)) {
+            $result['focal_tickers'] = $this->focalTickers;
         }
 
         return $result;

@@ -147,7 +147,7 @@ final class CollectionGateValidatorTest extends Unit
                 'MSFT' => $peerMarketCap,
             ]),
             $this->createConfigForCompanies(['AAPL', 'MSFT'], MetricDefinition::SCOPE_FOCAL),
-            'AAPL'
+            ['AAPL']
         );
 
         $this->assertTrue(
@@ -188,7 +188,7 @@ final class CollectionGateValidatorTest extends Unit
                 'MSFT' => $peerMarketCap,
             ]),
             $this->createConfigForCompanies(['AAPL', 'MSFT'], MetricDefinition::SCOPE_ALL),
-            'AAPL'
+            ['AAPL']
         );
 
         $this->assertFalse($result->passed);

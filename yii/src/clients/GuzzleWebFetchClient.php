@@ -47,11 +47,12 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
     {
         $this->allowedDomainPolicy->assertAllowed($request->url);
 
+        $safeRequestUrl = UrlSanitizer::sanitize($request->url);
         $domain = parse_url($request->url, PHP_URL_HOST);
         if (!is_string($domain) || $domain === '') {
             throw new NetworkException(
-                "Invalid URL (missing host): {$request->url}",
-                $request->url
+                "Invalid URL (missing host): {$safeRequestUrl}",
+                $safeRequestUrl
             );
         }
 
@@ -101,6 +102,7 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
 
                 $statusCode = $response->getStatusCode();
                 $this->rateLimiter->recordAttempt($domain);
+                $safeEffectiveUrl = UrlSanitizer::sanitize($effectiveUrl);
 
                 if ($statusCode === 429) {
                     $retryUntil = $this->parseRetryAfter($response->getHeaderLine('Retry-After'))
@@ -122,12 +124,12 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
                     $retryUntil = new DateTimeImmutable("+{$backoffSeconds} seconds");
                     $this->rateLimiter->recordBlock($domain, $retryUntil);
 
-                    $this->alertDispatcher->alertBlocked($domain, $effectiveUrl, $retryUntil);
+                    $this->alertDispatcher->alertBlocked($domain, $safeEffectiveUrl, $retryUntil);
 
                     throw new BlockedException(
                         "Forbidden by {$domain} (attempt {$consecutiveBlocks}, cooldown {$backoffSeconds}s)",
                         $domain,
-                        $effectiveUrl,
+                        $safeEffectiveUrl,
                         $retryUntil
                     );
                 }
@@ -142,8 +144,8 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
                     content: (string)$response->getBody(),
                     contentType: $response->getHeader('Content-Type')[0] ?? 'text/html',
                     statusCode: $statusCode,
-                    url: $request->url,
-                    finalUrl: $effectiveUrl,
+                    url: $safeRequestUrl,
+                    finalUrl: $safeEffectiveUrl,
                     retrievedAt: new DateTimeImmutable(),
                     headers: $response->getHeaders(),
                 );
@@ -172,23 +174,23 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
                         $retryUntil = new DateTimeImmutable("+{$backoffSeconds} seconds");
                         $this->rateLimiter->recordBlock($domain, $retryUntil);
 
-                        $this->alertDispatcher->alertBlocked($domain, $effectiveUrl, $retryUntil);
+                        $this->alertDispatcher->alertBlocked($domain, $safeEffectiveUrl, $retryUntil);
 
                         throw new BlockedException(
                             "Soft block ({$blockReason->value}) by {$domain}",
                             $domain,
-                            $effectiveUrl,
+                            $safeEffectiveUrl,
                             $retryUntil
                         );
                     }
 
                     if (!$this->blockDetector->isRecoverable($blockReason)) {
-                        $this->alertDispatcher->alertBlocked($domain, $effectiveUrl, null);
+                        $this->alertDispatcher->alertBlocked($domain, $safeEffectiveUrl, null);
 
                         throw new BlockedException(
                             "Non-recoverable block ({$blockReason->value}) by {$domain}",
                             $domain,
-                            $effectiveUrl,
+                            $safeEffectiveUrl,
                             null
                         );
                     }
@@ -205,8 +207,8 @@ final class GuzzleWebFetchClient implements WebFetchClientInterface
                 }
 
                 throw new NetworkException(
-                    "Request failed for {$request->url}: {$e->getMessage()}",
-                    $request->url,
+                    "Request failed for {$safeRequestUrl}: {$e->getMessage()}",
+                    $safeRequestUrl,
                     $e
                 );
             }

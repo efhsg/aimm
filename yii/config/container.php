@@ -51,12 +51,18 @@ use app\handlers\collectionpolicy\SetDefaultPolicyHandler;
 use app\handlers\collectionpolicy\SetDefaultPolicyInterface;
 use app\handlers\collectionpolicy\UpdateCollectionPolicyHandler;
 use app\handlers\collectionpolicy\UpdateCollectionPolicyInterface;
+use app\handlers\peergroup\AddFocalHandler;
+use app\handlers\peergroup\AddFocalInterface;
 use app\handlers\peergroup\AddMembersHandler;
 use app\handlers\peergroup\AddMembersInterface;
+use app\handlers\peergroup\ClearFocalsHandler;
+use app\handlers\peergroup\ClearFocalsInterface;
 use app\handlers\peergroup\CollectPeerGroupHandler;
 use app\handlers\peergroup\CollectPeerGroupInterface;
 use app\handlers\peergroup\CreatePeerGroupHandler;
 use app\handlers\peergroup\CreatePeerGroupInterface;
+use app\handlers\peergroup\RemoveFocalHandler;
+use app\handlers\peergroup\RemoveFocalInterface;
 use app\handlers\peergroup\RemoveMemberHandler;
 use app\handlers\peergroup\RemoveMemberInterface;
 use app\handlers\peergroup\SetFocalHandler;
@@ -226,6 +232,7 @@ return [
                 eiaApiKey: $params['eiaApiKey'] ?? null,
                 eiaInventorySeriesId: $params['eiaInventorySeriesId'] ?? null,
                 fmpApiKey: $params['fmpApiKey'] ?? null,
+                logger: Yii::getLogger(),
             );
         },
         CompanyDataFactory::class => CompanyDataFactory::class,
@@ -379,6 +386,30 @@ return [
 
         SetFocalInterface::class => static function (Container $container): SetFocalInterface {
             return new SetFocalHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        AddFocalInterface::class => static function (Container $container): AddFocalInterface {
+            return new AddFocalHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        RemoveFocalInterface::class => static function (Container $container): RemoveFocalInterface {
+            return new RemoveFocalHandler(
+                $container->get(PeerGroupQuery::class),
+                $container->get(PeerGroupMemberQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        ClearFocalsInterface::class => static function (Container $container): ClearFocalsInterface {
+            return new ClearFocalsHandler(
                 $container->get(PeerGroupQuery::class),
                 $container->get(PeerGroupMemberQuery::class),
                 Yii::getLogger(),

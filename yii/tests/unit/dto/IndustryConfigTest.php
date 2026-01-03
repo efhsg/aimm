@@ -133,62 +133,43 @@ final class IndustryConfigTest extends Unit
         $this->assertNull($array['alternative_tickers']);
     }
 
-    public function testFocalTickerIncludedInToArrayWhenSet(): void
+    public function testFocalTickersIncludedInToArrayWhenNotEmpty(): void
     {
-        $config = $this->createIndustryConfigWithFocalTicker('SHEL');
+        $config = $this->createIndustryConfigWithFocalTickers(['SHEL', 'XOM']);
         $array = $config->toArray();
 
-        $this->assertArrayHasKey('focal_ticker', $array);
-        $this->assertSame('SHEL', $array['focal_ticker']);
+        $this->assertArrayHasKey('focal_tickers', $array);
+        $this->assertSame(['SHEL', 'XOM'], $array['focal_tickers']);
     }
 
-    public function testFocalTickerExcludedFromToArrayWhenNull(): void
+    public function testFocalTickersExcludedFromToArrayWhenEmpty(): void
     {
         $config = $this->createIndustryConfig();
         $array = $config->toArray();
 
-        $this->assertArrayNotHasKey('focal_ticker', $array);
+        $this->assertArrayNotHasKey('focal_tickers', $array);
     }
 
-    public function testResolveFocalTickerReturnsOverrideWhenValid(): void
-    {
-        $config = $this->createIndustryConfigWithFocalTicker('SHEL');
-
-        $result = $config->resolveFocalTicker('XOM');
-
-        $this->assertSame('XOM', $result);
-    }
-
-    public function testResolveFocalTickerReturnsConfigFocalWhenNoOverride(): void
-    {
-        $config = $this->createIndustryConfigWithFocalTicker('SHEL');
-
-        $result = $config->resolveFocalTicker(null);
-
-        $this->assertSame('SHEL', $result);
-    }
-
-    public function testResolveFocalTickerReturnsFirstCompanyWhenNoFocalConfigured(): void
+    public function testFocalTickersDefaultsToEmptyArray(): void
     {
         $config = $this->createIndustryConfig();
-        $usedFallback = false;
 
-        $result = $config->resolveFocalTicker(null, $usedFallback);
-
-        $this->assertSame('SHEL', $result);
-        $this->assertTrue($usedFallback, 'Should indicate fallback was used');
+        $this->assertSame([], $config->focalTickers);
     }
 
-    public function testResolveFocalTickerIgnoresInvalidOverride(): void
+    public function testFocalTickersCanContainMultipleTickers(): void
     {
-        $config = $this->createIndustryConfigWithFocalTicker('SHEL');
+        $config = $this->createIndustryConfigWithFocalTickers(['SHEL', 'XOM']);
 
-        $result = $config->resolveFocalTicker('INVALID_TICKER');
-
-        $this->assertSame('SHEL', $result, 'Should fall back to config focal when override is invalid');
+        $this->assertCount(2, $config->focalTickers);
+        $this->assertContains('SHEL', $config->focalTickers);
+        $this->assertContains('XOM', $config->focalTickers);
     }
 
-    private function createIndustryConfigWithFocalTicker(string $focalTicker): IndustryConfig
+    /**
+     * @param list<string> $focalTickers
+     */
+    private function createIndustryConfigWithFocalTickers(array $focalTickers): IndustryConfig
     {
         return new IndustryConfig(
             id: 'oil-majors',
@@ -225,7 +206,7 @@ final class IndustryConfigTest extends Unit
                 quarterMetrics: [],
                 operationalMetrics: [],
             ),
-            focalTicker: $focalTicker,
+            focalTickers: $focalTickers,
         );
     }
 

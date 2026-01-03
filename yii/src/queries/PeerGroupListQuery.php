@@ -46,7 +46,8 @@ final class PeerGroupListQuery
                     g.policy_id, p.name AS policy_name,
                     g.is_active, g.created_at, g.updated_at, g.created_by, g.updated_by,
                     COALESCE(member_stats.member_count, 0) AS member_count,
-                    focal_member.ticker AS focal_ticker,
+                    COALESCE(focal_stats.focal_count, 0) AS focal_count,
+                    COALESCE(focal_stats.focal_tickers, \'\') AS focal_tickers,
                     last_run.status AS last_run_status,
                     last_run.started_at AS last_run_at
                 FROM industry_peer_group g
@@ -57,11 +58,15 @@ final class PeerGroupListQuery
                     GROUP BY peer_group_id
                 ) member_stats ON g.id = member_stats.peer_group_id
                 LEFT JOIN (
-                    SELECT m.peer_group_id, c.ticker
+                    SELECT
+                        m.peer_group_id,
+                        COUNT(*) AS focal_count,
+                        GROUP_CONCAT(c.ticker ORDER BY m.display_order, c.ticker SEPARATOR \', \') AS focal_tickers
                     FROM industry_peer_group_member m
                     JOIN company c ON m.company_id = c.id
                     WHERE m.is_focal = 1
-                ) focal_member ON g.id = focal_member.peer_group_id
+                    GROUP BY m.peer_group_id
+                ) focal_stats ON g.id = focal_stats.peer_group_id
                 LEFT JOIN (
                     SELECT r1.industry_id, r1.status, r1.started_at
                     FROM collection_run r1
@@ -118,7 +123,8 @@ final class PeerGroupListQuery
                     g.policy_id, p.name AS policy_name,
                     g.is_active, g.created_at, g.updated_at, g.created_by, g.updated_by,
                     COALESCE(member_stats.member_count, 0) AS member_count,
-                    focal_member.ticker AS focal_ticker,
+                    COALESCE(focal_stats.focal_count, 0) AS focal_count,
+                    COALESCE(focal_stats.focal_tickers, \'\') AS focal_tickers,
                     last_run.status AS last_run_status,
                     last_run.started_at AS last_run_at
                 FROM industry_peer_group g
@@ -129,11 +135,15 @@ final class PeerGroupListQuery
                     GROUP BY peer_group_id
                 ) member_stats ON g.id = member_stats.peer_group_id
                 LEFT JOIN (
-                    SELECT m.peer_group_id, c.ticker
+                    SELECT
+                        m.peer_group_id,
+                        COUNT(*) AS focal_count,
+                        GROUP_CONCAT(c.ticker ORDER BY m.display_order, c.ticker SEPARATOR \', \') AS focal_tickers
                     FROM industry_peer_group_member m
                     JOIN company c ON m.company_id = c.id
                     WHERE m.is_focal = 1
-                ) focal_member ON g.id = focal_member.peer_group_id
+                    GROUP BY m.peer_group_id
+                ) focal_stats ON g.id = focal_stats.peer_group_id
                 LEFT JOIN (
                     SELECT r1.industry_id, r1.status, r1.started_at
                     FROM collection_run r1
@@ -197,6 +207,12 @@ final class PeerGroupListQuery
      */
     private function toResponse(array $row): PeerGroupResponse
     {
+        $focalTickers = [];
+        $focalTickersStr = $row['focal_tickers'] ?? '';
+        if ($focalTickersStr !== '') {
+            $focalTickers = array_map('trim', explode(',', $focalTickersStr));
+        }
+
         return new PeerGroupResponse(
             id: (int) $row['id'],
             slug: $row['slug'],
@@ -207,7 +223,8 @@ final class PeerGroupListQuery
             policyName: $row['policy_name'] ?? null,
             isActive: (bool) $row['is_active'],
             memberCount: (int) $row['member_count'],
-            focalTicker: $row['focal_ticker'] ?? null,
+            focalCount: (int) ($row['focal_count'] ?? 0),
+            focalTickers: $focalTickers,
             lastRunStatus: $row['last_run_status'] ?? null,
             lastRunAt: $row['last_run_at'] !== null ? new DateTimeImmutable($row['last_run_at']) : null,
             createdAt: new DateTimeImmutable($row['created_at']),

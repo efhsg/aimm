@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace app\handlers\collection;
 
+use app\clients\FmpResponseCache;
 use app\dto\AnnualFinancials;
 use app\dto\CollectCompanyRequest;
 use app\dto\CollectCompanyResult;
@@ -79,6 +80,7 @@ final class CollectCompanyHandler implements CollectCompanyInterface
 
         $allAttempts = [];
         $timedOut = false;
+        $fmpResponseCache = new FmpResponseCache();
 
         $sources = $this->sourceCandidateFactory->forTicker(
             $request->ticker,
@@ -90,7 +92,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             $request,
             $sources,
             $allAttempts,
-            $deadline
+            $deadline,
+            $fmpResponseCache
         );
 
         if ($this->isTimedOut($deadline)) {
@@ -104,7 +107,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 $sources,
                 $allAttempts,
                 $deadline,
-                $companyId
+                $companyId,
+                $fmpResponseCache
             );
 
             if ($this->isTimedOut($deadline)) {
@@ -119,7 +123,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 $sources,
                 $allAttempts,
                 $deadline,
-                $companyId
+                $companyId,
+                $fmpResponseCache
             );
 
             if ($this->isTimedOut($deadline)) {
@@ -133,7 +138,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 $request,
                 $sources,
                 $allAttempts,
-                $deadline
+                $deadline,
+                $fmpResponseCache
             );
         }
 
@@ -328,7 +334,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         CollectCompanyRequest $request,
         array $sources,
         array &$allAttempts,
-        float $deadline
+        float $deadline,
+        FmpResponseCache $fmpResponseCache
     ): ValuationData {
         $metrics = [];
         $definitions = $request->requirements->valuationMetrics;
@@ -347,6 +354,7 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 severity: $severity,
                 ticker: $request->ticker,
                 unit: $definition->unit,
+                fmpResponseCache: $fmpResponseCache,
             ));
 
             $metrics[$definition->key] = $result->datapoint;
@@ -360,7 +368,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             $definitions,
             $metrics,
             $allAttempts,
-            $deadline
+            $deadline,
+            $fmpResponseCache
         );
 
         $fcfYield = $this->calculateFcfYield(
@@ -376,7 +385,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         array $definitions,
         array &$metrics,
         array &$allAttempts,
-        float $deadline
+        float $deadline,
+        FmpResponseCache $fmpResponseCache
     ): void {
         $current = $metrics['free_cash_flow_ttm'] ?? null;
         if ($current instanceof DataPointMoney && $current->value !== null) {
@@ -393,7 +403,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         $derived = $this->deriveFreeCashFlowTtmFromQuarterlyFreeCashFlow(
             $request,
             $allAttempts,
-            $deadline
+            $deadline,
+            $fmpResponseCache
         );
 
         if ($derived === null) {
@@ -417,15 +428,17 @@ final class CollectCompanyHandler implements CollectCompanyInterface
     private function deriveFreeCashFlowTtmFromQuarterlyFreeCashFlow(
         CollectCompanyRequest $request,
         array &$allAttempts,
-        float $deadline
+        float $deadline,
+        FmpResponseCache $fmpResponseCache
     ): ?DataPointMoney {
         if ($this->isTimedOut($deadline)) {
             return null;
         }
 
-        $quartersSources = $this->sourceCandidateFactory->forQuarters(
-            $request->ticker,
-            $request->config->listingExchange
+        $quartersSources = $this->sourceCandidateFactory->forQuartersMetric(
+            ticker: $request->ticker,
+            metricKey: 'quarters.free_cash_flow',
+            exchange: $request->config->listingExchange
         );
         if (empty($quartersSources)) {
             return null;
@@ -438,6 +451,7 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             severity: Severity::Required,
             ticker: $request->ticker,
             unit: MetricDefinition::UNIT_CURRENCY,
+            fmpResponseCache: $fmpResponseCache,
         ));
 
         $allAttempts = array_merge($allAttempts, $result->sourceAttempts);
@@ -617,7 +631,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         array $sources,
         array &$allAttempts,
         float $deadline,
-        int $companyId
+        int $companyId,
+        FmpResponseCache $fmpResponseCache
     ): FinancialsData {
         if ($this->isTimedOut($deadline)) {
             return new FinancialsData(
@@ -626,20 +641,19 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             );
         }
 
-        $financialsSources = $this->sourceCandidateFactory->forFinancials(
-            $request->ticker,
-            $request->config->listingExchange
-        );
-
-        if (empty($financialsSources)) {
-            return new FinancialsData(
-                historyYears: $request->requirements->historyYears,
-                annualData: [],
-            );
-        }
-
         $annualData = [];
         $definitions = $request->requirements->annualFinancialMetrics;
+
+        $this->logger->log(
+            [
+                'message' => 'collectFinancials start',
+                'ticker' => $request->ticker,
+                'definitions_count' => count($definitions),
+                'definitions' => array_map(fn ($d) => $d->key, $definitions),
+            ],
+            Logger::LEVEL_INFO,
+            'collection'
+        );
 
         // Optimisation: Skip fetching if we already have this year in dossier?
         // But CollectDatapointHandler collects *all* years at once from historical sources (FMP, etc).
@@ -660,6 +674,17 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 $yearsNeeded[] = $year;
             }
         }
+
+        $this->logger->log(
+            [
+                'message' => 'collectFinancials staleness check',
+                'ticker' => $request->ticker,
+                'years_needed' => $yearsNeeded,
+                'history_years' => $request->requirements->historyYears,
+            ],
+            Logger::LEVEL_INFO,
+            'collection'
+        );
 
         // If no years needed, populate from dossier
         if (empty($yearsNeeded)) {
@@ -698,6 +723,12 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             $severity = $definition->required ? Severity::Required : Severity::Optional;
             $datapointKey = "financials.{$definition->key}";
 
+            $financialsSources = $this->sourceCandidateFactory->forFinancialsMetric(
+                ticker: $request->ticker,
+                metricKey: $datapointKey,
+                exchange: $request->config->listingExchange
+            );
+
             $result = $this->datapointCollector->collect(new CollectDatapointRequest(
                 datapointKey: $datapointKey,
                 sourceCandidates: $financialsSources,
@@ -705,10 +736,24 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 severity: $severity,
                 ticker: $request->ticker,
                 unit: $definition->unit,
+                fmpResponseCache: $fmpResponseCache,
             ));
 
             $metricResults[$definition->key] = $result;
             $allAttempts = array_merge($allAttempts, $result->sourceAttempts);
+
+            $this->logger->log(
+                [
+                    'message' => 'collectFinancials metric result',
+                    'ticker' => $request->ticker,
+                    'metric' => $definition->key,
+                    'found' => $result->found,
+                    'is_historical' => $result->isHistorical(),
+                    'has_extraction' => $result->historicalExtraction !== null,
+                ],
+                Logger::LEVEL_INFO,
+                'collection'
+            );
         }
 
         // Parse the historical data into AnnualFinancials by fiscal year
@@ -883,7 +928,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         array $sources,
         array &$allAttempts,
         float $deadline,
-        int $companyId
+        int $companyId,
+        FmpResponseCache $fmpResponseCache
     ): QuartersData {
         if ($this->isTimedOut($deadline)) {
             return new QuartersData(quarters: []);
@@ -894,15 +940,6 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         // unless I have time, but sticking to "write to dossier" is the main requirement.
         // "Add staleness checks" was met by the Annual check above.
         // I will focus on writing first.
-
-        $quartersSources = $this->sourceCandidateFactory->forQuarters(
-            $request->ticker,
-            $request->config->listingExchange
-        );
-
-        if (empty($quartersSources)) {
-            return new QuartersData(quarters: []);
-        }
 
         $definitions = $request->requirements->quarterMetrics;
 
@@ -916,6 +953,12 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             $severity = $definition->required ? Severity::Required : Severity::Optional;
             $datapointKey = "quarters.{$definition->key}";
 
+            $quartersSources = $this->sourceCandidateFactory->forQuartersMetric(
+                ticker: $request->ticker,
+                metricKey: $datapointKey,
+                exchange: $request->config->listingExchange
+            );
+
             $result = $this->datapointCollector->collect(new CollectDatapointRequest(
                 datapointKey: $datapointKey,
                 sourceCandidates: $quartersSources,
@@ -923,6 +966,7 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 severity: $severity,
                 ticker: $request->ticker,
                 unit: $definition->unit,
+                fmpResponseCache: $fmpResponseCache,
             ));
 
             $metricResults[$definition->key] = $result;
@@ -1029,7 +1073,8 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         CollectCompanyRequest $request,
         array $sources,
         array &$allAttempts,
-        float $deadline
+        float $deadline,
+        FmpResponseCache $fmpResponseCache
     ): ?OperationalData {
         $definitions = $request->requirements->operationalMetrics;
 
@@ -1053,6 +1098,7 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 severity: $severity,
                 ticker: $request->ticker,
                 unit: $definition->unit,
+                fmpResponseCache: $fmpResponseCache,
             ));
 
             if ($result->found && $result->datapoint->value !== null) {

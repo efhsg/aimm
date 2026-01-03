@@ -54,6 +54,9 @@ return [
                 'peer-group/<slug:[a-z0-9-]+>/add-members' => 'peer-group/add-members',
                 'peer-group/<slug:[a-z0-9-]+>/remove-member' => 'peer-group/remove-member',
                 'peer-group/<slug:[a-z0-9-]+>/set-focal' => 'peer-group/set-focal',
+                'peer-group/<slug:[a-z0-9-]+>/add-focal' => 'peer-group/add-focal',
+                'peer-group/<slug:[a-z0-9-]+>/remove-focal' => 'peer-group/remove-focal',
+                'peer-group/<slug:[a-z0-9-]+>/clear-focals' => 'peer-group/clear-focals',
                 'peer-group/<slug:[a-z0-9-]+>/collect' => 'peer-group/collect',
 
                 // Collection Run

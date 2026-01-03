@@ -11,6 +11,9 @@ use DateTimeImmutable;
  */
 final readonly class PeerGroupResponse
 {
+    /**
+     * @param list<string> $focalTickers
+     */
     public function __construct(
         public int $id,
         public string $slug,
@@ -21,7 +24,8 @@ final readonly class PeerGroupResponse
         public ?string $policyName,
         public bool $isActive,
         public int $memberCount,
-        public ?string $focalTicker,
+        public int $focalCount,
+        public array $focalTickers,
         public ?string $lastRunStatus,
         public ?DateTimeImmutable $lastRunAt,
         public DateTimeImmutable $createdAt,
@@ -46,7 +50,8 @@ final readonly class PeerGroupResponse
             'policy_name' => $this->policyName,
             'is_active' => $this->isActive,
             'member_count' => $this->memberCount,
-            'focal_ticker' => $this->focalTicker,
+            'focal_count' => $this->focalCount,
+            'focal_tickers' => $this->focalTickers,
             'last_run_status' => $this->lastRunStatus,
             'last_run_at' => $this->lastRunAt?->format('Y-m-d H:i:s'),
             'created_at' => $this->createdAt->format('Y-m-d H:i:s'),

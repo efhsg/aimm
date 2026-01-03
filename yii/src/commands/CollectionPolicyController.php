@@ -216,6 +216,33 @@ final class CollectionPolicyController extends Controller
     }
 
     /**
+     * Updates an existing collection policy from a JSON file.
+     *
+     * @param string $slug The policy slug to update
+     * @param string $jsonFile Path to JSON file (or - for stdin)
+     */
+    public function actionUpdate(string $slug, string $jsonFile): int
+    {
+        $policy = $this->policyQuery->findBySlug($slug);
+        if ($policy === null) {
+            $this->stderr("Error: Policy '{$slug}' not found\n", Console::FG_RED);
+            return ExitCode::DATAERR;
+        }
+
+        $json = $this->readJsonFile($jsonFile);
+        if ($json === null) {
+            return ExitCode::DATAERR;
+        }
+
+        $data = $this->buildUpdateData($policy, $json);
+
+        $this->policyQuery->update((int) $policy['id'], $data);
+        $this->stdout("Updated: {$slug}\n", Console::FG_GREEN);
+
+        return ExitCode::OK;
+    }
+
+    /**
      * Deletes a collection policy.
      *
      * @param string $slug The policy slug
@@ -293,6 +320,60 @@ final class CollectionPolicyController extends Controller
             'required_indicators' => isset($json['required_indicators']) ? Json::encode($json['required_indicators']) : null,
             'optional_indicators' => isset($json['optional_indicators']) ? Json::encode($json['optional_indicators']) : null,
         ];
+    }
+
+    /**
+     * Build update data from JSON, preserving existing values for unset fields.
+     *
+     * @param array<string, mixed> $policy Existing policy data
+     * @param array<string, mixed> $json JSON input data
+     * @return array<string, mixed>
+     */
+    private function buildUpdateData(array $policy, array $json): array
+    {
+        $data = [];
+
+        if (isset($json['name'])) {
+            $data['name'] = $json['name'];
+        }
+        if (array_key_exists('description', $json)) {
+            $data['description'] = $json['description'];
+        }
+        if (isset($json['history_years'])) {
+            $data['history_years'] = (int) $json['history_years'];
+        }
+        if (isset($json['quarters_to_fetch'])) {
+            $data['quarters_to_fetch'] = (int) $json['quarters_to_fetch'];
+        }
+        if (isset($json['valuation_metrics'])) {
+            $data['valuation_metrics'] = Json::encode($json['valuation_metrics']);
+        }
+        if (isset($json['annual_financial_metrics'])) {
+            $data['annual_financial_metrics'] = Json::encode($json['annual_financial_metrics']);
+        }
+        if (isset($json['quarterly_financial_metrics'])) {
+            $data['quarterly_financial_metrics'] = Json::encode($json['quarterly_financial_metrics']);
+        }
+        if (isset($json['operational_metrics'])) {
+            $data['operational_metrics'] = Json::encode($json['operational_metrics']);
+        }
+        if (array_key_exists('commodity_benchmark', $json)) {
+            $data['commodity_benchmark'] = $json['commodity_benchmark'];
+        }
+        if (array_key_exists('margin_proxy', $json)) {
+            $data['margin_proxy'] = $json['margin_proxy'];
+        }
+        if (array_key_exists('sector_index', $json)) {
+            $data['sector_index'] = $json['sector_index'];
+        }
+        if (isset($json['required_indicators'])) {
+            $data['required_indicators'] = Json::encode($json['required_indicators']);
+        }
+        if (isset($json['optional_indicators'])) {
+            $data['optional_indicators'] = Json::encode($json['optional_indicators']);
+        }
+
+        return $data;
     }
 
     private function printJsonField(string $label, ?string $json): void

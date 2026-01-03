@@ -34,6 +34,7 @@ class PeerGroupMemberQuery
 
     /**
      * @return array{company_id: int, ticker: string, name: string}|null
+     * @deprecated Use findFocalsByGroup() instead for multi-focal support
      */
     public function findFocalByGroup(int $groupId): ?array
     {
@@ -47,6 +48,24 @@ class PeerGroupMemberQuery
             ->queryOne();
 
         return $row === false ? null : $row;
+    }
+
+    /**
+     * Find all focal companies in a peer group.
+     *
+     * @return list<array{company_id: int, ticker: string, name: string}>
+     */
+    public function findFocalsByGroup(int $groupId): array
+    {
+        return $this->db->createCommand(
+            'SELECT m.company_id, c.ticker, c.name
+             FROM industry_peer_group_member m
+             JOIN company c ON m.company_id = c.id
+             WHERE m.peer_group_id = :groupId AND m.is_focal = 1
+             ORDER BY m.display_order, c.ticker'
+        )
+            ->bindValue(':groupId', $groupId)
+            ->queryAll();
     }
 
     public function isMember(int $groupId, int $companyId): bool
@@ -84,10 +103,15 @@ class PeerGroupMemberQuery
             ->execute();
     }
 
+    /**
+     * Set a single focal company, clearing any existing focals.
+     *
+     * @deprecated Use addFocal()/removeFocal() for multi-focal support
+     */
     public function setFocal(int $groupId, int $companyId): void
     {
         // Clear existing focal
-        $this->clearFocal($groupId);
+        $this->clearFocals($groupId);
 
         // Set new focal
         $this->db->createCommand()
@@ -99,7 +123,38 @@ class PeerGroupMemberQuery
             ->execute();
     }
 
-    public function clearFocal(int $groupId): void
+    /**
+     * Add focal designation to a member without clearing existing focals.
+     */
+    public function addFocal(int $groupId, int $companyId): void
+    {
+        $this->db->createCommand()
+            ->update(
+                'industry_peer_group_member',
+                ['is_focal' => 1],
+                ['peer_group_id' => $groupId, 'company_id' => $companyId]
+            )
+            ->execute();
+    }
+
+    /**
+     * Remove focal designation from a specific member.
+     */
+    public function removeFocal(int $groupId, int $companyId): void
+    {
+        $this->db->createCommand()
+            ->update(
+                'industry_peer_group_member',
+                ['is_focal' => 0],
+                ['peer_group_id' => $groupId, 'company_id' => $companyId]
+            )
+            ->execute();
+    }
+
+    /**
+     * Clear all focal designations in a peer group.
+     */
+    public function clearFocals(int $groupId): void
     {
         $this->db->createCommand()
             ->update(
@@ -108,6 +163,14 @@ class PeerGroupMemberQuery
                 ['peer_group_id' => $groupId, 'is_focal' => 1]
             )
             ->execute();
+    }
+
+    /**
+     * @deprecated Use clearFocals() instead
+     */
+    public function clearFocal(int $groupId): void
+    {
+        $this->clearFocals($groupId);
     }
 
     public function updateDisplayOrder(int $groupId, int $companyId, int $displayOrder): void

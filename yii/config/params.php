@@ -27,8 +27,8 @@ return [
     'eiaApiKey' => 'DEMO_KEY',
     'eiaInventorySeriesId' => 'PET.WCRSTUS1.W',
 
-    // Financial Modeling Prep API key (set FMP_API_KEY env var)
-    'fmpApiKey' => null,
+    // Financial Modeling Prep API key
+    'fmpApiKey' => getenv('FMP_API_KEY') ?: null,
 
     // Rate limiter: 'file' (dev/single-process) or 'database' (production/multi-process)
     'rateLimiter' => 'file',

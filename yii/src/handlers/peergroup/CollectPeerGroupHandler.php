@@ -18,6 +18,7 @@ use app\queries\CollectionRunRepository;
 use app\queries\CompanyQuery;
 use app\queries\PeerGroupMemberQuery;
 use app\queries\PeerGroupQuery;
+use InvalidArgumentException;
 use Throwable;
 use yii\log\Logger;
 
@@ -87,15 +88,18 @@ final class CollectPeerGroupHandler implements CollectPeerGroupInterface
             // 5. Build IndustryConfig from group + policy + members
             $industryConfig = $this->buildIndustryConfig($group, $policy, $members);
 
-            // 6. Determine focal ticker
-            $focalTicker = $this->resolveFocalTicker($members, $request->focalTickerOverride);
+            // 6. Build focal tickers from members and additional focals
+            $additionalFocals = $this->normalizeAndValidateFocals(
+                $request->additionalFocals,
+                $members
+            );
 
             // 7. Execute collection
             $result = $this->industryCollector->collect(new CollectIndustryRequest(
                 config: $industryConfig,
                 batchSize: $request->batchSize,
                 enableMemoryManagement: $request->enableMemoryManagement,
-                focalTicker: $focalTicker,
+                focalTickers: $additionalFocals,
             ));
 
             // 8. Get run ID from datapack
@@ -191,7 +195,7 @@ final class CollectPeerGroupHandler implements CollectPeerGroupInterface
             companies: $companyConfigs,
             macroRequirements: $this->buildMacroRequirements($policy),
             dataRequirements: $this->buildDataRequirements($policy),
-            focalTicker: $this->getFocalTickerFromMembers($members),
+            focalTickers: $this->getFocalTickersFromMembers($members),
         );
     }
 
@@ -240,11 +244,13 @@ final class CollectPeerGroupHandler implements CollectPeerGroupInterface
      */
     private function buildDataRequirements(array $policy): DataRequirements
     {
+        $annual = $this->parseMetrics($policy['annual_financial_metrics'] ?? null);
+
         return new DataRequirements(
             historyYears: (int) ($policy['history_years'] ?? 5),
             quartersToFetch: (int) ($policy['quarters_to_fetch'] ?? 8),
             valuationMetrics: $this->parseMetrics($policy['valuation_metrics'] ?? null),
-            annualFinancialMetrics: $this->parseMetrics($policy['annual_financial_metrics'] ?? null),
+            annualFinancialMetrics: $annual,
             quarterMetrics: $this->parseMetrics($policy['quarterly_financial_metrics'] ?? null),
             operationalMetrics: $this->parseMetrics($policy['operational_metrics'] ?? null),
         );
@@ -303,37 +309,54 @@ final class CollectPeerGroupHandler implements CollectPeerGroupInterface
     }
 
     /**
-     * Get the focal ticker from members.
+     * Get focal tickers from members marked as is_focal.
      *
      * @param array<string, mixed>[] $members
+     * @return list<string>
      */
-    private function getFocalTickerFromMembers(array $members): ?string
+    private function getFocalTickersFromMembers(array $members): array
     {
+        $focalTickers = [];
         foreach ($members as $member) {
             if (!empty($member['is_focal'])) {
-                return $member['ticker'];
+                $focalTickers[] = $member['ticker'];
             }
         }
-
-        return null;
+        return $focalTickers;
     }
 
     /**
-     * Resolve focal ticker with override support.
+     * Normalize and validate additional focal tickers.
      *
+     * @param list<string> $additionalFocals
      * @param array<string, mixed>[] $members
+     * @return list<string>
      */
-    private function resolveFocalTicker(array $members, ?string $override): ?string
+    private function normalizeAndValidateFocals(array $additionalFocals, array $members): array
     {
-        if ($override !== null && $override !== '') {
-            // Validate override is a member
-            foreach ($members as $member) {
-                if ($member['ticker'] === $override) {
-                    return $override;
-                }
-            }
+        // Normalize: trim and uppercase
+        $normalized = array_map(
+            static fn (string $t): string => strtoupper(trim($t)),
+            $additionalFocals
+        );
+
+        // Remove empty strings
+        $normalized = array_filter($normalized, static fn (string $t): bool => $t !== '');
+
+        // Remove duplicates
+        $normalized = array_unique($normalized);
+
+        // Validate all are valid members
+        $validTickers = array_column($members, 'ticker');
+        $invalidFocals = array_diff($normalized, $validTickers);
+
+        if (!empty($invalidFocals)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid focal ticker(s): %s. Must be members of the peer group.',
+                implode(', ', $invalidFocals)
+            ));
         }
 
-        return $this->getFocalTickerFromMembers($members);
+        return array_values($normalized);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace app\dto;
 
+use app\clients\FmpResponseCache;
 use app\enums\Severity;
 use DateTimeImmutable;
 
@@ -23,6 +24,7 @@ final readonly class CollectDatapointRequest
         public ?string $ticker = null,
         public ?DateTimeImmutable $asOfMin = null,
         public ?string $unit = null,
+        public ?FmpResponseCache $fmpResponseCache = null,
     ) {
     }
 }

@@ -207,6 +207,33 @@ final class FmpAdapterTest extends Unit
         $this->assertSame(35_400_000_000.0, $netIncome->periods[0]->value);
     }
 
+    public function testParsesStableIncomeStatementEndpoint(): void
+    {
+        $content = $this->loadFixture('fmp/income-statement.json');
+        $adapter = new FmpAdapter();
+
+        $request = new AdaptRequest(
+            fetchResult: new FetchResult(
+                content: $content,
+                contentType: 'application/json',
+                statusCode: 200,
+                url: 'https://financialmodelingprep.com/stable/income-statement?symbol=XOM&period=annual&apikey=demo',
+                finalUrl: 'https://financialmodelingprep.com/stable/income-statement?symbol=XOM&period=annual&apikey=demo',
+                retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            ),
+            datapointKeys: [
+                'financials.revenue',
+            ],
+            ticker: 'XOM',
+        );
+
+        $result = $adapter->adapt($request);
+
+        $this->assertSame([], $result->notFound);
+        $this->assertEmpty($result->extractions);
+        $this->assertArrayHasKey('financials.revenue', $result->historicalExtractions);
+    }
+
     public function testParsesCashFlowWithHistoricalAndTtm(): void
     {
         $content = $this->loadFixture('fmp/cash-flow.json');

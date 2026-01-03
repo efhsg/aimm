@@ -88,9 +88,26 @@ $this->title = $group->name;
 <div class="card" style="margin-top: var(--space-6);">
     <div class="card__header">
         <h2 class="card__title">Members (<?= count($members) ?>)</h2>
-        <button type="button" class="btn btn--primary btn--sm" id="add-members-btn">
-            + Add Companies
-        </button>
+        <div class="toolbar">
+            <?php
+            $focalCount = array_reduce($members, static fn ($carry, $m) => $carry + ($m['is_focal'] ? 1 : 0), 0);
+if ($focalCount > 0): ?>
+                <form method="post"
+                      action="<?= Url::to(['clear-focals', 'slug' => $group->slug]) ?>"
+                      style="display: inline;">
+                    <?= Html::hiddenInput(
+                        Yii::$app->request->csrfParam,
+                        Yii::$app->request->csrfToken
+                    ) ?>
+                    <button type="submit" class="btn btn--secondary btn--sm">
+                        Clear All Focals (<?= $focalCount ?>)
+                    </button>
+                </form>
+            <?php endif; ?>
+            <button type="button" class="btn btn--primary btn--sm" id="add-members-btn">
+                + Add Companies
+            </button>
+        </div>
     </div>
     <div class="card__body">
         <?php if (empty($members)): ?>
@@ -105,7 +122,7 @@ $this->title = $group->name;
                         <tr>
                             <th>Ticker</th>
                             <th>Company Name</th>
-                            <th>Focal</th>
+                            <th>Focals</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -119,9 +136,21 @@ $this->title = $group->name;
                                 <td>
                                     <?php if ($member['is_focal']): ?>
                                         <span class="badge badge--info">Focal</span>
+                                        <form method="post"
+                                              action="<?= Url::to(['remove-focal', 'slug' => $group->slug]) ?>"
+                                              style="display: inline; margin-left: var(--space-2);">
+                                            <?= Html::hiddenInput(
+                                                Yii::$app->request->csrfParam,
+                                                Yii::$app->request->csrfToken
+                                            ) ?>
+                                            <input type="hidden" name="company_id" value="<?= $member['company_id'] ?>">
+                                            <button type="submit" class="btn btn--sm btn--secondary">
+                                                Remove Focal
+                                            </button>
+                                        </form>
                                     <?php else: ?>
                                         <form method="post"
-                                              action="<?= Url::to(['set-focal', 'slug' => $group->slug]) ?>"
+                                              action="<?= Url::to(['add-focal', 'slug' => $group->slug]) ?>"
                                               style="display: inline;">
                                             <?= Html::hiddenInput(
                                                 Yii::$app->request->csrfParam,
@@ -129,7 +158,7 @@ $this->title = $group->name;
                                             ) ?>
                                             <input type="hidden" name="company_id" value="<?= $member['company_id'] ?>">
                                             <button type="submit" class="btn btn--sm btn--secondary">
-                                                Set Focal
+                                                Add Focal
                                             </button>
                                         </form>
                                     <?php endif; ?>

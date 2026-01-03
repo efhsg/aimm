@@ -4,17 +4,23 @@ declare(strict_types=1);
 
 namespace app\controllers;
 
+use app\dto\peergroup\AddFocalRequest;
 use app\dto\peergroup\AddMembersRequest;
+use app\dto\peergroup\ClearFocalsRequest;
 use app\dto\peergroup\CollectPeerGroupRequest;
 use app\dto\peergroup\CreatePeerGroupRequest;
+use app\dto\peergroup\RemoveFocalRequest;
 use app\dto\peergroup\RemoveMemberRequest;
 use app\dto\peergroup\SetFocalRequest;
 use app\dto\peergroup\TogglePeerGroupRequest;
 use app\dto\peergroup\UpdatePeerGroupRequest;
 use app\filters\AdminAuthFilter;
+use app\handlers\peergroup\AddFocalInterface;
 use app\handlers\peergroup\AddMembersInterface;
+use app\handlers\peergroup\ClearFocalsInterface;
 use app\handlers\peergroup\CollectPeerGroupInterface;
 use app\handlers\peergroup\CreatePeerGroupInterface;
+use app\handlers\peergroup\RemoveFocalInterface;
 use app\handlers\peergroup\RemoveMemberInterface;
 use app\handlers\peergroup\SetFocalInterface;
 use app\handlers\peergroup\TogglePeerGroupInterface;
@@ -53,6 +59,9 @@ final class PeerGroupController extends Controller
         private readonly AddMembersInterface $addMembersHandler,
         private readonly RemoveMemberInterface $removeMemberHandler,
         private readonly SetFocalInterface $setFocalHandler,
+        private readonly AddFocalInterface $addFocalHandler,
+        private readonly RemoveFocalInterface $removeFocalHandler,
+        private readonly ClearFocalsInterface $clearFocalsHandler,
         private readonly CollectPeerGroupInterface $collectHandler,
         $config = []
     ) {
@@ -360,6 +369,8 @@ final class PeerGroupController extends Controller
 
     /**
      * Set a focal company in a peer group (POST only).
+     *
+     * @deprecated Use actionAddFocal + actionClearFocals for multi-focal support.
      */
     public function actionSetFocal(string $slug): Response
     {
@@ -390,6 +401,115 @@ final class PeerGroupController extends Controller
 
         if ($result->success) {
             Yii::$app->session->setFlash('success', 'Focal company updated successfully.');
+        } else {
+            Yii::$app->session->setFlash('error', implode(' ', $result->errors));
+        }
+
+        return $this->redirect(['view', 'slug' => $slug]);
+    }
+
+    /**
+     * Add a focal company to a peer group (POST only).
+     */
+    public function actionAddFocal(string $slug): Response
+    {
+        $request = Yii::$app->request;
+
+        if (!$request->isPost) {
+            throw new NotFoundHttpException('Method not allowed.');
+        }
+
+        $group = $this->listQuery->findBySlug($slug);
+
+        if ($group === null) {
+            throw new NotFoundHttpException('Peer group not found.');
+        }
+
+        $companyId = (int) $request->post('company_id', 0);
+
+        if ($companyId <= 0) {
+            Yii::$app->session->setFlash('error', 'Invalid company ID.');
+            return $this->redirect(['view', 'slug' => $slug]);
+        }
+
+        $result = $this->addFocalHandler->addFocal(new AddFocalRequest(
+            groupId: $group->id,
+            companyId: $companyId,
+            actorUsername: AdminAuthFilter::getAuthenticatedUsername() ?? 'unknown',
+        ));
+
+        if ($result->success) {
+            Yii::$app->session->setFlash('success', 'Company marked as focal.');
+        } else {
+            Yii::$app->session->setFlash('error', implode(' ', $result->errors));
+        }
+
+        return $this->redirect(['view', 'slug' => $slug]);
+    }
+
+    /**
+     * Remove a focal company from a peer group (POST only).
+     */
+    public function actionRemoveFocal(string $slug): Response
+    {
+        $request = Yii::$app->request;
+
+        if (!$request->isPost) {
+            throw new NotFoundHttpException('Method not allowed.');
+        }
+
+        $group = $this->listQuery->findBySlug($slug);
+
+        if ($group === null) {
+            throw new NotFoundHttpException('Peer group not found.');
+        }
+
+        $companyId = (int) $request->post('company_id', 0);
+
+        if ($companyId <= 0) {
+            Yii::$app->session->setFlash('error', 'Invalid company ID.');
+            return $this->redirect(['view', 'slug' => $slug]);
+        }
+
+        $result = $this->removeFocalHandler->removeFocal(new RemoveFocalRequest(
+            groupId: $group->id,
+            companyId: $companyId,
+            actorUsername: AdminAuthFilter::getAuthenticatedUsername() ?? 'unknown',
+        ));
+
+        if ($result->success) {
+            Yii::$app->session->setFlash('success', 'Company removed from focals.');
+        } else {
+            Yii::$app->session->setFlash('error', implode(' ', $result->errors));
+        }
+
+        return $this->redirect(['view', 'slug' => $slug]);
+    }
+
+    /**
+     * Clear all focal companies from a peer group (POST only).
+     */
+    public function actionClearFocals(string $slug): Response
+    {
+        $request = Yii::$app->request;
+
+        if (!$request->isPost) {
+            throw new NotFoundHttpException('Method not allowed.');
+        }
+
+        $group = $this->listQuery->findBySlug($slug);
+
+        if ($group === null) {
+            throw new NotFoundHttpException('Peer group not found.');
+        }
+
+        $result = $this->clearFocalsHandler->clearFocals(new ClearFocalsRequest(
+            groupId: $group->id,
+            actorUsername: AdminAuthFilter::getAuthenticatedUsername() ?? 'unknown',
+        ));
+
+        if ($result->success) {
+            Yii::$app->session->setFlash('success', 'All focal companies cleared.');
         } else {
             Yii::$app->session->setFlash('error', implode(' ', $result->errors));
         }

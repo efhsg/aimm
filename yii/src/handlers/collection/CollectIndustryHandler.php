@@ -50,7 +50,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
         $datapackId = Uuid::uuid4()->toString();
         $startTime = new DateTimeImmutable();
         $companyCount = count($request->config->companies);
-        $focalTicker = $this->resolveFocalTicker($request);
+        $focalTickers = $this->buildFocalTickers($request);
         $runId = $this->runRepository->create($request->config->id, $datapackId);
 
         $this->logger->log(
@@ -61,7 +61,8 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                 'company_count' => $companyCount,
                 'batch_size' => $request->batchSize,
                 'memory_management' => $request->enableMemoryManagement,
-                'focal_ticker' => $focalTicker,
+                'focal_count' => count($focalTickers),
+                'focal_tickers' => $focalTickers,
             ],
             Logger::LEVEL_INFO,
             'collection'
@@ -96,7 +97,8 @@ final class CollectIndustryHandler implements CollectIndustryInterface
 
                 foreach ($batch as $companyConfig) {
                     try {
-                        $requirements = $companyConfig->ticker === $focalTicker
+                        $isFocal = in_array($companyConfig->ticker, $focalTickers, true);
+                        $requirements = $isFocal
                             ? $request->config->dataRequirements
                             : $peerRequirements;
 
@@ -177,7 +179,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                 );
             }
 
-            $gateResult = $this->gateValidator->validate($dataPack, $request->config, $focalTicker);
+            $gateResult = $this->gateValidator->validate($dataPack, $request->config, $focalTickers);
             $this->repository->saveValidation($request->config->id, $datapackId, $gateResult);
             $this->runRepository->recordErrors($runId, $gateResult);
 
@@ -245,26 +247,48 @@ final class CollectIndustryHandler implements CollectIndustryInterface
         }
     }
 
-    private function resolveFocalTicker(CollectIndustryRequest $request): string
+    /**
+     * Build the list of focal tickers from config and request.
+     *
+     * @return list<string>
+     */
+    private function buildFocalTickers(CollectIndustryRequest $request): array
     {
-        $usedFallback = false;
-        $focalTicker = $request->config->resolveFocalTicker($request->focalTicker, $usedFallback);
+        // Merge config focals with request focals
+        $merged = array_unique(array_merge(
+            $request->config->focalTickers,
+            $request->focalTickers
+        ));
 
-        if ($focalTicker === null) {
-            return '';
-        }
-
-        if ($usedFallback) {
+        if (empty($merged) && !empty($request->config->companies)) {
+            $fallbackTicker = $request->config->companies[0]->ticker;
             $this->logger->log(
-                sprintf(
-                    'Focal ticker resolved to first company: %s (no explicit focal_ticker configured)',
-                    $focalTicker
-                ),
-                Logger::LEVEL_INFO
+                [
+                    'message' => 'Focal tickers not provided; falling back to first company',
+                    'ticker' => $fallbackTicker,
+                ],
+                Logger::LEVEL_INFO,
+                'collection'
             );
+
+            return [$fallbackTicker];
         }
 
-        return $focalTicker;
+        // Validate all focals are valid companies
+        $validTickers = array_map(
+            static fn ($c): string => $c->ticker,
+            $request->config->companies
+        );
+
+        $invalidFocals = array_diff($merged, $validTickers);
+        if (!empty($invalidFocals)) {
+            throw new CollectionException(sprintf(
+                'Invalid focal ticker(s): %s. Must be in configured companies.',
+                implode(', ', $invalidFocals)
+            ));
+        }
+
+        return array_values($merged);
     }
 
     private function buildPeerRequirements(DataRequirements $requirements): DataRequirements
