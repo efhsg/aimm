@@ -46,6 +46,7 @@ Repeatable infrastructure tasks.
 | [upgrade-php-version](meta/upgrade-php-version.md) | Upgrade PHP version used by the Yii2 runtime (Docker + Composer constraints) and validate the stack. |
 | [create-migration](meta/create-migration.md) | Create Yii2 database migrations. Tables for collection logs, rate limiting, job queue. |
 | [review-and-improve-skill](meta/review-and-improve-skill.md) | Review an existing skill doc and rewrite it with tighter contracts and actionable DoD/tests. |
+| [review-artifact](meta/review-artifact.md) | Review any design or analysis artifact for correctness, completeness, clarity, risk, and fitness-for-purpose. |
 | [review-design-doc](meta/review-design-doc.md) | Perform a structured, critical review of a design document against stated principles, architectural taxonomy, type-safety, and security constraints. |
 | [review-changes](meta/review-changes.md) | Review code changes for correctness, style, and project compliance. Invoked via `/review-changes` command. |
 
