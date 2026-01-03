@@ -29,7 +29,7 @@ if ($currentSector !== null) {
     $params['sector'] = $currentSector;
 }
 ?>
-<a href="<?= Url::to($params) ?>" style="text-decoration: none; color: inherit;">
+<a href="<?= Url::to($params) ?>" class="table__sort">
     <?= Html::encode($label) ?>
     <?php if ($isActive): ?>
         <?= $currentDir === 'ASC' ? '↑' : '↓' ?>

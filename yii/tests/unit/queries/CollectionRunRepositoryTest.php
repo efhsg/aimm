@@ -374,4 +374,190 @@ final class CollectionRunRepositoryTest extends Unit
 
         $this->assertNull($repository->extractTicker(null));
     }
+
+    public function testListRecentReturnsAllRunsWithoutFilters(): void
+    {
+        $expectedRows = [
+            ['id' => 3, 'status' => 'complete'],
+            ['id' => 2, 'status' => 'running'],
+            ['id' => 1, 'status' => 'failed'],
+        ];
+
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')->willReturnSelf();
+        $command->method('queryAll')->willReturn($expectedRows);
+
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('createCommand')
+            ->with($this->callback(function (string $sql): bool {
+                return str_contains($sql, 'ORDER BY started_at DESC')
+                    && !str_contains($sql, 'WHERE');
+            }))
+            ->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $result = $repository->listRecent();
+
+        $this->assertSame($expectedRows, $result);
+    }
+
+    public function testListRecentFiltersbyStatus(): void
+    {
+        $boundParams = [];
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')
+            ->willReturnCallback(function (string $name, $value) use ($command, &$boundParams) {
+                $boundParams[$name] = $value;
+                return $command;
+            });
+        $command->method('queryAll')->willReturn([]);
+
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('createCommand')
+            ->with($this->stringContains('status = :status'))
+            ->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $repository->listRecent('running');
+
+        $this->assertSame('running', $boundParams[':status']);
+    }
+
+    public function testListRecentFiltersBySearchWithEscaping(): void
+    {
+        $boundParams = [];
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')
+            ->willReturnCallback(function (string $name, $value) use ($command, &$boundParams) {
+                $boundParams[$name] = $value;
+                return $command;
+            });
+        $command->method('queryAll')->willReturn([]);
+
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('createCommand')
+            ->with($this->stringContains('industry_id LIKE :search'))
+            ->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $repository->listRecent(null, 'oil%majors');
+
+        $this->assertSame('%oil\%majors%', $boundParams[':search']);
+    }
+
+    public function testListRecentCombinesStatusAndSearch(): void
+    {
+        $boundParams = [];
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')
+            ->willReturnCallback(function (string $name, $value) use ($command, &$boundParams) {
+                $boundParams[$name] = $value;
+                return $command;
+            });
+        $command->method('queryAll')->willReturn([]);
+
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('createCommand')
+            ->with($this->callback(function (string $sql): bool {
+                return str_contains($sql, 'status = :status')
+                    && str_contains($sql, 'industry_id LIKE :search');
+            }))
+            ->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $repository->listRecent('complete', 'oil');
+
+        $this->assertSame('complete', $boundParams[':status']);
+        $this->assertSame('%oil%', $boundParams[':search']);
+    }
+
+    public function testListRecentRespectsLimitAndOffset(): void
+    {
+        $boundParams = [];
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')
+            ->willReturnCallback(function (string $name, $value) use ($command, &$boundParams) {
+                $boundParams[$name] = $value;
+                return $command;
+            });
+        $command->method('queryAll')->willReturn([]);
+
+        $db = $this->createMock(Connection::class);
+        $db->method('createCommand')->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $repository->listRecent(null, null, 25, 50);
+
+        $this->assertSame(25, $boundParams[':limit']);
+        $this->assertSame(50, $boundParams[':offset']);
+    }
+
+    public function testCountRecentReturnsCountWithoutFilters(): void
+    {
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')->willReturnSelf();
+        $command->method('queryScalar')->willReturn('42');
+
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('createCommand')
+            ->with($this->callback(function (string $sql): bool {
+                return str_contains($sql, 'SELECT COUNT(*)')
+                    && !str_contains($sql, 'WHERE');
+            }))
+            ->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $result = $repository->countRecent();
+
+        $this->assertSame(42, $result);
+    }
+
+    public function testCountRecentFiltersByStatus(): void
+    {
+        $boundParams = [];
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')
+            ->willReturnCallback(function (string $name, $value) use ($command, &$boundParams) {
+                $boundParams[$name] = $value;
+                return $command;
+            });
+        $command->method('queryScalar')->willReturn('5');
+
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('createCommand')
+            ->with($this->stringContains('status = :status'))
+            ->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $result = $repository->countRecent('failed');
+
+        $this->assertSame(5, $result);
+        $this->assertSame('failed', $boundParams[':status']);
+    }
+
+    public function testCountRecentFiltersBySearchWithEscaping(): void
+    {
+        $boundParams = [];
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')
+            ->willReturnCallback(function (string $name, $value) use ($command, &$boundParams) {
+                $boundParams[$name] = $value;
+                return $command;
+            });
+        $command->method('queryScalar')->willReturn('3');
+
+        $db = $this->createMock(Connection::class);
+        $db->method('createCommand')->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $repository->countRecent(null, 'test_value');
+
+        $this->assertSame('%test\_value%', $boundParams[':search']);
+    }
 }

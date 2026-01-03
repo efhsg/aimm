@@ -166,6 +166,14 @@ final class CollectionRunRepository
     }
 
     /**
+     * Escape LIKE pattern special characters.
+     */
+    private function escapeLikePattern(string $value): string
+    {
+        return strtr($value, ['%' => '\%', '_' => '\_', '\\' => '\\\\']);
+    }
+
+    /**
      * Get errors and warnings for a collection run.
      *
      * @return list<array<string, mixed>>
@@ -198,6 +206,77 @@ final class CollectionRunRepository
             ->bindValue(':group_id', $peerGroupId)
             ->bindValue(':limit', $limit)
             ->queryAll();
+    }
+
+    /**
+     * List recent collection runs with optional filters.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listRecent(
+        ?string $status = null,
+        ?string $search = null,
+        int $limit = 50,
+        int $offset = 0
+    ): array {
+        $query = 'SELECT * FROM {{%collection_run}}';
+        $conditions = [];
+        $params = [];
+
+        if ($status !== null) {
+            $conditions[] = 'status = :status';
+            $params[':status'] = $status;
+        }
+
+        if ($search !== null) {
+            $conditions[] = '(industry_id LIKE :search OR datapack_id LIKE :search)';
+            $params[':search'] = '%' . $this->escapeLikePattern($search) . '%';
+        }
+
+        if ($conditions !== []) {
+            $query .= ' WHERE ' . implode(' AND ', $conditions);
+        }
+
+        $query .= ' ORDER BY started_at DESC LIMIT :limit OFFSET :offset';
+
+        $command = $this->db->createCommand($query)
+            ->bindValue(':limit', $limit)
+            ->bindValue(':offset', $offset);
+
+        foreach ($params as $name => $value) {
+            $command->bindValue($name, $value);
+        }
+
+        return $command->queryAll();
+    }
+
+    public function countRecent(?string $status = null, ?string $search = null): int
+    {
+        $query = 'SELECT COUNT(*) FROM {{%collection_run}}';
+        $conditions = [];
+        $params = [];
+
+        if ($status !== null) {
+            $conditions[] = 'status = :status';
+            $params[':status'] = $status;
+        }
+
+        if ($search !== null) {
+            $conditions[] = '(industry_id LIKE :search OR datapack_id LIKE :search)';
+            $params[':search'] = '%' . $this->escapeLikePattern($search) . '%';
+        }
+
+        if ($conditions !== []) {
+            $query .= ' WHERE ' . implode(' AND ', $conditions);
+        }
+
+        $command = $this->db->createCommand($query);
+
+        foreach ($params as $name => $value) {
+            $command->bindValue($name, $value);
+        }
+
+        return (int) $command->queryScalar();
     }
 
     /**

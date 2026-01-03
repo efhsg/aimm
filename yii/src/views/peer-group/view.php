@@ -24,7 +24,7 @@ $this->title = $group->name;
         </a>
         <form method="post"
               action="<?= Url::to(['toggle', 'slug' => $group->slug]) ?>"
-              style="display: inline;">
+              >
             <?= Html::hiddenInput(
                 Yii::$app->request->csrfParam,
                 Yii::$app->request->csrfToken
@@ -85,7 +85,7 @@ $this->title = $group->name;
     </div>
 </div>
 
-<div class="card" style="margin-top: var(--space-6);">
+<div class="card card--spaced">
     <div class="card__header">
         <h2 class="card__title">Members (<?= count($members) ?>)</h2>
         <div class="toolbar">
@@ -93,8 +93,7 @@ $this->title = $group->name;
             $focalCount = array_reduce($members, static fn ($carry, $m) => $carry + ($m['is_focal'] ? 1 : 0), 0);
 if ($focalCount > 0): ?>
                 <form method="post"
-                      action="<?= Url::to(['clear-focals', 'slug' => $group->slug]) ?>"
-                      style="display: inline;">
+                      action="<?= Url::to(['clear-focals', 'slug' => $group->slug]) ?>">
                     <?= Html::hiddenInput(
                         Yii::$app->request->csrfParam,
                         Yii::$app->request->csrfToken
@@ -129,44 +128,45 @@ if ($focalCount > 0): ?>
                     <tbody>
                         <?php foreach ($members as $member): ?>
                             <tr>
-                                <td>
+                                <td class="table__cell--mono">
                                     <strong><?= Html::encode($member['ticker']) ?></strong>
                                 </td>
                                 <td><?= Html::encode($member['name']) ?></td>
                                 <td>
                                     <?php if ($member['is_focal']): ?>
-                                        <span class="badge badge--info">Focal</span>
-                                        <form method="post"
-                                              action="<?= Url::to(['remove-focal', 'slug' => $group->slug]) ?>"
-                                              style="display: inline; margin-left: var(--space-2);">
-                                            <?= Html::hiddenInput(
-                                                Yii::$app->request->csrfParam,
-                                                Yii::$app->request->csrfToken
-                                            ) ?>
-                                            <input type="hidden" name="company_id" value="<?= $member['company_id'] ?>">
-                                            <button type="submit" class="btn btn--sm btn--secondary">
-                                                Remove Focal
-                                            </button>
-                                        </form>
+                                        <div class="table__actions">
+                                            <span class="badge badge--info">Focal</span>
+                                            <form method="post"
+                                                  action="<?= Url::to(['remove-focal', 'slug' => $group->slug]) ?>">
+                                                <?= Html::hiddenInput(
+                                                    Yii::$app->request->csrfParam,
+                                                    Yii::$app->request->csrfToken
+                                                ) ?>
+                                                <input type="hidden" name="company_id" value="<?= $member['company_id'] ?>">
+                                                <button type="submit" class="btn btn--sm btn--secondary">
+                                                    Remove Focal
+                                                </button>
+                                            </form>
+                                        </div>
                                     <?php else: ?>
-                                        <form method="post"
-                                              action="<?= Url::to(['add-focal', 'slug' => $group->slug]) ?>"
-                                              style="display: inline;">
-                                            <?= Html::hiddenInput(
-                                                Yii::$app->request->csrfParam,
-                                                Yii::$app->request->csrfToken
-                                            ) ?>
-                                            <input type="hidden" name="company_id" value="<?= $member['company_id'] ?>">
-                                            <button type="submit" class="btn btn--sm btn--secondary">
-                                                Add Focal
-                                            </button>
-                                        </form>
+                                        <div class="table__actions">
+                                            <form method="post"
+                                                  action="<?= Url::to(['add-focal', 'slug' => $group->slug]) ?>">
+                                                <?= Html::hiddenInput(
+                                                    Yii::$app->request->csrfParam,
+                                                    Yii::$app->request->csrfToken
+                                                ) ?>
+                                                <input type="hidden" name="company_id" value="<?= $member['company_id'] ?>">
+                                                <button type="submit" class="btn btn--sm btn--secondary">
+                                                    Add Focal
+                                                </button>
+                                            </form>
+                                        </div>
                                     <?php endif; ?>
                                 </td>
                                 <td>
                                     <form method="post"
                                           action="<?= Url::to(['remove-member', 'slug' => $group->slug]) ?>"
-                                          style="display: inline;"
                                           onsubmit="return confirm('Remove <?= Html::encode($member['ticker']) ?> from this group?');">
                                         <?= Html::hiddenInput(
                                             Yii::$app->request->csrfParam,
@@ -187,13 +187,12 @@ if ($focalCount > 0): ?>
     </div>
 </div>
 
-<div class="card" style="margin-top: var(--space-6);">
+<div class="card card--spaced">
     <div class="card__header">
         <h2 class="card__title">Collection</h2>
         <?php if ($group->isActive && count($members) > 0): ?>
             <form method="post"
                   action="<?= Url::to(['collect', 'slug' => $group->slug]) ?>"
-                  style="display: inline;"
                   onsubmit="return confirm('Start data collection for this peer group?');">
                 <?= Html::hiddenInput(
                     Yii::$app->request->csrfParam,
@@ -243,7 +242,7 @@ if ($focalCount > 0): ?>
                             };
                             ?>
                             <tr>
-                                <td>
+                                <td class="table__cell--number">
                                     <a href="<?= Url::to(['collection-run/view', 'id' => $run['id']]) ?>">
                                         #<?= $run['id'] ?>
                                     </a>
@@ -254,7 +253,7 @@ if ($focalCount > 0): ?>
                                         <?= Html::encode(ucfirst($run['status'])) ?>
                                     </span>
                                 </td>
-                                <td>
+                                <td class="table__cell--number">
                                     <?= $run['companies_success'] ?>/<?= $run['companies_total'] ?>
                                 </td>
                                 <td>
@@ -285,7 +284,7 @@ if ($focalCount > 0): ?>
 </div>
 
 <!-- Add Members Modal -->
-<div id="add-members-modal" class="modal" style="display: none;">
+<div id="add-members-modal" class="modal modal--hidden">
     <div class="modal__backdrop" onclick="closeModal()"></div>
     <div class="modal__content">
         <div class="modal__header">
@@ -318,94 +317,13 @@ if ($focalCount > 0): ?>
     </div>
 </div>
 
-<style>
-.alert {
-    padding: var(--space-4);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--space-4);
-}
-.alert--warning {
-    background: var(--color-warning-50, #fffbeb);
-    border: 1px solid var(--color-warning-200, #fde68a);
-    color: var(--color-warning-800, #92400e);
-}
-.text-danger {
-    color: var(--color-error-600, #dc2626);
-}
-.text-warning {
-    color: var(--color-warning-600, #d97706);
-}
-
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: var(--z-modal, 400);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.modal__backdrop {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-}
-.modal__content {
-    position: relative;
-    background: var(--bg-surface);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-xl);
-    width: 100%;
-    max-width: 500px;
-    margin: var(--space-4);
-}
-.modal__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-4) var(--space-6);
-    border-bottom: 1px solid var(--border-default);
-}
-.modal__title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    margin: 0;
-}
-.modal__close {
-    background: none;
-    border: none;
-    font-size: var(--text-2xl);
-    cursor: pointer;
-    color: var(--text-secondary);
-    line-height: 1;
-}
-.modal__close:hover {
-    color: var(--text-primary);
-}
-.modal__body {
-    padding: var(--space-6);
-}
-.modal__footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-    padding: var(--space-4) var(--space-6);
-    border-top: 1px solid var(--border-default);
-}
-</style>
-
 <script>
 document.getElementById('add-members-btn').addEventListener('click', function() {
-    document.getElementById('add-members-modal').style.display = 'flex';
+    document.getElementById('add-members-modal').classList.remove('modal--hidden');
 });
 
 function closeModal() {
-    document.getElementById('add-members-modal').style.display = 'none';
+    document.getElementById('add-members-modal').classList.add('modal--hidden');
 }
 
 document.addEventListener('keydown', function(e) {

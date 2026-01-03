@@ -40,6 +40,7 @@ $this->title = 'Collection Policies';
                             <th>Quarters</th>
                             <th>Sector Default</th>
                             <th>Created</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -54,9 +55,9 @@ $this->title = 'Collection Policies';
                                         <span class="text-muted text-sm"><?= Html::encode($policy['description']) ?></span>
                                     <?php endif; ?>
                                 </td>
-                                <td><code><?= Html::encode($policy['slug']) ?></code></td>
-                                <td><?= $policy['history_years'] ?> years</td>
-                                <td><?= $policy['quarters_to_fetch'] ?></td>
+                                <td class="table__cell--mono"><code><?= Html::encode($policy['slug']) ?></code></td>
+                                <td class="table__cell--number"><?= $policy['history_years'] ?> years</td>
+                                <td class="table__cell--number"><?= $policy['quarters_to_fetch'] ?></td>
                                 <td>
                                     <?php if (!empty($policy['is_default_for_sector'])): ?>
                                         <span class="badge badge--info"><?= Html::encode($policy['is_default_for_sector']) ?></span>
@@ -71,6 +72,18 @@ $this->title = 'Collection Policies';
                                         <span class="text-muted text-sm">by <?= Html::encode($policy['created_by']) ?></span>
                                     <?php endif; ?>
                                 </td>
+                                <td>
+                                    <div class="table__actions">
+                                        <a href="<?= Url::to(['view', 'slug' => $policy['slug']]) ?>"
+                                           class="btn btn--sm btn--secondary">
+                                            View
+                                        </a>
+                                        <a href="<?= Url::to(['update', 'slug' => $policy['slug']]) ?>"
+                                           class="btn btn--sm btn--secondary">
+                                            Edit
+                                        </a>
+                                    </div>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -79,15 +92,3 @@ $this->title = 'Collection Policies';
         <?php endif; ?>
     </div>
 </div>
-
-<style>
-.text-sm {
-    font-size: var(--text-sm);
-}
-code {
-    font-family: var(--font-mono);
-    background: var(--bg-subtle);
-    padding: 0.125rem 0.375rem;
-    border-radius: var(--radius-sm);
-}
-</style>

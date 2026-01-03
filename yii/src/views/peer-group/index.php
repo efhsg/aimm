@@ -46,7 +46,7 @@ $this->title = 'Peer Groups';
 
     <div class="filter-bar__controls">
         <?php if (!empty($sectors)): ?>
-            <select class="search-input" style="width: auto;" onchange="filterBySector(this.value)">
+            <select class="search-input search-input--compact" onchange="filterBySector(this.value)">
                 <option value="">All Sectors</option>
                 <?php foreach ($sectors as $sector): ?>
                     <option value="<?= Html::encode($sector) ?>" <?= $currentSector === $sector ? 'selected' : '' ?>>
@@ -56,7 +56,7 @@ $this->title = 'Peer Groups';
             </select>
         <?php endif; ?>
 
-        <form method="get" action="<?= Url::to(['index']) ?>" style="display: inline-block;">
+        <form method="get" action="<?= Url::to(['index']) ?>">
             <?php if ($currentStatus !== null): ?>
                 <input type="hidden" name="status" value="<?= Html::encode($currentStatus) ?>">
             <?php endif; ?>
@@ -133,7 +133,7 @@ $this->title = 'Peer Groups';
                                 </a>
                             </td>
                             <td><?= Html::encode($group->sector) ?></td>
-                            <td><?= $group->memberCount ?></td>
+                            <td class="table__cell--number"><?= $group->memberCount ?></td>
                             <td>
                                 <?php if ($group->focalCount > 0): ?>
                                     <?php foreach ($group->focalTickers as $ticker): ?>
@@ -175,8 +175,7 @@ $this->title = 'Peer Groups';
                                         Edit
                                     </a>
                                     <form method="post"
-                                          action="<?= Url::to(['toggle', 'slug' => $group->slug]) ?>"
-                                          style="display: inline;">
+                                          action="<?= Url::to(['toggle', 'slug' => $group->slug]) ?>">
                                         <?= Html::hiddenInput(
                                             Yii::$app->request->csrfParam,
                                             Yii::$app->request->csrfToken

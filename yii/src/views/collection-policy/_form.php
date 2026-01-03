@@ -106,7 +106,7 @@ use yii\helpers\Html;
         </div>
     </div>
 
-    <div class="card" style="margin-top: var(--space-6);">
+    <div class="card card--spaced">
         <div class="card__header">
             <h2 class="card__title">Macro Requirements</h2>
         </div>
@@ -165,10 +165,12 @@ use yii\helpers\Html;
         </div>
     </div>
 
-    <div class="card" style="margin-top: var(--space-6);">
+    <div class="card card--spaced">
         <div class="card__header">
-            <h2 class="card__title">Data Requirements</h2>
-            <p class="card__subtitle">Define metrics as JSON arrays with key, unit, required, and required_scope fields.</p>
+            <div>
+                <h2 class="card__title">Data Requirements</h2>
+                <p class="card__subtitle">Define metrics as JSON arrays with key, unit, required, and required_scope fields.</p>
+            </div>
         </div>
         <div class="card__body">
             <div class="form-group">
@@ -205,83 +207,12 @@ use yii\helpers\Html;
         </div>
     </div>
 
-    <div class="form-actions" style="margin-top: var(--space-6);">
+    <div class="form-actions">
         <button type="submit" class="btn btn--primary">
             <?= $isUpdate ? 'Update Policy' : 'Create Policy' ?>
         </button>
     </div>
 </form>
-
-<style>
-.alert {
-    padding: var(--space-4);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--space-6);
-}
-.alert--error {
-    background: var(--color-error-50, #fef2f2);
-    border: 1px solid var(--color-error-200, #fecaca);
-    color: var(--color-error-800, #991b1b);
-}
-.alert ul {
-    margin: 0;
-    padding-left: var(--space-4);
-}
-.form-row {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-4);
-}
-.form-row--3 {
-    grid-template-columns: repeat(3, 1fr);
-}
-.form-group {
-    margin-bottom: var(--space-4);
-}
-.form-label {
-    display: block;
-    font-weight: 500;
-    margin-bottom: var(--space-2);
-}
-.form-label .required {
-    color: var(--color-error-600);
-}
-.form-input,
-.form-textarea {
-    width: 100%;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    font-size: var(--text-base);
-}
-.form-input:focus,
-.form-textarea:focus {
-    outline: none;
-    border-color: var(--color-primary-500);
-    box-shadow: 0 0 0 3px var(--color-primary-100);
-}
-.form-input[readonly] {
-    background: var(--bg-subtle);
-}
-.form-textarea--code {
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-}
-.form-help {
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-    margin-top: var(--space-1);
-}
-.form-actions {
-    display: flex;
-    gap: var(--space-3);
-}
-.card__subtitle {
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-    margin: 0;
-}
-</style>
 
 <?php if (!$isUpdate): ?>
 <script>

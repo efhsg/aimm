@@ -7,18 +7,25 @@ namespace app\controllers;
 use app\filters\AdminAuthFilter;
 use app\queries\CollectionRunRepository;
 use Yii;
+use yii\data\Pagination;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 /**
- * Controller for viewing collection run details.
+ * Controller for listing and viewing collection runs.
  *
  * Provides read-only access to collection run history and status.
  * All actions require HTTP Basic Authentication.
  */
 final class CollectionRunController extends Controller
 {
+    private const STATUS_OPTIONS = [
+        'running' => 'Running',
+        'complete' => 'Complete',
+        'failed' => 'Failed',
+    ];
+
     public $layout = 'main';
 
     public function __construct(
@@ -56,6 +63,40 @@ final class CollectionRunController extends Controller
             'run' => $run,
             'errors' => array_filter($errors, fn ($e) => $e['severity'] === 'error'),
             'warnings' => array_filter($errors, fn ($e) => $e['severity'] === 'warning'),
+        ]);
+    }
+
+    /**
+     * List recent collection runs.
+     */
+    public function actionIndex(): string
+    {
+        $request = Yii::$app->request;
+
+        $statusParam = $request->get('status');
+        $status = is_string($statusParam) && array_key_exists($statusParam, self::STATUS_OPTIONS)
+            ? $statusParam
+            : null;
+
+        $search = $request->get('search');
+        $search = is_string($search) ? trim($search) : null;
+        $search = $search === '' ? null : $search;
+
+        $totalCount = $this->runRepository->countRecent($status, $search);
+        $pagination = new Pagination([
+            'totalCount' => $totalCount,
+            'pageSize' => 50,
+        ]);
+
+        $runs = $this->runRepository->listRecent($status, $search, $pagination->limit, $pagination->offset);
+
+        return $this->render('index', [
+            'runs' => $runs,
+            'currentStatus' => $status,
+            'currentSearch' => $search,
+            'pagination' => $pagination,
+            'totalCount' => $totalCount,
+            'statusOptions' => self::STATUS_OPTIONS,
         ]);
     }
 

@@ -89,7 +89,7 @@ $statusClass = match ($run['status']) {
 </div>
 
 <?php if (!empty($errors)): ?>
-<div class="card" style="margin-top: var(--space-6);">
+<div class="card card--spaced">
     <div class="card__header">
         <h2 class="card__title">Errors (<?= count($errors) ?>)</h2>
     </div>
@@ -107,10 +107,10 @@ $statusClass = match ($run['status']) {
                 <tbody>
                     <?php foreach ($errors as $error): ?>
                         <tr>
-                            <td>
+                            <td class="table__cell--mono">
                                 <?= $error['ticker'] !== null ? Html::encode($error['ticker']) : '<span class="text-muted">-</span>' ?>
                             </td>
-                            <td><code><?= Html::encode($error['error_code']) ?></code></td>
+                            <td class="table__cell--mono"><code><?= Html::encode($error['error_code']) ?></code></td>
                             <td><?= Html::encode($error['error_message']) ?></td>
                             <td>
                                 <?php if ($error['error_path'] !== null): ?>
@@ -129,7 +129,7 @@ $statusClass = match ($run['status']) {
 <?php endif; ?>
 
 <?php if (!empty($warnings)): ?>
-<div class="card" style="margin-top: var(--space-6);">
+<div class="card card--spaced">
     <div class="card__header">
         <h2 class="card__title">Warnings (<?= count($warnings) ?>)</h2>
     </div>
@@ -147,10 +147,10 @@ $statusClass = match ($run['status']) {
                 <tbody>
                     <?php foreach ($warnings as $warning): ?>
                         <tr>
-                            <td>
+                            <td class="table__cell--mono">
                                 <?= $warning['ticker'] !== null ? Html::encode($warning['ticker']) : '<span class="text-muted">-</span>' ?>
                             </td>
-                            <td><code><?= Html::encode($warning['error_code']) ?></code></td>
+                            <td class="table__cell--mono"><code><?= Html::encode($warning['error_code']) ?></code></td>
                             <td><?= Html::encode($warning['error_message']) ?></td>
                             <td>
                                 <?php if ($warning['error_path'] !== null): ?>
@@ -169,7 +169,7 @@ $statusClass = match ($run['status']) {
 <?php endif; ?>
 
 <?php if (empty($errors) && empty($warnings) && $run['status'] === 'complete'): ?>
-<div class="card" style="margin-top: var(--space-6);">
+<div class="card card--spaced">
     <div class="card__body">
         <div class="empty-state">
             <h3 class="empty-state__title">No issues found</h3>
@@ -178,21 +178,3 @@ $statusClass = match ($run['status']) {
     </div>
 </div>
 <?php endif; ?>
-
-<style>
-.text-success {
-    color: var(--color-success-600, #16a34a);
-}
-.text-danger {
-    color: var(--color-error-600, #dc2626);
-}
-.text-sm {
-    font-size: var(--text-sm);
-}
-code {
-    font-family: var(--font-mono);
-    background: var(--bg-subtle);
-    padding: 0.125rem 0.375rem;
-    border-radius: var(--radius-sm);
-}
-</style>

@@ -41,7 +41,6 @@ $formatJson = function (mixed $value): string {
         </a>
         <form method="post"
               action="<?= Url::to(['delete', 'slug' => $policy['slug']]) ?>"
-              style="display: inline;"
               onsubmit="return confirm('Delete this collection policy?');">
             <?= Html::hiddenInput(
                 Yii::$app->request->csrfParam,
@@ -78,12 +77,12 @@ $formatJson = function (mixed $value): string {
             <div class="detail-value"><?= $policy['quarters_to_fetch'] ?></div>
 
             <div class="detail-label">Sector Default</div>
-            <div class="detail-value">
+            <div class="detail-value detail-value--inline">
                 <?php if (!empty($policy['is_default_for_sector'])): ?>
                     <span class="badge badge--info"><?= Html::encode($policy['is_default_for_sector']) ?></span>
                     <form method="post"
                           action="<?= Url::to(['set-default', 'slug' => $policy['slug']]) ?>"
-                          style="display: inline; margin-left: var(--space-2);">
+                          >
                         <?= Html::hiddenInput(
                             Yii::$app->request->csrfParam,
                             Yii::$app->request->csrfToken
@@ -113,7 +112,7 @@ $formatJson = function (mixed $value): string {
     </div>
 </div>
 
-<div class="card" style="margin-top: var(--space-6);">
+<div class="card card--spaced">
     <div class="card__header">
         <h2 class="card__title">Macro Requirements</h2>
     </div>
@@ -157,7 +156,7 @@ $formatJson = function (mixed $value): string {
     </div>
 </div>
 
-<div class="card" style="margin-top: var(--space-6);">
+<div class="card card--spaced">
     <div class="card__header">
         <h2 class="card__title">Data Requirements</h2>
     </div>
@@ -205,32 +204,3 @@ $formatJson = function (mixed $value): string {
         </div>
     </div>
 </div>
-
-<style>
-code {
-    font-family: var(--font-mono);
-    background: var(--bg-subtle);
-    padding: 0.125rem 0.375rem;
-    border-radius: var(--radius-sm);
-}
-.json-display {
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    background: var(--bg-subtle);
-    padding: var(--space-3);
-    border-radius: var(--radius-md);
-    overflow-x: auto;
-    margin: 0;
-    white-space: pre-wrap;
-}
-.metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: var(--space-6);
-}
-.metrics-section h3 {
-    font-size: var(--text-base);
-    font-weight: 600;
-    margin-bottom: var(--space-3);
-}
-</style>
