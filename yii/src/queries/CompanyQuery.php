@@ -74,4 +74,16 @@ class CompanyQuery
             ->update('company', [$field => $at->format('Y-m-d H:i:s')], ['id' => $id])
             ->execute();
     }
+
+    /**
+     * Find all companies.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function findAll(): array
+    {
+        return $this->db->createCommand(
+            'SELECT * FROM company ORDER BY ticker'
+        )->queryAll();
+    }
 }

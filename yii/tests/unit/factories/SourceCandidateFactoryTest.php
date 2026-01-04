@@ -18,19 +18,22 @@ final class SourceCandidateFactoryTest extends Unit
         $factory = new SourceCandidateFactory();
         $candidates = $factory->forTicker('AAPL', 'NASDAQ');
 
-        // Yahoo (2 variants), StockAnalysis, Reuters, WSJ, Bloomberg, Morningstar, SeekingAlpha
-        $this->assertGreaterThanOrEqual(8, count($candidates));
+        // Yahoo HTML, StockAnalysis, Reuters, WSJ, Bloomberg, Morningstar, SeekingAlpha
+        // Note: yahoo_finance_api is disabled (requires crumb authentication)
+        $this->assertGreaterThanOrEqual(7, count($candidates));
 
         // Check that all expected adapters are present
         $adapterIds = array_map(static fn ($c) => $c->adapterId, $candidates);
         $this->assertContains('yahoo_finance', $adapterIds);
-        $this->assertContains('yahoo_finance_api', $adapterIds);
         $this->assertContains('stockanalysis', $adapterIds);
         $this->assertContains('reuters', $adapterIds);
         $this->assertContains('wsj', $adapterIds);
         $this->assertContains('bloomberg', $adapterIds);
         $this->assertContains('morningstar', $adapterIds);
         $this->assertContains('seeking_alpha', $adapterIds);
+
+        // Verify yahoo_finance_api is NOT included (disabled)
+        $this->assertNotContains('yahoo_finance_api', $adapterIds);
 
         // Check URLs for key adapters
         $urlsByAdapter = [];
@@ -39,7 +42,6 @@ final class SourceCandidateFactoryTest extends Unit
         }
 
         $this->assertSame('https://finance.yahoo.com/quote/AAPL', $urlsByAdapter['yahoo_finance']);
-        $this->assertStringContainsString('query1.finance.yahoo.com', $urlsByAdapter['yahoo_finance_api']);
     }
 
     public function testMacroCandidatesUseYahooSourcesOnly(): void
@@ -47,31 +49,29 @@ final class SourceCandidateFactoryTest extends Unit
         $factory = new SourceCandidateFactory();
         $candidates = $factory->forMacro('BRENT');
 
-        $this->assertCount(2, $candidates);
+        // Only yahoo_finance HTML is available (yahoo_finance_api is disabled)
+        $this->assertCount(1, $candidates);
         $this->assertSame('yahoo_finance', $candidates[0]->adapterId);
         $this->assertStringContainsString('BZ%3DF', $candidates[0]->url);
-
-        $this->assertSame('yahoo_finance_api', $candidates[1]->adapterId);
-        $this->assertStringContainsString('BZ%3DF', $candidates[1]->url);
     }
 
     public function testMacroCandidatesResolveSnakeCaseKeys(): void
     {
         $factory = new SourceCandidateFactory();
 
-        // brent_crude should resolve to BZ=F
+        // brent_crude should resolve to BZ=F (only yahoo_finance, API disabled)
         $brentCandidates = $factory->forMacro('brent_crude');
-        $this->assertCount(2, $brentCandidates);
+        $this->assertCount(1, $brentCandidates);
         $this->assertStringContainsString('BZ%3DF', $brentCandidates[0]->url);
 
         // wti_crude should resolve to CL=F
         $wtiCandidates = $factory->forMacro('wti_crude');
-        $this->assertCount(2, $wtiCandidates);
+        $this->assertCount(1, $wtiCandidates);
         $this->assertStringContainsString('CL%3DF', $wtiCandidates[0]->url);
 
         // natural_gas should resolve to NG=F
         $gasCandidates = $factory->forMacro('natural_gas');
-        $this->assertCount(2, $gasCandidates);
+        $this->assertCount(1, $gasCandidates);
         $this->assertStringContainsString('NG%3DF', $gasCandidates[0]->url);
     }
 

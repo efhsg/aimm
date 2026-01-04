@@ -17,7 +17,6 @@ final readonly class CollectIndustryResult
     public function __construct(
         public string $industryId,
         public string $datapackId,
-        public string $dataPackPath,
         public GateResult $gateResult,
         public CollectionStatus $overallStatus,
         public array $companyStatuses,

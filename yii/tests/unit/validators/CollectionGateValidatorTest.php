@@ -195,6 +195,106 @@ final class CollectionGateValidatorTest extends Unit
         $this->assertContains('MISSING_REQUIRED', $this->getErrorCodes($result));
     }
 
+    public function testValidateResultsPassesWhenAllComplete(): void
+    {
+        $validator = $this->createValidator();
+        $result = $validator->validateResults(
+            companyStatuses: [
+                'AAPL' => CollectionStatus::Complete,
+                'MSFT' => CollectionStatus::Complete,
+            ],
+            macroStatus: CollectionStatus::Complete,
+            config: $this->createConfigForCompanies(['AAPL', 'MSFT']),
+            focalTickers: ['AAPL']
+        );
+
+        $this->assertTrue($result->passed);
+        $this->assertEmpty($result->errors);
+        $this->assertEmpty($result->warnings);
+    }
+
+    public function testValidateResultsFailsWhenFocalFailed(): void
+    {
+        $validator = $this->createValidator();
+        $result = $validator->validateResults(
+            companyStatuses: [
+                'AAPL' => CollectionStatus::Failed,
+                'MSFT' => CollectionStatus::Complete,
+            ],
+            macroStatus: CollectionStatus::Complete,
+            config: $this->createConfigForCompanies(['AAPL', 'MSFT']),
+            focalTickers: ['AAPL']
+        );
+
+        $this->assertFalse($result->passed);
+        $this->assertContains('FOCAL_FAILED', $this->getErrorCodes($result));
+    }
+
+    public function testValidateResultsWarnsWhenFocalPartial(): void
+    {
+        $validator = $this->createValidator();
+        $result = $validator->validateResults(
+            companyStatuses: [
+                'AAPL' => CollectionStatus::Partial,
+                'MSFT' => CollectionStatus::Complete,
+            ],
+            macroStatus: CollectionStatus::Complete,
+            config: $this->createConfigForCompanies(['AAPL', 'MSFT']),
+            focalTickers: ['AAPL']
+        );
+
+        $this->assertTrue($result->passed);
+        $this->assertEmpty($result->errors);
+        $this->assertContains('FOCAL_PARTIAL', $this->getWarningCodes($result));
+    }
+
+    public function testValidateResultsWarnsWhenPeerFailed(): void
+    {
+        $validator = $this->createValidator();
+        $result = $validator->validateResults(
+            companyStatuses: [
+                'AAPL' => CollectionStatus::Complete,
+                'MSFT' => CollectionStatus::Failed,
+            ],
+            macroStatus: CollectionStatus::Complete,
+            config: $this->createConfigForCompanies(['AAPL', 'MSFT']),
+            focalTickers: ['AAPL']
+        );
+
+        $this->assertTrue($result->passed);
+        $this->assertEmpty($result->errors);
+        $this->assertContains('PEER_FAILED', $this->getWarningCodes($result));
+    }
+
+    public function testValidateResultsFailsWhenMacroFailed(): void
+    {
+        $validator = $this->createValidator();
+        $result = $validator->validateResults(
+            companyStatuses: ['AAPL' => CollectionStatus::Complete],
+            macroStatus: CollectionStatus::Failed,
+            config: $this->createConfigForCompanies(['AAPL']),
+            focalTickers: ['AAPL']
+        );
+
+        $this->assertFalse($result->passed);
+        $this->assertContains('MACRO_FAILED', $this->getErrorCodes($result));
+    }
+
+    public function testValidateResultsWarnsWhenMacroPartial(): void
+    {
+        $validator = $this->createValidator();
+        $result = $validator->validateResults(
+            companyStatuses: ['AAPL' => CollectionStatus::Complete],
+            macroStatus: CollectionStatus::Partial,
+            config: $this->createConfigForCompanies(['AAPL']),
+            focalTickers: ['AAPL']
+        );
+
+        $this->assertTrue($result->passed);
+        $this->assertEmpty($result->errors);
+        $this->assertContains('MACRO_PARTIAL', $this->getWarningCodes($result));
+    }
+
     private function createValidator(): CollectionGateValidator
     {
         $schemaValidator = $this->createMock(SchemaValidatorInterface::class);
@@ -371,6 +471,14 @@ final class CollectionGateValidatorTest extends Unit
     private function getErrorCodes(GateResult $result): array
     {
         return array_map(static fn ($error) => $error->code, $result->errors);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function getWarningCodes(GateResult $result): array
+    {
+        return array_map(static fn ($warning) => $warning->code, $result->warnings);
     }
 
     private function buildInvalidMoney(

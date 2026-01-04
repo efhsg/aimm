@@ -21,9 +21,9 @@ final readonly class HistoricalExtraction
         public string $datapointKey,
         public array $periods,
         public string $unit,
+        public SourceLocator $locator,
         public ?string $currency = null,
         public ?string $scale = null,
-        public SourceLocator $locator,
     ) {
     }
 

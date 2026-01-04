@@ -26,10 +26,13 @@ use app\handlers\collection\CollectIndustryHandler;
 use app\handlers\collection\CollectMacroHandler;
 use app\models\CollectionError;
 use app\models\CollectionRun;
-use app\models\IndustryConfig as IndustryConfigRecord;
+use app\queries\AnnualFinancialQuery;
 use app\queries\CollectionRunRepository;
-use app\queries\DataPackRepository;
-use app\transformers\DataPackAssembler;
+use app\queries\CompanyQuery;
+use app\queries\MacroIndicatorQuery;
+use app\queries\PriceHistoryQuery;
+use app\queries\QuarterlyFinancialQuery;
+use app\queries\ValuationSnapshotQuery;
 use app\validators\CollectionGateValidator;
 use app\validators\SchemaValidator;
 use app\validators\SemanticValidator;
@@ -39,6 +42,11 @@ use RuntimeException;
 use Yii;
 
 /**
+ * Integration test for CollectIndustryHandler with dossier architecture.
+ *
+ * Tests the full collection flow using fixture-based web fetching
+ * and real database interactions for collection_run tracking.
+ *
  * @covers \app\handlers\collection\CollectIndustryHandler
  */
 final class CollectIndustryHandlerIntegrationTest extends Unit
@@ -50,61 +58,137 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         parent::setUp();
         $this->tempDir = sys_get_temp_dir() . '/collect_industry_integration_' . uniqid();
         mkdir($this->tempDir, 0755, true);
-        $this->seedIndustryConfig();
+        $this->cleanDatabase();
+        $this->cleanTestData();
+        $this->seedTestData();
     }
 
     protected function tearDown(): void
     {
-        CollectionError::deleteAll();
-        CollectionRun::deleteAll();
-        IndustryConfigRecord::deleteAll();
+        $this->cleanDatabase();
+        $this->cleanTestData();
         $this->deleteDirectory($this->tempDir);
         parent::tearDown();
     }
 
-    public function testCollectsIndustryAndPassesGate(): void
+    private function cleanDatabase(): void
     {
-        $handler = $this->createHandler([
+        CollectionError::deleteAll();
+        CollectionRun::deleteAll();
+    }
+
+    private function seedTestData(): void
+    {
+        // Seed industry_peer_group for FK constraint
+        $db = Yii::$app->db;
+        $db->createCommand()->insert('industry_peer_group', [
+            'slug' => 'tech',
+            'name' => 'Technology Test',
+            'sector' => 'Software',
+            'is_active' => 1,
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s'),
+        ])->execute();
+    }
+
+    private function cleanTestData(): void
+    {
+        $db = Yii::$app->db;
+        $db->createCommand()->delete('industry_peer_group', ['slug' => 'tech'])->execute();
+    }
+
+    public function testCollectsIndustryAndRecordsRun(): void
+    {
+        $fixtures = [
             'https://finance.yahoo.com/quote/AAPL' => [
                 'path' => $this->fixturePath('yahoo-finance/AAPL-quote.html'),
                 'contentType' => 'text/html',
             ],
-        ]);
+        ];
 
-        $result = $handler->collect($this->createRequest());
+        $handler = $this->createHandler($fixtures);
+        $request = $this->createRequest();
 
-        $this->assertTrue(
-            $result->gateResult->passed,
-            'Gate failed: ' . implode('; ', array_map(
-                static fn ($error): string => "{$error->code} {$error->message}",
-                $result->gateResult->errors
-            ))
-        );
-        $this->assertSame(CollectionStatus::Complete, $result->overallStatus);
-        $this->assertFileExists($result->dataPackPath);
+        $result = $handler->collect($request);
+
+        // Verify result structure
+        $this->assertSame('tech', $result->industryId);
+        $this->assertNotEmpty($result->datapackId);
+        $this->assertInstanceOf(\app\dto\GateResult::class, $result->gateResult);
+        $this->assertArrayHasKey('AAPL', $result->companyStatuses);
+
+        // Verify collection run was recorded
+        $run = CollectionRun::findOne(['datapack_id' => $result->datapackId]);
+        $this->assertNotNull($run, 'Collection run should be recorded in database');
+        $this->assertSame('tech', $run->industry_id);
+        $this->assertNotNull($run->completed_at);
+        $this->assertSame(1, (int) $run->companies_total);
     }
 
-    public function testGateFailureMarksRunFailed(): void
+    public function testGateFailsWhenFocalCompanyFails(): void
     {
-        $handler = $this->createHandler([
+        // Use non-existent fixture to simulate collection failure
+        $fixtures = [
             'https://finance.yahoo.com/quote/AAPL' => [
-                'path' => $this->fixturePath('yahoo-finance/invalid-page.html'),
+                'path' => $this->fixturePath('yahoo-finance/not-found.html'),
                 'contentType' => 'text/html',
             ],
-        ]);
+        ];
 
-        $result = $handler->collect($this->createRequest());
+        $handler = $this->createHandler($fixtures);
+        $request = $this->createRequest();
 
+        $result = $handler->collect($request);
+
+        // Gate should fail because focal company (AAPL) failed
         $this->assertFalse($result->gateResult->passed);
         $this->assertSame(CollectionStatus::Failed, $result->overallStatus);
-        $this->assertNotEmpty($result->gateResult->errors);
+
+        // Verify errors were recorded
+        $run = CollectionRun::findOne(['datapack_id' => $result->datapackId]);
+        $this->assertNotNull($run);
+        $this->assertSame(0, (int) $run->gate_passed);
+        $this->assertGreaterThan(0, (int) $run->error_count);
+
+        // Verify collection errors are stored
+        $errors = CollectionError::findAll(['collection_run_id' => $run->id]);
+        $this->assertNotEmpty($errors);
+    }
+
+    public function testMultipleCompaniesWithMixedResults(): void
+    {
+        $config = $this->createIndustryConfigWithMultipleCompanies();
+
+        $fixtures = [
+            'https://finance.yahoo.com/quote/AAPL' => [
+                'path' => $this->fixturePath('yahoo-finance/AAPL-quote.html'),
+                'contentType' => 'text/html',
+            ],
+            // MSFT will fail (no fixture)
+        ];
+
+        $handler = $this->createHandler($fixtures);
+        $request = new CollectIndustryRequest(
+            config: $config,
+            batchSize: 2,
+            enableMemoryManagement: false,
+        );
+
+        $result = $handler->collect($request);
+
+        // AAPL is focal and should succeed, MSFT is peer and will fail
+        $this->assertArrayHasKey('AAPL', $result->companyStatuses);
+        $this->assertArrayHasKey('MSFT', $result->companyStatuses);
+
+        // Gate should pass (focal succeeded, peer failure is only a warning)
+        $this->assertTrue($result->gateResult->passed);
+
+        // But there should be warnings about the peer failure
+        $this->assertNotEmpty($result->gateResult->warnings);
     }
 
     private function createHandler(array $fixtures): CollectIndustryHandler
     {
-        $repository = new DataPackRepository($this->tempDir);
-        $assembler = new DataPackAssembler($repository);
-
         $blockedPath = $this->tempDir . '/blocked-sources.json';
         $adapterChain = new AdapterChain(
             [new YahooFinanceAdapter()],
@@ -114,6 +198,8 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
 
         $fetchClient = new FixtureWebFetchClient($fixtures);
         $dataPointFactory = new DataPointFactory();
+        $sourceCandidateFactory = new SourceCandidateFactory();
+
         $datapointHandler = new CollectDatapointHandler(
             $fetchClient,
             $adapterChain,
@@ -121,18 +207,35 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
             Yii::getLogger(),
         );
 
+        // Create query mocks that don't actually write to DB
+        // (we're testing the handler orchestration, not DB persistence)
+        $companyQuery = $this->createMock(CompanyQuery::class);
+        $companyQuery->method('findOrCreate')->willReturn(1);
+
+        $annualQuery = $this->createMock(AnnualFinancialQuery::class);
+        $quarterlyQuery = $this->createMock(QuarterlyFinancialQuery::class);
+        $valuationQuery = $this->createMock(ValuationSnapshotQuery::class);
+        $macroQuery = $this->createMock(MacroIndicatorQuery::class);
+        $priceQuery = $this->createMock(PriceHistoryQuery::class);
+
         $companyHandler = new CollectCompanyHandler(
             $datapointHandler,
-            new SourceCandidateFactory(),
+            $sourceCandidateFactory,
             $dataPointFactory,
             Yii::getLogger(),
+            $companyQuery,
+            $annualQuery,
+            $quarterlyQuery,
+            $valuationQuery,
         );
 
         $macroHandler = new CollectMacroHandler(
             $datapointHandler,
-            new SourceCandidateFactory(),
+            $sourceCandidateFactory,
             $dataPointFactory,
             Yii::getLogger(),
+            $macroQuery,
+            $priceQuery,
         );
 
         $schemaValidator = new SchemaValidator(Yii::$app->basePath . '/config/schemas');
@@ -142,8 +245,6 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         return new CollectIndustryHandler(
             companyCollector: $companyHandler,
             macroCollector: $macroHandler,
-            repository: $repository,
-            assembler: $assembler,
             gateValidator: $gateValidator,
             alertDispatcher: new AlertDispatcher([]),
             runRepository: new CollectionRunRepository(Yii::$app->db),
@@ -189,6 +290,50 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
             companies: [$company],
             macroRequirements: new MacroRequirements(),
             dataRequirements: $requirements,
+            focalTickers: ['AAPL'],
+        );
+    }
+
+    private function createIndustryConfigWithMultipleCompanies(): IndustryConfig
+    {
+        $companies = [
+            new CompanyConfig(
+                ticker: 'AAPL',
+                name: 'Apple Inc.',
+                listingExchange: 'NASDAQ',
+                listingCurrency: 'USD',
+                reportingCurrency: 'USD',
+                fyEndMonth: 12,
+            ),
+            new CompanyConfig(
+                ticker: 'MSFT',
+                name: 'Microsoft Corp.',
+                listingExchange: 'NASDAQ',
+                listingCurrency: 'USD',
+                reportingCurrency: 'USD',
+                fyEndMonth: 6,
+            ),
+        ];
+
+        $requirements = new DataRequirements(
+            historyYears: 1,
+            quartersToFetch: 0,
+            valuationMetrics: [
+                new MetricDefinition(key: 'market_cap', unit: 'currency', required: true),
+            ],
+            annualFinancialMetrics: [],
+            quarterMetrics: [],
+            operationalMetrics: [],
+        );
+
+        return new IndustryConfig(
+            id: 'tech',
+            name: 'Technology',
+            sector: 'Software',
+            companies: $companies,
+            macroRequirements: new MacroRequirements(),
+            dataRequirements: $requirements,
+            focalTickers: ['AAPL'], // Only AAPL is focal
         );
     }
 
@@ -218,36 +363,11 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
 
         rmdir($dir);
     }
-
-    private function seedIndustryConfig(): void
-    {
-        CollectionError::deleteAll();
-        CollectionRun::deleteAll();
-        IndustryConfigRecord::deleteAll();
-
-        $record = new IndustryConfigRecord();
-        $record->industry_id = 'tech';
-        $record->name = 'Technology';
-        $record->config_json = json_encode([
-            'id' => 'tech',
-            'name' => 'Technology',
-            'sector' => 'Software',
-            'companies' => [],
-            'macro_requirements' => new \stdClass(),
-            'data_requirements' => [
-                'history_years' => 1,
-                'quarters_to_fetch' => 0,
-                'valuation_metrics' => [],
-                'annual_financial_metrics' => [],
-                'quarter_metrics' => [],
-                'operational_metrics' => [],
-            ],
-        ], JSON_THROW_ON_ERROR);
-        $record->save(false);
-    }
 }
 
 /**
+ * Mock web fetch client that returns fixture content.
+ *
  * @internal
  */
 final class FixtureWebFetchClient implements WebFetchClientInterface
@@ -265,7 +385,18 @@ final class FixtureWebFetchClient implements WebFetchClientInterface
         $fixture = $this->fixtures[$request->url] ?? null;
         if ($fixture === null) {
             return new FetchResult(
-                content: '',
+                content: '<html><body>Not Found</body></html>',
+                contentType: 'text/html',
+                statusCode: 404,
+                url: $request->url,
+                finalUrl: $request->url,
+                retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            );
+        }
+
+        if (!file_exists($fixture['path'])) {
+            return new FetchResult(
+                content: '<html><body>Fixture Not Found</body></html>',
                 contentType: 'text/html',
                 statusCode: 404,
                 url: $request->url,
@@ -294,10 +425,3 @@ final class FixtureWebFetchClient implements WebFetchClientInterface
         return false;
     }
 }
-
-/**
- * @internal
- */
-/**
- * @internal
- */

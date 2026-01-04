@@ -1,9 +1,8 @@
 START TRANSACTION;
 
--- Collection policy for Global Energy Supermajors
--- Note: This is for Phase 2/3 development with supermajors-testdata.
--- For live collection, use us-energy-majors (FMP free tier compatible).
--- margin_proxy is NULL because GLOBAL_REFINING_MARGIN has no source mapping.
+-- Collection policy for US Energy Majors
+-- Note: margin_proxy is NULL because CRACK_SPREAD has no source mapping.
+-- If margin proxy is needed, use WTI or BRENT (both mapped to Yahoo Finance).
 INSERT INTO collection_policy (
     slug,
     name,
@@ -24,9 +23,9 @@ INSERT INTO collection_policy (
     created_at,
     updated_at
 ) VALUES (
-    'global-energy-supermajors',
-    'Global Energy Supermajors',
-    NULL,
+    'us-energy-majors',
+    'US Energy Majors',
+    'US-listed energy companies for FMP free tier compatibility',
     5,
     8,
     JSON_ARRAY(
@@ -50,19 +49,16 @@ INSERT INTO collection_policy (
         JSON_OBJECT('key','net_income','unit','currency','required',FALSE),
         JSON_OBJECT('key','free_cash_flow','unit','currency','required',FALSE)
     ),
-    JSON_ARRAY(
-        JSON_OBJECT('key','total_production_kboed','unit','number','required',FALSE),
-        JSON_OBJECT('key','lng_liquefaction_volumes','unit','number','required',FALSE)
-    ),
-    'BRENT',
+    JSON_ARRAY(),
+    'WTI',
     NULL,
     'XLE',
-    JSON_ARRAY('natural_gas', 'brent_crude', 'rig_count', 'oil_inventory'),
+    JSON_ARRAY('natural_gas', 'wti_crude', 'rig_count', 'oil_inventory'),
     NULL,
     NULL,
     'admin',
-    '2025-12-31 10:05:21',
-    '2025-12-31 22:25:03'
+    NOW(),
+    NOW()
 );
 SET @policy_id := LAST_INSERT_ID();
 
@@ -79,35 +75,36 @@ INSERT INTO industry_peer_group (
     created_at,
     updated_at
 ) VALUES (
-    'global-energy-supermajors',
-    'Global Energy Supermajors',
-    NULL,
+    'us-energy-majors',
+    'US Energy Majors',
+    'Major US-listed energy companies (FMP free tier compatible)',
     'Energy',
     @policy_id,
     1,
     'admin',
-    'claude-code',
-    '2025-12-31 10:05:21',
-    '2025-12-31 22:25:03'
+    'admin',
+    NOW(),
+    NOW()
 );
 SET @peer_group_id := LAST_INSERT_ID();
 
--- Companies
+-- Companies (all US-listed, FMP free tier compatible)
 INSERT INTO company (ticker, exchange, name, sector, currency, fiscal_year_end) VALUES
-('SHEL', 'NYSE', 'Shell plc', 'Energy', 'USD', 12),
-('XOM',  'NYSE', 'Exxon Mobil Corporation', 'Energy', 'USD', 12),
-('BP',   'NYSE', 'BP plc', 'Energy', 'USD', 12),
-('CVX',  'NYSE', 'Chevron Corporation', 'Energy', 'USD', 12),
-('TTE',  'NYSE', 'TotalEnergies SE', 'Energy', 'USD', 12);
+('XOM', 'NYSE', 'Exxon Mobil Corporation', 'Energy', 'USD', 12),
+('CVX', 'NYSE', 'Chevron Corporation', 'Energy', 'USD', 12),
+('COP', 'NYSE', 'ConocoPhillips', 'Energy', 'USD', 12),
+('EOG', 'NYSE', 'EOG Resources Inc', 'Energy', 'USD', 12),
+('OXY', 'NYSE', 'Occidental Petroleum Corporation', 'Energy', 'USD', 12)
+ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Company IDs
-SET @company_shel := (SELECT id FROM company WHERE ticker = 'SHEL');
-SET @company_xom  := (SELECT id FROM company WHERE ticker = 'XOM');
-SET @company_bp   := (SELECT id FROM company WHERE ticker = 'BP');
-SET @company_cvx  := (SELECT id FROM company WHERE ticker = 'CVX');
-SET @company_tte  := (SELECT id FROM company WHERE ticker = 'TTE');
+SET @company_xom := (SELECT id FROM company WHERE ticker = 'XOM');
+SET @company_cvx := (SELECT id FROM company WHERE ticker = 'CVX');
+SET @company_cop := (SELECT id FROM company WHERE ticker = 'COP');
+SET @company_eog := (SELECT id FROM company WHERE ticker = 'EOG');
+SET @company_oxy := (SELECT id FROM company WHERE ticker = 'OXY');
 
--- Peer group members
+-- Peer group members (XOM as focal)
 INSERT INTO industry_peer_group_member (
     peer_group_id,
     company_id,
@@ -116,10 +113,10 @@ INSERT INTO industry_peer_group_member (
     added_at,
     added_by
 ) VALUES
-(@peer_group_id, @company_shel, 1, 0, '2025-12-31 10:05:21', 'admin'),
-(@peer_group_id, @company_xom,  0, 1, '2025-12-31 10:05:21', 'admin'),
-(@peer_group_id, @company_bp,   0, 2, '2025-12-31 10:05:21', 'admin'),
-(@peer_group_id, @company_cvx,  0, 3, '2025-12-31 10:05:21', 'admin'),
-(@peer_group_id, @company_tte,  0, 4, '2025-12-31 10:05:21', 'admin');
+(@peer_group_id, @company_xom, 1, 0, NOW(), 'admin'),
+(@peer_group_id, @company_cvx, 0, 1, NOW(), 'admin'),
+(@peer_group_id, @company_cop, 0, 2, NOW(), 'admin'),
+(@peer_group_id, @company_eog, 0, 3, NOW(), 'admin'),
+(@peer_group_id, @company_oxy, 0, 4, NOW(), 'admin');
 
 COMMIT;

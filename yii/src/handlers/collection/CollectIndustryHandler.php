@@ -8,19 +8,15 @@ use app\alerts\AlertDispatcher;
 use app\dto\CollectCompanyRequest;
 use app\dto\CollectIndustryRequest;
 use app\dto\CollectIndustryResult;
-use app\dto\CollectionLog;
 use app\dto\CollectMacroRequest;
 use app\dto\DataRequirements;
 use app\dto\MetricDefinition;
 use app\enums\CollectionStatus;
 use app\exceptions\CollectionException;
 use app\queries\CollectionRunRepository;
-use app\queries\DataPackRepository;
-use app\transformers\DataPackAssemblerInterface;
 use app\validators\CollectionGateValidatorInterface;
 use DateTimeImmutable;
 use Ramsey\Uuid\Uuid;
-use RuntimeException;
 use yii\log\Logger;
 
 /**
@@ -36,8 +32,6 @@ final class CollectIndustryHandler implements CollectIndustryInterface
     public function __construct(
         private readonly CollectCompanyInterface $companyCollector,
         private readonly CollectMacroInterface $macroCollector,
-        private readonly DataPackRepository $repository,
-        private readonly DataPackAssemblerInterface $assembler,
         private readonly CollectionGateValidatorInterface $gateValidator,
         private readonly AlertDispatcher $alertDispatcher,
         private readonly CollectionRunRepository $runRepository,
@@ -110,12 +104,6 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                             )
                         );
 
-                        $this->repository->saveCompanyIntermediate(
-                            $request->config->id,
-                            $datapackId,
-                            $companyResult->data
-                        );
-
                         $companyStatuses[$companyConfig->ticker] = $companyResult->status;
                         $totalAttempts += count($companyResult->sourceAttempts);
 
@@ -155,32 +143,14 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             );
 
             $endTime = new DateTimeImmutable();
-            $collectionLog = new CollectionLog(
-                startedAt: $startTime,
-                completedAt: $endTime,
-                durationSeconds: $endTime->getTimestamp() - $startTime->getTimestamp(),
-                companyStatuses: $companyStatuses,
-                macroStatus: $macroResult->status,
-                totalAttempts: $totalAttempts,
+            $durationSeconds = $endTime->getTimestamp() - $startTime->getTimestamp();
+
+            $gateResult = $this->gateValidator->validateResults(
+                $companyStatuses,
+                $macroResult->status,
+                $request->config,
+                $focalTickers
             );
-
-            $dataPackPath = $this->assembler->assemble(
-                industryId: $request->config->id,
-                datapackId: $datapackId,
-                macro: $macroResult->data,
-                collectionLog: $collectionLog,
-                collectedAt: $startTime,
-            );
-
-            $dataPack = $this->repository->load($request->config->id, $datapackId);
-            if ($dataPack === null) {
-                throw new RuntimeException(
-                    "Failed to load assembled datapack for validation: {$datapackId}"
-                );
-            }
-
-            $gateResult = $this->gateValidator->validate($dataPack, $request->config, $focalTickers);
-            $this->repository->saveValidation($request->config->id, $datapackId, $gateResult);
             $this->runRepository->recordErrors($runId, $gateResult);
 
             if (!$gateResult->passed) {
@@ -192,39 +162,33 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                 $overallStatus = CollectionStatus::Failed;
             }
 
-            unset($dataPack);
-
             $this->logger->log(
                 [
                     'message' => 'Industry collection complete',
                     'industry' => $request->config->id,
                     'datapack_id' => $datapackId,
                     'status' => $overallStatus->value,
-                    'gate_passed' => $gateResult->passed,
-                    'datapack_path' => $dataPackPath,
-                    'duration_seconds' => $collectionLog->durationSeconds,
+                    'duration_seconds' => $durationSeconds,
                     'peak_memory_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
                 ],
                 Logger::LEVEL_INFO,
                 'collection'
             );
 
-            $fileSizeBytes = file_exists($dataPackPath) ? (int) filesize($dataPackPath) : 0;
             $this->runRepository->complete(
                 $runId,
                 $overallStatus->value,
                 $gateResult->passed,
                 count($gateResult->errors),
                 count($gateResult->warnings),
-                $dataPackPath,
-                $fileSizeBytes,
-                $collectionLog->durationSeconds
+                '',
+                0,
+                $durationSeconds
             );
 
             return new CollectIndustryResult(
                 industryId: $request->config->id,
                 datapackId: $datapackId,
-                dataPackPath: $dataPackPath,
                 gateResult: $gateResult,
                 overallStatus: $overallStatus,
                 companyStatuses: $companyStatuses,

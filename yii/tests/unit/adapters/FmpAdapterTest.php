@@ -429,6 +429,58 @@ final class FmpAdapterTest extends Unit
         $this->assertContains('macro.commodity_benchmark', $keys);
     }
 
+    public function testReturnsRateLimitErrorForApiQuotaExceeded(): void
+    {
+        $adapter = new FmpAdapter();
+        $rateLimitResponse = json_encode([
+            'Error Message' => 'Limit Reach . Please upgrade your plan or visit our documentation for more details',
+        ]);
+
+        $request = new AdaptRequest(
+            fetchResult: new FetchResult(
+                content: $rateLimitResponse,
+                contentType: 'application/json',
+                statusCode: 200,
+                url: 'https://financialmodelingprep.com/stable/income-statement?symbol=XOM&period=annual&apikey=demo',
+                finalUrl: 'https://financialmodelingprep.com/stable/income-statement?symbol=XOM&period=annual&apikey=demo',
+                retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            ),
+            datapointKeys: ['financials.revenue'],
+            ticker: 'XOM',
+        );
+
+        $result = $adapter->adapt($request);
+
+        $this->assertSame(['financials.revenue'], $result->notFound);
+        $this->assertSame('FMP API rate limit reached - daily quota exceeded', $result->parseError);
+    }
+
+    public function testReturnsApiErrorForGenericErrors(): void
+    {
+        $adapter = new FmpAdapter();
+        $errorResponse = json_encode([
+            'Error Message' => 'Invalid API key. Please provide a valid API key.',
+        ]);
+
+        $request = new AdaptRequest(
+            fetchResult: new FetchResult(
+                content: $errorResponse,
+                contentType: 'application/json',
+                statusCode: 200,
+                url: 'https://financialmodelingprep.com/stable/quote?symbol=XOM&apikey=invalid',
+                finalUrl: 'https://financialmodelingprep.com/stable/quote?symbol=XOM&apikey=invalid',
+                retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            ),
+            datapointKeys: ['valuation.market_cap'],
+            ticker: 'XOM',
+        );
+
+        $result = $adapter->adapt($request);
+
+        $this->assertSame(['valuation.market_cap'], $result->notFound);
+        $this->assertStringStartsWith('FMP API error:', $result->parseError);
+    }
+
     private function loadFixture(string $path): string
     {
         $fullPath = dirname(__DIR__, 2) . '/fixtures/' . $path;

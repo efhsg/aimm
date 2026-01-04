@@ -6,7 +6,6 @@ use app\adapters\AdapterChain;
 use app\adapters\BakerHughesRigCountAdapter;
 use app\adapters\BlockedSourceRegistry;
 use app\adapters\BloombergAdapter;
-use app\adapters\CachedDataAdapter;
 use app\adapters\EcbAdapter;
 use app\adapters\EiaInventoryAdapter;
 use app\adapters\FmpAdapter;
@@ -74,14 +73,11 @@ use app\handlers\peergroup\UpdatePeerGroupInterface;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
 use app\queries\CompanyQuery;
-use app\queries\DataPackRepository;
 use app\queries\PeerGroupListQuery;
 use app\queries\PeerGroupMemberQuery;
 use app\queries\PeerGroupQuery;
 use app\queries\SourceBlockRepository;
 use app\queries\SourceBlockRepositoryInterface;
-use app\transformers\DataPackAssembler;
-use app\transformers\DataPackAssemblerInterface;
 use app\validators\CollectionGateValidator;
 use app\validators\CollectionGateValidatorInterface;
 use app\validators\SchemaValidator;
@@ -159,26 +155,6 @@ return [
 
         BlockedSourceRegistry::class => BlockedSourceRegistry::class,
 
-        CachedDataAdapter::class => static function (Container $container): CachedDataAdapter {
-            $industry = null;
-            if (Yii::$app->request instanceof \yii\web\Request) {
-                $industry = Yii::$app->request->get('industry');
-            }
-            if (!is_string($industry) || $industry === '') {
-                $paramIndustry = Yii::$app->params['collectionIndustryId'] ?? null;
-                if (is_string($paramIndustry) && $paramIndustry !== '') {
-                    $industry = $paramIndustry;
-                }
-            }
-            if (!is_string($industry) || $industry === '') {
-                $industry = 'unknown';
-            }
-            return new CachedDataAdapter(
-                $container->get(DataPackRepository::class),
-                $industry,
-            );
-        },
-
         AdapterChain::class => static function (Container $container): AdapterChain {
             return new AdapterChain(
                 adapters: [
@@ -193,7 +169,6 @@ return [
                     $container->get(BloombergAdapter::class),
                     $container->get(MorningstarAdapter::class),
                     $container->get(SeekingAlphaAdapter::class),
-                    $container->get(CachedDataAdapter::class),
                 ],
                 blockedRegistry: $container->get(BlockedSourceRegistry::class),
                 logger: Yii::getLogger(),
@@ -250,24 +225,6 @@ return [
             return new CollectionRunRepository(Yii::$app->db);
         },
 
-        DataPackRepository::class => static function (): DataPackRepository {
-            $params = Yii::$app->params;
-            $basePath = $params['datapacksPath'] ?? '@runtime/datapacks';
-
-            return new DataPackRepository(
-                basePath: Yii::getAlias($basePath),
-            );
-        },
-
-        DataPackAssembler::class => static function (Container $container): DataPackAssembler {
-            return new DataPackAssembler(
-                repository: $container->get(DataPackRepository::class),
-            );
-        },
-        DataPackAssemblerInterface::class => static function (Container $container): DataPackAssemblerInterface {
-            return $container->get(DataPackAssembler::class);
-        },
-
         CollectDatapointInterface::class => static function (Container $container): CollectDatapointInterface {
             return new CollectDatapointHandler(
                 webFetchClient: $container->get(WebFetchClientInterface::class),
@@ -305,8 +262,6 @@ return [
             return new CollectIndustryHandler(
                 companyCollector: $container->get(CollectCompanyInterface::class),
                 macroCollector: $container->get(CollectMacroInterface::class),
-                repository: $container->get(DataPackRepository::class),
-                assembler: $container->get(DataPackAssemblerInterface::class),
                 gateValidator: $container->get(CollectionGateValidatorInterface::class),
                 alertDispatcher: $container->get(AlertDispatcher::class),
                 runRepository: $container->get(CollectionRunRepository::class),

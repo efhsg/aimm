@@ -93,6 +93,7 @@ final class SemanticValidationRules
     public const ALLOWED_DOMAINS = [
         'finance.yahoo.com',
         'query1.finance.yahoo.com',
+        'financialmodelingprep.com',
         'www.reuters.com',
         'www.wsj.com',
         'www.bloomberg.com',

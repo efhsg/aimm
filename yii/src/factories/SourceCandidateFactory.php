@@ -25,6 +25,7 @@ final class SourceCandidateFactory
 
     private const KEY_SUPPORTS_FINANCIALS = 'supports_financials';
     private const KEY_SUPPORTS_QUARTERS = 'supports_quarters';
+    private const KEY_DISABLED = 'disabled';
 
     private const MACRO_KEY_RIG_COUNT = 'rig_count';
     private const MACRO_KEY_INVENTORY = 'inventory';
@@ -93,6 +94,9 @@ final class SourceCandidateFactory
             self::KEY_SUPPORTS_FINANCIALS => false,
             self::KEY_SUPPORTS_QUARTERS => false,
         ],
+        // DISABLED: Yahoo Finance API requires crumb authentication (returns 401 Unauthorized)
+        // See: https://github.com/ranaroussi/yfinance/issues/1703
+        // TODO: Implement crumb authentication or use Yahoo HTML scraping instead
         'yahoo_finance_api' => [
             self::KEY_DOMAIN => 'query1.finance.yahoo.com',
             self::KEY_PRIORITY => 2,
@@ -101,6 +105,7 @@ final class SourceCandidateFactory
             self::KEY_SUPPORTS_MACRO => true,
             self::KEY_SUPPORTS_FINANCIALS => false,
             self::KEY_SUPPORTS_QUARTERS => false,
+            self::KEY_DISABLED => true,
         ],
         'yahoo_finance_financials' => [
             self::KEY_DOMAIN => 'query1.finance.yahoo.com',
@@ -110,6 +115,7 @@ final class SourceCandidateFactory
             self::KEY_SUPPORTS_MACRO => false,
             self::KEY_SUPPORTS_FINANCIALS => true,
             self::KEY_SUPPORTS_QUARTERS => false,
+            self::KEY_DISABLED => true,
         ],
         'yahoo_finance_quarters' => [
             self::KEY_DOMAIN => 'query1.finance.yahoo.com',
@@ -119,11 +125,22 @@ final class SourceCandidateFactory
             self::KEY_SUPPORTS_MACRO => false,
             self::KEY_SUPPORTS_FINANCIALS => false,
             self::KEY_SUPPORTS_QUARTERS => true,
+            self::KEY_DISABLED => true,
         ],
         'stockanalysis' => [
             self::KEY_DOMAIN => 'stockanalysis.com',
             self::KEY_PRIORITY => 3,
             self::KEY_URL_TEMPLATE => 'https://stockanalysis.com/stocks/{ticker}/',
+            self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_LOWER,
+            self::KEY_SUPPORTS_MACRO => false,
+            self::KEY_SUPPORTS_FINANCIALS => false,
+            self::KEY_SUPPORTS_QUARTERS => false,
+        ],
+        // Stockanalysis statistics page has EV/EBITDA and other valuation ratios
+        'stockanalysis_statistics' => [
+            self::KEY_DOMAIN => 'stockanalysis.com',
+            self::KEY_PRIORITY => 3,
+            self::KEY_URL_TEMPLATE => 'https://stockanalysis.com/stocks/{ticker}/statistics/',
             self::KEY_TICKER_FORMAT => self::TICKER_FORMAT_LOWER,
             self::KEY_SUPPORTS_MACRO => false,
             self::KEY_SUPPORTS_FINANCIALS => false,
@@ -224,8 +241,8 @@ final class SourceCandidateFactory
     /**
      * Generate prioritized source candidates for a ticker.
      *
-     * Per the Hybrid Strategy: Yahoo handles valuation (free, sufficient for daily updates).
-     * FMP is reserved for financials/quarters to save API credits.
+     * Strategy: FMP key-metrics/ratios first (most reliable for valuation metrics),
+     * then Yahoo HTML scraping and other sources as fallback.
      *
      * @return list<SourceCandidate>
      */
@@ -233,14 +250,17 @@ final class SourceCandidateFactory
     {
         $candidates = [];
 
-        // Note: FMP candidates are NOT added here for valuation.
-        // Per design doc: "Yahoo for valuation to save credits".
-        // FMP should only be used for financials/quarters via forFinancials()/forQuarters().
+        // Add FMP valuation endpoints first (priority 1) - most reliable for US stocks
+        $fmpCandidates = $this->buildFmpValuationCandidates($ticker);
+        $candidates = array_merge($candidates, $fmpCandidates);
 
         foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
-            // forTicker() is used for single-point valuation scraping and must not include
-            // the dedicated financials/quarters API endpoints (those are handled via
-            // forFinancials()/forQuarters()) to avoid unnecessary requests and blocks.
+            // Skip disabled sources (e.g., Yahoo API requiring crumb auth)
+            if ($config[self::KEY_DISABLED] ?? false) {
+                continue;
+            }
+
+            // Skip dedicated financials/quarters endpoints (handled via forFinancials()/forQuarters())
             if (($config[self::KEY_SUPPORTS_FINANCIALS] ?? false) || ($config[self::KEY_SUPPORTS_QUARTERS] ?? false)) {
                 continue;
             }
@@ -250,10 +270,16 @@ final class SourceCandidateFactory
                 continue;
             }
 
+            // Adjust priority: if FMP is available, other sources get lower priority
+            $priority = $config[self::KEY_PRIORITY];
+            if ($this->fmpApiKey !== null) {
+                $priority += 10;
+            }
+
             $candidates[] = new SourceCandidate(
                 url: $url,
                 adapterId: $adapterId,
-                priority: $config[self::KEY_PRIORITY],
+                priority: $priority,
                 domain: $config[self::KEY_DOMAIN],
             );
         }
@@ -263,6 +289,45 @@ final class SourceCandidateFactory
             static fn (SourceCandidate $a, SourceCandidate $b): int =>
             $a->priority <=> $b->priority
         );
+
+        return $candidates;
+    }
+
+    /**
+     * Build FMP candidates for valuation metrics (key-metrics and ratios endpoints).
+     *
+     * @return list<SourceCandidate>
+     */
+    private function buildFmpValuationCandidates(string $ticker): array
+    {
+        if ($this->fmpApiKey === null || $this->fmpApiKey === '') {
+            return [];
+        }
+
+        $candidates = [];
+        $upperTicker = strtoupper($ticker);
+
+        // Key-metrics endpoint (has evToEBITDA, freeCashFlowYield, marketCap, etc.)
+        $keyMetricsUrl = $this->buildFmpUrl(self::FMP_KEY_METRICS_URL, $upperTicker);
+        if ($keyMetricsUrl !== null) {
+            $candidates[] = new SourceCandidate(
+                url: $keyMetricsUrl,
+                adapterId: 'fmp',
+                priority: 1,
+                domain: self::FMP_DOMAIN,
+            );
+        }
+
+        // Ratios endpoint (has additional valuation ratios)
+        $ratiosUrl = $this->buildFmpUrl(self::FMP_RATIOS_URL, $upperTicker);
+        if ($ratiosUrl !== null) {
+            $candidates[] = new SourceCandidate(
+                url: $ratiosUrl,
+                adapterId: 'fmp',
+                priority: 2,
+                domain: self::FMP_DOMAIN,
+            );
+        }
 
         return $candidates;
     }
@@ -323,6 +388,11 @@ final class SourceCandidateFactory
         }
 
         foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
+            // Skip disabled sources (e.g., Yahoo API requiring crumb auth)
+            if ($config[self::KEY_DISABLED] ?? false) {
+                continue;
+            }
+
             if (!($config[self::KEY_SUPPORTS_MACRO] ?? false)) {
                 continue;
             }
@@ -528,8 +598,12 @@ final class SourceCandidateFactory
             ? self::KEY_SUPPORTS_QUARTERS
             : self::KEY_SUPPORTS_FINANCIALS;
 
-        // Add Yahoo as fallback (priority 2+)
+        // Add fallback sources (skip disabled ones like Yahoo API)
         foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
+            if ($config[self::KEY_DISABLED] ?? false) {
+                continue;
+            }
+
             if (!($config[$supportsKey] ?? false)) {
                 continue;
             }
@@ -539,7 +613,7 @@ final class SourceCandidateFactory
                 continue;
             }
 
-            // Yahoo gets higher priority number (lower priority) as FMP fallback
+            // Fallback sources get higher priority number (lower priority) than FMP
             $priority = $config[self::KEY_PRIORITY];
             if ($this->fmpApiKey !== null) {
                 $priority += 5;

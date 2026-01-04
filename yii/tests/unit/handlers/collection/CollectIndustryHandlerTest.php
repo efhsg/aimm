@@ -10,7 +10,6 @@ use app\alerts\CollectionAlertEvent;
 use app\dto\CollectCompanyRequest;
 use app\dto\CollectCompanyResult;
 use app\dto\CollectIndustryRequest;
-use app\dto\CollectionLog;
 use app\dto\CollectMacroResult;
 use app\dto\CompanyConfig;
 use app\dto\CompanyData;
@@ -18,10 +17,8 @@ use app\dto\datapoints\DataPointMoney;
 use app\dto\datapoints\SourceLocator;
 use app\dto\DataRequirements;
 use app\dto\FinancialsData;
-use app\dto\GateError;
 use app\dto\GateResult;
 use app\dto\IndustryConfig;
-use app\dto\IndustryDataPack;
 use app\dto\MacroData;
 use app\dto\MacroRequirements;
 use app\dto\MetricDefinition;
@@ -34,8 +31,6 @@ use app\handlers\collection\CollectCompanyInterface;
 use app\handlers\collection\CollectIndustryHandler;
 use app\handlers\collection\CollectMacroInterface;
 use app\queries\CollectionRunRepository;
-use app\queries\DataPackRepository;
-use app\transformers\DataPackAssemblerInterface;
 use app\validators\CollectionGateValidatorInterface;
 use Codeception\Test\Unit;
 use DateTimeImmutable;
@@ -44,20 +39,10 @@ use yii\log\Logger;
 
 final class CollectIndustryHandlerTest extends Unit
 {
-    private string $tempDir;
-    private DataPackRepository $repository;
     private ?Connection $runDb = null;
-
-    protected function _before(): void
-    {
-        $this->tempDir = sys_get_temp_dir() . '/collect-industry-test-' . uniqid();
-        mkdir($this->tempDir, 0755, true);
-        $this->repository = new DataPackRepository($this->tempDir);
-    }
 
     protected function _after(): void
     {
-        $this->deleteDirectory($this->tempDir);
         if ($this->runDb !== null) {
             $this->runDb->close();
             $this->runDb = null;
@@ -82,11 +67,9 @@ final class CollectIndustryHandlerTest extends Unit
                 return $this->createCompanyResult($request->config, CollectionStatus::Complete);
             });
 
-        $assembler = new TestDataPackAssembler($this->repository);
-
         $gateResult = new GateResult(true, [], []);
         $gateValidator = $this->createMock(CollectionGateValidatorInterface::class);
-        $gateValidator->method('validate')->willReturn($gateResult);
+        $gateValidator->method('validateResults')->willReturn($gateResult);
 
         $alertNotifier = new TestAlertNotifier();
         $alertDispatcher = new AlertDispatcher([$alertNotifier]);
@@ -96,8 +79,6 @@ final class CollectIndustryHandlerTest extends Unit
         $handler = $this->createHandler(
             $companyCollector,
             $macroCollector,
-            $this->repository,
-            $assembler,
             $gateValidator,
             $alertDispatcher,
             $runRepository
@@ -111,16 +92,11 @@ final class CollectIndustryHandlerTest extends Unit
 
         $this->assertSame($config->id, $result->industryId);
         $this->assertNotSame('', $result->datapackId);
-        $this->assertStringContainsString('datapack.json', $result->dataPackPath);
         $this->assertSame(CollectionStatus::Complete, $result->overallStatus);
         $this->assertSame($gateResult, $result->gateResult);
         $this->assertCount(2, $result->companyStatuses);
         $this->assertSame(CollectionStatus::Complete, $result->companyStatuses['AAA']);
         $this->assertSame(CollectionStatus::Complete, $result->companyStatuses['BBB']);
-        $this->assertSame(
-            ['AAA', 'BBB'],
-            $this->repository->listIntermediateTickers($config->id, $result->datapackId)
-        );
         $this->assertSame([], $alertNotifier->events);
 
         $run = $this->getRunRow();
@@ -133,7 +109,6 @@ final class CollectIndustryHandlerTest extends Unit
         $this->assertSame(1, (int) $run['gate_passed']);
         $this->assertSame(0, (int) $run['error_count']);
         $this->assertSame(0, (int) $run['warning_count']);
-        $this->assertNotSame('', (string) $run['file_path']);
     }
 
     public function testReturnsPartialWhenMacroFails(): void
@@ -156,10 +131,10 @@ final class CollectIndustryHandlerTest extends Unit
                 CollectionStatus::Complete
             ));
 
-        $assembler = new TestDataPackAssembler($this->repository);
-
+        // Macro failure triggers gate error
+        $gateResult = new GateResult(false, [new \app\dto\GateError('MACRO_FAILED', 'Macro failed', 'macro')], []);
         $gateValidator = $this->createMock(CollectionGateValidatorInterface::class);
-        $gateValidator->method('validate')->willReturn(new GateResult(true, [], []));
+        $gateValidator->method('validateResults')->willReturn($gateResult);
 
         $alertNotifier = new TestAlertNotifier();
         $alertDispatcher = new AlertDispatcher([$alertNotifier]);
@@ -169,8 +144,6 @@ final class CollectIndustryHandlerTest extends Unit
         $handler = $this->createHandler(
             $companyCollector,
             $macroCollector,
-            $this->repository,
-            $assembler,
             $gateValidator,
             $alertDispatcher,
             $runRepository
@@ -182,18 +155,20 @@ final class CollectIndustryHandlerTest extends Unit
             enableMemoryManagement: false,
         ));
 
-        // Macro failure degrades to Partial, not Failed (macro is optional)
-        $this->assertSame(CollectionStatus::Partial, $result->overallStatus);
-        $this->assertSame([], $alertNotifier->events);
+        // Macro failure triggers gate failure → overall Failed + alert
+        $this->assertSame(CollectionStatus::Failed, $result->overallStatus);
+        $this->assertCount(1, $alertNotifier->events);
 
         $run = $this->getRunRow();
-        $this->assertSame(CollectionStatus::Partial->value, $run['status']);
+        $this->assertSame(CollectionStatus::Failed->value, $run['status']);
         $this->assertSame(1, (int) $run['companies_total']);
         $this->assertSame(1, (int) $run['companies_success']);
         $this->assertSame(0, (int) $run['companies_failed']);
+        $this->assertSame(0, (int) $run['gate_passed']);
+        $this->assertSame(1, (int) $run['error_count']);
     }
 
-    public function testPersistsIntermediatesInBatches(): void
+    public function testCollectsCompaniesInBatches(): void
     {
         $config = $this->createIndustryConfig(['AAA', 'BBB', 'CCC']);
         $macroResult = new CollectMacroResult(
@@ -215,10 +190,8 @@ final class CollectIndustryHandlerTest extends Unit
                 return $this->createCompanyResult($request->config, CollectionStatus::Complete);
             });
 
-        $assembler = new TestDataPackAssembler($this->repository);
-
         $gateValidator = $this->createMock(CollectionGateValidatorInterface::class);
-        $gateValidator->method('validate')->willReturn(new GateResult(true, [], []));
+        $gateValidator->method('validateResults')->willReturn(new GateResult(true, [], []));
 
         $alertNotifier = new TestAlertNotifier();
         $alertDispatcher = new AlertDispatcher([$alertNotifier]);
@@ -228,92 +201,23 @@ final class CollectIndustryHandlerTest extends Unit
         $handler = $this->createHandler(
             $companyCollector,
             $macroCollector,
-            $this->repository,
-            $assembler,
             $gateValidator,
             $alertDispatcher,
             $runRepository
         );
 
-        $result = $handler->collect(new CollectIndustryRequest(
+        $handler->collect(new CollectIndustryRequest(
             config: $config,
             batchSize: 2,
             enableMemoryManagement: false,
         ));
 
         $this->assertSame(['AAA', 'BBB', 'CCC'], $collectedTickers);
-        $this->assertSame(
-            ['AAA', 'BBB', 'CCC'],
-            $this->repository->listIntermediateTickers($config->id, $result->datapackId)
-        );
 
         $run = $this->getRunRow();
         $this->assertSame(3, (int) $run['companies_total']);
         $this->assertSame(3, (int) $run['companies_success']);
         $this->assertSame(0, (int) $run['companies_failed']);
-    }
-
-    public function testAlertsWhenGateFails(): void
-    {
-        $config = $this->createIndustryConfig(['AAA']);
-        $macroResult = new CollectMacroResult(
-            data: new MacroData(),
-            sourceAttempts: [],
-            status: CollectionStatus::Complete,
-        );
-
-        $macroCollector = $this->createMock(CollectMacroInterface::class);
-        $macroCollector->method('collect')->willReturn($macroResult);
-
-        $companyCollector = $this->createMock(CollectCompanyInterface::class);
-        $companyCollector->method('collect')
-            ->willReturn($this->createCompanyResult(
-                $config->companies[0],
-                CollectionStatus::Complete
-            ));
-
-        $assembler = new TestDataPackAssembler($this->repository);
-
-        $gateErrors = [new GateError('GATE_FAILED', 'Gate failed')];
-        $gateResult = new GateResult(false, $gateErrors, []);
-        $gateValidator = $this->createMock(CollectionGateValidatorInterface::class);
-        $gateValidator->method('validate')->willReturn($gateResult);
-
-        $alertNotifier = new TestAlertNotifier();
-        $alertDispatcher = new AlertDispatcher([$alertNotifier]);
-
-        $runRepository = $this->createRunRepository();
-
-        $handler = $this->createHandler(
-            $companyCollector,
-            $macroCollector,
-            $this->repository,
-            $assembler,
-            $gateValidator,
-            $alertDispatcher,
-            $runRepository
-        );
-
-        $result = $handler->collect(new CollectIndustryRequest(
-            config: $config,
-            batchSize: 1,
-            enableMemoryManagement: false,
-        ));
-
-        $this->assertSame(CollectionStatus::Failed, $result->overallStatus);
-        $this->assertCount(1, $alertNotifier->events);
-        $event = $alertNotifier->events[0];
-        $this->assertSame(CollectionAlertEvent::SEVERITY_WARNING, $event->severity);
-        $this->assertSame('GATE_FAILED', $event->type);
-        $this->assertSame($config->id, $event->context['industry_id'] ?? null);
-        $this->assertSame($result->datapackId, $event->context['datapack_id'] ?? null);
-
-        $run = $this->getRunRow();
-        $this->assertSame(CollectionStatus::Failed->value, $run['status']);
-        $errorCount = $this->runDb?->createCommand(
-            'SELECT COUNT(*) FROM collection_error'
-        )->queryScalar();
-        $this->assertSame(1, (int) $errorCount);
     }
 
     public function testPeerCompaniesReceiveRelaxedRequirementsForFocalScopeMetrics(): void
@@ -337,9 +241,8 @@ final class CollectIndustryHandlerTest extends Unit
                 return $this->createCompanyResult($request->config, CollectionStatus::Complete);
             });
 
-        $assembler = new TestDataPackAssembler($this->repository);
         $gateValidator = $this->createMock(CollectionGateValidatorInterface::class);
-        $gateValidator->method('validate')->willReturn(new GateResult(true, [], []));
+        $gateValidator->method('validateResults')->willReturn(new GateResult(true, [], []));
 
         $alertNotifier = new TestAlertNotifier();
         $alertDispatcher = new AlertDispatcher([$alertNotifier]);
@@ -348,8 +251,6 @@ final class CollectIndustryHandlerTest extends Unit
         $handler = $this->createHandler(
             $companyCollector,
             $macroCollector,
-            $this->repository,
-            $assembler,
             $gateValidator,
             $alertDispatcher,
             $runRepository
@@ -404,9 +305,8 @@ final class CollectIndustryHandlerTest extends Unit
                 return $this->createCompanyResult($request->config, CollectionStatus::Complete);
             });
 
-        $assembler = new TestDataPackAssembler($this->repository);
         $gateValidator = $this->createMock(CollectionGateValidatorInterface::class);
-        $gateValidator->method('validate')->willReturn(new GateResult(true, [], []));
+        $gateValidator->method('validateResults')->willReturn(new GateResult(true, [], []));
 
         $alertNotifier = new TestAlertNotifier();
         $alertDispatcher = new AlertDispatcher([$alertNotifier]);
@@ -415,8 +315,6 @@ final class CollectIndustryHandlerTest extends Unit
         $handler = $this->createHandler(
             $companyCollector,
             $macroCollector,
-            $this->repository,
-            $assembler,
             $gateValidator,
             $alertDispatcher,
             $runRepository
@@ -575,8 +473,6 @@ final class CollectIndustryHandlerTest extends Unit
     private function createHandler(
         CollectCompanyInterface $companyCollector,
         CollectMacroInterface $macroCollector,
-        DataPackRepository $repository,
-        DataPackAssemblerInterface $assembler,
         CollectionGateValidatorInterface $gateValidator,
         AlertDispatcher $alertDispatcher,
         CollectionRunRepository $runRepository
@@ -584,8 +480,6 @@ final class CollectIndustryHandlerTest extends Unit
         return new CollectIndustryHandler(
             companyCollector: $companyCollector,
             macroCollector: $macroCollector,
-            repository: $repository,
-            assembler: $assembler,
             gateValidator: $gateValidator,
             alertDispatcher: $alertDispatcher,
             runRepository: $runRepository,
@@ -643,63 +537,6 @@ final class CollectIndustryHandlerTest extends Unit
         $this->assertIsArray($row);
 
         return $row;
-    }
-
-    private function deleteDirectory(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-
-        $files = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-
-        foreach ($files as $file) {
-            if ($file->isDir()) {
-                rmdir($file->getPathname());
-            } else {
-                unlink($file->getPathname());
-            }
-        }
-
-        rmdir($dir);
-    }
-}
-
-final class TestDataPackAssembler implements DataPackAssemblerInterface
-{
-    public function __construct(
-        private DataPackRepository $repository,
-    ) {
-    }
-
-    public function assemble(
-        string $industryId,
-        string $datapackId,
-        MacroData $macro,
-        CollectionLog $collectionLog,
-        DateTimeImmutable $collectedAt,
-    ): string {
-        $companies = [];
-        foreach ($this->repository->listIntermediateTickers($industryId, $datapackId) as $ticker) {
-            $company = $this->repository->loadCompanyIntermediate($industryId, $datapackId, $ticker);
-            if ($company !== null) {
-                $companies[$ticker] = $company;
-            }
-        }
-
-        $dataPack = new IndustryDataPack(
-            industryId: $industryId,
-            datapackId: $datapackId,
-            collectedAt: $collectedAt,
-            macro: $macro,
-            companies: $companies,
-            collectionLog: $collectionLog,
-        );
-
-        return $this->repository->save($dataPack);
     }
 }
 

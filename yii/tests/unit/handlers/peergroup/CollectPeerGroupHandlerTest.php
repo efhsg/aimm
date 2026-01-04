@@ -164,7 +164,6 @@ final class CollectPeerGroupHandlerTest extends Unit
         $mockResult = new CollectIndustryResult(
             industryId: 'test-group',
             datapackId: 'test-datapack-123',
-            dataPackPath: '/tmp/test.json',
             gateResult: new GateResult(true, [], []),
             overallStatus: CollectionStatus::Complete,
             companyStatuses: ['AAPL' => CollectionStatus::Complete],

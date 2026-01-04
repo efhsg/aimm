@@ -556,12 +556,12 @@ final class YahooFinanceAdapter implements SourceAdapterInterface
             datapointKey: $key,
             periods: $periods,
             unit: $unit,
-            currency: $currency,
-            scale: 'units',
             locator: SourceLocator::json(
                 "{$path}[*].{$field}",
                 "Historical {$field}: " . count($periods) . ' periods'
             ),
+            currency: $currency,
+            scale: 'units',
         );
     }
 

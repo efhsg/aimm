@@ -67,12 +67,15 @@ final class FmpAdapter implements SourceAdapterInterface
 
     /**
      * Key-metrics endpoint field mappings (scalar values, uses index 0).
+     * Field names match FMP stable API key-metrics endpoint response.
      */
     private const KEY_METRICS_FIELDS = [
-        'valuation.ev_ebitda' => ['field' => 'enterpriseValueOverEBITDA', 'unit' => 'ratio'],
+        'valuation.ev_ebitda' => ['field' => 'evToEBITDA', 'unit' => 'ratio'],
         'valuation.fcf_yield' => ['field' => 'freeCashFlowYield', 'unit' => 'percent'],
         'valuation.div_yield' => ['field' => 'dividendYield', 'unit' => 'percent'],
         'valuation.net_debt_ebitda' => ['field' => 'netDebtToEBITDA', 'unit' => 'ratio'],
+        'valuation.market_cap' => ['field' => 'marketCap', 'unit' => 'currency'],
+        'valuation.enterprise_value' => ['field' => 'enterpriseValue', 'unit' => 'currency'],
     ];
 
     /**
@@ -149,6 +152,17 @@ final class FmpAdapter implements SourceAdapterInterface
                 extractions: [],
                 notFound: $request->datapointKeys,
                 parseError: 'Invalid JSON response',
+            );
+        }
+
+        // Detect FMP API error responses (rate limit, auth errors, etc.)
+        $apiError = $this->detectApiError($decoded);
+        if ($apiError !== null) {
+            return new AdaptResult(
+                adapterId: self::ADAPTER_ID,
+                extractions: [],
+                notFound: $request->datapointKeys,
+                parseError: $apiError,
             );
         }
 
@@ -405,9 +419,9 @@ final class FmpAdapter implements SourceAdapterInterface
                 datapointKey: $key,
                 periods: $periods,
                 unit: $config['unit'],
+                locator: SourceLocator::json("\$[*].{$field}", "periods: " . count($periods)),
                 currency: $currency,
                 scale: 'units',
-                locator: SourceLocator::json("\$[*].{$field}", "periods: " . count($periods)),
             );
         }
 
@@ -478,9 +492,9 @@ final class FmpAdapter implements SourceAdapterInterface
                 datapointKey: $key,
                 periods: $periods,
                 unit: $config['unit'],
+                locator: SourceLocator::json("\$[*].{$field}", "periods: " . count($periods)),
                 currency: $currency,
                 scale: 'units',
-                locator: SourceLocator::json("\$[*].{$field}", "periods: " . count($periods)),
             );
         }
 
@@ -531,12 +545,12 @@ final class FmpAdapter implements SourceAdapterInterface
                     datapointKey: $key,
                     periods: $periods,
                     unit: $config['unit'],
-                    currency: $currency,
-                    scale: 'units',
                     locator: SourceLocator::json(
                         "\$[*].(" . implode(' - ', $config['fields']) . ")",
                         "periods: " . count($periods)
                     ),
+                    currency: $currency,
+                    scale: 'units',
                 );
                 continue;
             }
@@ -671,6 +685,34 @@ final class FmpAdapter implements SourceAdapterInterface
         }
 
         return array_sum($values);
+    }
+
+    /**
+     * Detect FMP API error responses.
+     *
+     * FMP returns errors as: {"Error Message": "Limit Reach..."} or {"Error": "..."}
+     *
+     * @param array<string, mixed> $decoded
+     */
+    private function detectApiError(array $decoded): ?string
+    {
+        // Check for "Error Message" key (rate limits, auth errors)
+        if (isset($decoded['Error Message'])) {
+            $error = (string) $decoded['Error Message'];
+
+            if (str_contains($error, 'Limit Reach')) {
+                return 'FMP API rate limit reached - daily quota exceeded';
+            }
+
+            return 'FMP API error: ' . $error;
+        }
+
+        // Check for "Error" key (other errors)
+        if (isset($decoded['Error'])) {
+            return 'FMP API error: ' . (string) $decoded['Error'];
+        }
+
+        return null;
     }
 
     private function parseDate(?string $dateString): ?DateTimeImmutable

@@ -54,4 +54,48 @@ class PriceHistoryQuery
 
         return (int) $this->db->getLastInsertID();
     }
+
+    /**
+     * Bulk insert price history records.
+     *
+     * @param list<array> $records
+     * @return int Number of records inserted
+     */
+    public function bulkInsert(array $records): int
+    {
+        if (empty($records)) {
+            return 0;
+        }
+
+        $columns = array_keys($records[0]);
+        $rows = array_map(fn (array $record) => array_values($record), $records);
+
+        $this->db->createCommand()
+            ->batchInsert('price_history', $columns, $rows)
+            ->execute();
+
+        return count($records);
+    }
+
+    /**
+     * Find existing price dates for a symbol within a date range.
+     *
+     * @return list<string> List of existing dates (Y-m-d format)
+     */
+    public function findExistingDates(string $symbol, DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $rows = $this->db->createCommand(
+            'SELECT price_date FROM price_history
+             WHERE symbol = :symbol
+               AND price_date BETWEEN :from AND :to'
+        )
+            ->bindValues([
+                ':symbol' => $symbol,
+                ':from' => $from->format('Y-m-d'),
+                ':to' => $to->format('Y-m-d'),
+            ])
+            ->queryColumn();
+
+        return $rows;
+    }
 }

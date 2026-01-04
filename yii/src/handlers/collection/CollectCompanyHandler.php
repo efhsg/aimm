@@ -1134,9 +1134,10 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             return CollectionStatus::Failed;
         }
 
-        $requiredKeys = $this->getRequiredMetricKeys($request->requirements->valuationMetrics);
+        // Check required valuation metrics
+        $requiredValuationKeys = $this->getRequiredMetricKeys($request->requirements->valuationMetrics);
         $missingRequired = 0;
-        foreach ($requiredKeys as $metric) {
+        foreach ($requiredValuationKeys as $metric) {
             $datapoint = $this->getValuationMetric($valuation, $metric);
             if ($datapoint === null || $datapoint->value === null) {
                 $missingRequired++;
@@ -1147,7 +1148,53 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             return CollectionStatus::Partial;
         }
 
+        // Check required annual financial metrics (most recent year only)
+        $requiredFinancialKeys = $this->getRequiredMetricKeys($request->requirements->annualFinancialMetrics);
+        if ($requiredFinancialKeys !== []) {
+            if ($financials->annualData === []) {
+                // No annual data but required metrics exist - all are missing
+                $missingRequired += count($requiredFinancialKeys);
+            } else {
+                $latestYear = max(array_keys($financials->annualData));
+                $latestAnnual = $financials->annualData[$latestYear] ?? null;
+                if ($latestAnnual === null) {
+                    $missingRequired += count($requiredFinancialKeys);
+                } else {
+                    foreach ($requiredFinancialKeys as $metric) {
+                        $datapoint = $this->getAnnualMetric($latestAnnual, $metric);
+                        if ($datapoint === null || $datapoint->value === null) {
+                            $missingRequired++;
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($missingRequired > 0) {
+            return CollectionStatus::Partial;
+        }
+
         return CollectionStatus::Complete;
+    }
+
+    private function getAnnualMetric(
+        AnnualFinancials $annual,
+        string $metric
+    ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber|null {
+        $known = match ($metric) {
+            'revenue' => $annual->revenue,
+            'ebitda' => $annual->ebitda,
+            'net_income' => $annual->netIncome,
+            'net_debt' => $annual->netDebt,
+            'free_cash_flow' => $annual->freeCashFlow,
+            default => null,
+        };
+
+        if ($known !== null) {
+            return $known;
+        }
+
+        return $annual->additionalMetrics[$metric] ?? null;
     }
 
     private function getValuationMetric(

@@ -147,6 +147,22 @@ final class CollectMacroHandler implements CollectMacroInterface
                 }
             }
 
+            // Margin Proxy -> PriceHistory (commodity type)
+            if ($margin !== null && $margin->value !== null && $request->requirements->marginProxy) {
+                $exists = $this->priceQuery->findBySymbolAndDate($request->requirements->marginProxy, $now);
+                if (!$exists) {
+                    $this->priceQuery->insert([
+                        'symbol' => $request->requirements->marginProxy,
+                        'symbol_type' => 'commodity',
+                        'price_date' => $dateStr,
+                        'close' => $margin->value,
+                        'currency' => $margin->currency,
+                        'source_adapter' => 'web_fetch',
+                        'collected_at' => $now->format('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+
             // Sector Index -> PriceHistory
             // Note: Indices are measured in points, not currency. Using 'XXX' (ISO no-currency code).
             if ($index !== null && $index->value !== null && $request->requirements->sectorIndex) {

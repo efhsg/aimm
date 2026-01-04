@@ -110,12 +110,12 @@ final class EcbAdapter implements SourceAdapterInterface
             datapointKey: self::KEY_FX_RATES,
             periods: $periods,
             unit: 'ratio',
-            currency: 'EUR/' . self::TARGET_CURRENCY,
-            scale: null,
             locator: SourceLocator::xpath(
                 '//eurofxref:Cube[@currency="' . self::TARGET_CURRENCY . '"]',
                 sprintf('EUR/%s: %d daily rates', self::TARGET_CURRENCY, count($periods))
             ),
+            currency: 'EUR/' . self::TARGET_CURRENCY,
+            scale: null,
         );
     }
 

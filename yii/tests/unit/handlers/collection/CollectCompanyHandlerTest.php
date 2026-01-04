@@ -289,6 +289,21 @@ final class CollectCompanyHandlerTest extends Unit
 
     public function testCalculatesFcfYieldFromQuarterlyFreeCashFlowWhenDirectSourcesMissing(): void
     {
+        // This test requires a factory with FMP API key so forQuartersMetric returns candidates
+        $factoryWithFmp = new SourceCandidateFactory(fmpApiKey: 'DEMO_KEY');
+        $datapointCollector = $this->createMock(CollectDatapointInterface::class);
+
+        $handler = new CollectCompanyHandler(
+            $datapointCollector,
+            $factoryWithFmp,
+            $this->dataPointFactory,
+            $this->logger,
+            $this->companyQuery,
+            $this->annualQuery,
+            $this->quarterlyQuery,
+            $this->valuationQuery
+        );
+
         $request = $this->createRequest(['market_cap', 'fcf_yield'], []);
 
         $historicalExtraction = new HistoricalExtraction(
@@ -300,9 +315,9 @@ final class CollectCompanyHandlerTest extends Unit
                 new PeriodValue(new DateTimeImmutable('2023-12-31'), 10_000_000_000.0),
             ],
             unit: MetricDefinition::UNIT_CURRENCY,
+            locator: SourceLocator::json('cashflowStatementHistoryQuarterly', 'freeCashFlow'),
             currency: 'USD',
             scale: 'units',
-            locator: SourceLocator::json('cashflowStatementHistoryQuarterly', 'freeCashFlow'),
         );
 
         $quartersResult = new CollectDatapointResult(
@@ -310,8 +325,8 @@ final class CollectCompanyHandlerTest extends Unit
             datapoint: $this->createMoneyDatapoint(10_000_000_000.0),
             sourceAttempts: [
                 new SourceAttempt(
-                    url: 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=cashflowStatementHistoryQuarterly',
-                    providerId: 'yahoo_finance_quarters',
+                    url: 'https://financialmodelingprep.com/api/v3/cash-flow-statement/AAPL?period=quarter&limit=4&apikey=DEMO_KEY',
+                    providerId: 'fmp',
                     attemptedAt: new DateTimeImmutable(),
                     outcome: 'success',
                     httpStatus: 200,
@@ -323,13 +338,13 @@ final class CollectCompanyHandlerTest extends Unit
                 content: '{}',
                 contentType: 'application/json',
                 statusCode: 200,
-                url: 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=cashflowStatementHistoryQuarterly',
-                finalUrl: 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=cashflowStatementHistoryQuarterly',
+                url: 'https://financialmodelingprep.com/api/v3/cash-flow-statement/AAPL?period=quarter&limit=4&apikey=DEMO_KEY',
+                finalUrl: 'https://financialmodelingprep.com/api/v3/cash-flow-statement/AAPL?period=quarter&limit=4&apikey=DEMO_KEY',
                 retrievedAt: new DateTimeImmutable(),
             ),
         );
 
-        $this->datapointCollector
+        $datapointCollector
             ->method('collect')
             ->willReturnCallback(function (CollectDatapointRequest $req) use ($quartersResult) {
                 return match ($req->datapointKey) {
@@ -343,7 +358,7 @@ final class CollectCompanyHandlerTest extends Unit
                 };
             });
 
-        $result = $this->handler->collect($request);
+        $result = $handler->collect($request);
 
         $this->assertNotNull($result->data->valuation->freeCashFlowTtm);
         $this->assertSame(CollectionMethod::Derived, $result->data->valuation->freeCashFlowTtm->method);

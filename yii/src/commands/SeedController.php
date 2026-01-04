@@ -28,8 +28,10 @@ final class SeedController extends Controller
             return $result;
         }
 
-        // Add more seeders here as needed:
-        // $this->actionOtherSeeder();
+        $result = $this->actionUsEnergyMajors();
+        if ($result !== ExitCode::OK) {
+            return $result;
+        }
 
         $this->stdout("\nAll seeders completed.\n", Console::FG_GREEN);
 
@@ -79,17 +81,117 @@ final class SeedController extends Controller
     }
 
     /**
+     * Seeds the US Energy Majors peer group (FMP free tier compatible).
+     *
+     * Creates: collection policy, peer group, companies, and memberships.
+     * All tickers are US-listed and work with FMP free tier.
+     */
+    public function actionUsEnergyMajors(): int
+    {
+        $this->stdout("Seeding US Energy Majors peer group...\n");
+
+        // Check if already seeded
+        $exists = (bool) Yii::$app->db->createCommand(
+            'SELECT 1 FROM collection_policy WHERE slug = :slug'
+        )->bindValue(':slug', 'us-energy-majors')->queryScalar();
+
+        if ($exists) {
+            $this->stdout("  Already seeded.\n", Console::FG_YELLOW);
+            return ExitCode::OK;
+        }
+
+        $sqlFile = Yii::getAlias('@app/../../docs/queries/us_energy_majors_setup.sql');
+
+        if (!file_exists($sqlFile)) {
+            $this->stderr("SQL file not found: {$sqlFile}\n", Console::FG_RED);
+            return ExitCode::DATAERR;
+        }
+
+        $sql = file_get_contents($sqlFile);
+
+        try {
+            $pdo = Yii::$app->db->getMasterPdo();
+            $pdo->exec($sql);
+
+            $this->stdout("  Seeded: collection policy, peer group, 5 US companies\n", Console::FG_GREEN);
+        } catch (\Exception $e) {
+            $this->stderr("Seeding failed: " . $e->getMessage() . "\n", Console::FG_RED);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        return ExitCode::OK;
+    }
+
+    /**
+     * Seeds realistic test data for Global Energy Supermajors.
+     *
+     * Adds annual financials (5 years), quarterly financials (8 quarters),
+     * and valuation snapshots for all 5 supermajors. Use this for phase 2
+     * development when API quotas are exhausted.
+     *
+     * Requires: oil-majors peer group must be seeded first.
+     */
+    public function actionSupermajorsTestdata(): int
+    {
+        $this->stdout("Seeding Global Energy Supermajors test data...\n");
+
+        // Check if peer group exists
+        $peerGroupExists = (bool) Yii::$app->db->createCommand(
+            'SELECT 1 FROM industry_peer_group WHERE slug = :slug'
+        )->bindValue(':slug', 'global-energy-supermajors')->queryScalar();
+
+        if (!$peerGroupExists) {
+            $this->stderr("  Peer group 'global-energy-supermajors' not found.\n", Console::FG_RED);
+            $this->stderr("  Run 'yii seed/oil-majors' first.\n", Console::FG_YELLOW);
+            return ExitCode::DATAERR;
+        }
+
+        // Check if already seeded (look for seeded annual financials)
+        $alreadySeeded = (bool) Yii::$app->db->createCommand(
+            "SELECT 1 FROM annual_financial WHERE source_adapter = 'seed' LIMIT 1"
+        )->queryScalar();
+
+        if ($alreadySeeded) {
+            $this->stdout("  Test data already seeded.\n", Console::FG_YELLOW);
+            return ExitCode::OK;
+        }
+
+        $sqlFile = Yii::getAlias('@app/../../docs/queries/global_supermajors_testdata.sql');
+
+        if (!file_exists($sqlFile)) {
+            $this->stderr("SQL file not found: {$sqlFile}\n", Console::FG_RED);
+            return ExitCode::DATAERR;
+        }
+
+        $sql = file_get_contents($sqlFile);
+
+        try {
+            $pdo = Yii::$app->db->getMasterPdo();
+            $pdo->exec($sql);
+
+            $this->stdout("  Seeded: 25 annual records (2021-2025), 40 quarterly records (2024-2025), 5 valuations\n", Console::FG_GREEN);
+        } catch (\Exception $e) {
+            $this->stderr("Seeding failed: " . $e->getMessage() . "\n", Console::FG_RED);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        return ExitCode::OK;
+    }
+
+    /**
      * Lists available seeders.
      */
     public function actionIndex(): int
     {
         $this->stdout("Seeders:\n\n");
-        $this->stdout("  yii seed/all           Run all seeders\n");
-        $this->stdout("  yii seed/oil-majors    Seed Global Energy Supermajors\n");
-        $this->stdout("  yii seed/clear         Clear all seed data\n");
+        $this->stdout("  yii seed/all                    Run all seeders\n");
+        $this->stdout("  yii seed/oil-majors             Seed Global Energy Supermajors\n");
+        $this->stdout("  yii seed/us-energy-majors       Seed US Energy Majors (FMP free tier)\n");
+        $this->stdout("  yii seed/supermajors-testdata   Seed realistic test data (no API needed)\n");
+        $this->stdout("  yii seed/clear                  Clear all seed data\n");
         $this->stdout("\nDatabase setup:\n\n");
-        $this->stdout("  yii db/init            Run migrations + all seeders\n");
-        $this->stdout("  yii db/reset           Drop tables, migrate, and seed\n");
+        $this->stdout("  yii db/init                     Run migrations + all seeders\n");
+        $this->stdout("  yii db/reset                    Drop tables, migrate, and seed\n");
         $this->stdout("\n");
 
         return ExitCode::OK;
