@@ -57,6 +57,13 @@ Follow skill contracts (inputs, outputs, DoD) when they apply.
 
 ## Claude-Specific Configuration
 
+### Behavioral Guidelines
+
+- **Research before action**: Do not jump into implementation or change files unless clearly instructed. When the user's intent is ambiguous, default to providing information, doing research, and providing recommendations rather than taking action. Only proceed with edits, modifications, or implementations when the user explicitly requests them.
+- **Read before answering**: Never speculate about code you have not opened. If the user references a specific file, read it before answering. Investigate and read relevant files BEFORE answering questions about the codebase. Never make claims about code before investigating unless certain of the correct answer.
+- **Parallel tool calls**: If you intend to call multiple tools and there are no dependencies between the calls, make all independent tool calls in parallel. Maximize parallel execution for speed and efficiency. Only call tools sequentially when parameters depend on previous results.
+- **Summarize completed work**: After completing a task that involves tool use, provide a quick summary of the work done.
+
 ### Tool Preferences
 
 - Use Bash for git operations

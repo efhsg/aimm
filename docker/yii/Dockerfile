@@ -42,6 +42,8 @@ RUN adduser --uid ${USER_ID} --disabled-password --gecos "" ${USER_NAME}
 
 WORKDIR /var/www/html/yii
 
+ENV PATH="/var/www/html/yii:${PATH}"
+
 RUN sed -i "s|9000|${PHP_FPM_PORT}|" /usr/local/etc/php-fpm.d/www.conf \
     && sed -i "s|9000|${PHP_FPM_PORT}|" /usr/local/etc/php-fpm.d/zz-docker.conf
 
