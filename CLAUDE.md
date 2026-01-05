@@ -46,23 +46,18 @@ Before writing or modifying any code, you MUST:
 @docs/rules/commits.md
 @docs/rules/workflow.md
 
-## Skills System
+## Skills
 
-Before implementing, check `docs/skills/index.md` for relevant skills:
+Repeatable tasks with defined inputs/outputs. See `docs/skills/index.md`.
 
-**Collection skills:**
-- collect-datapoint, collect-company, collect-macro
-- adapt-source-response, build-source-candidates
-- validate-collection-gate, enforce-rate-limit
+| Skill | Use for |
+|-------|---------|
+| `access-database-from-host` | DB access from host machine |
+| `upgrade-php-version` | PHP version upgrades |
+| `create-migration` | New database migrations |
+| `review-changes` | Code review (`/review-changes`) |
 
-**Shared skills:**
-- record-provenance, record-not-found
-
-**Meta skills:**
-- create-migration, upgrade-php-version, access-database-from-host
-- review-changes, review-artifact, review-design-doc, review-and-improve-skill
-
-Follow skill contracts (inputs, outputs, DoD) when they apply.
+For code reference docs, see `docs/reference/`.
 
 ## Claude-Specific Configuration
 
