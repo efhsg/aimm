@@ -1,11 +1,22 @@
-# AIMM Rules
+# Project Rules
 
-> **MOVED:** Rules have been modularized into `docs/rules/` for multi-agent compatibility.
+This document aggregates all project rules. Read these before any implementation.
 
-See:
-- [docs/rules/coding-standards.md](rules/coding-standards.md)
-- [docs/rules/architecture.md](rules/architecture.md)
-- [docs/rules/security.md](rules/security.md)
-- [docs/rules/testing.md](rules/testing.md)
-- [docs/rules/commits.md](rules/commits.md)
-- [docs/rules/workflow.md](rules/workflow.md)
+## Rule Files
+
+- [Coding Standards](rules/coding-standards.md)
+- [Architecture](rules/architecture.md)
+- [Security](rules/security.md)
+- [Testing](rules/testing.md)
+- [Commits](rules/commits.md)
+- [Workflow](rules/workflow.md)
+
+## Quick Reference
+
+See individual files for details. Key points:
+
+- PSR-12 + strict_types in all PHP
+- No banned folders: services/, helpers/, components/, utils/, misc/
+- Every datapoint needs provenance
+- No silent failures
+- No fabricated data

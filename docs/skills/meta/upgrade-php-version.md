@@ -4,7 +4,6 @@ description: Upgrade the PHP runtime version used by the Yii2 application (Docke
 area: meta
 depends_on:
   - docs/RULES.md
-  - docs/skills/meta/setup-project.md
 ---
 
 # UpgradePhpVersion

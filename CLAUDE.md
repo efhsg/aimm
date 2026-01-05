@@ -21,7 +21,7 @@ You are a **Senior Software Engineer** specializing in financial data systems.
 **Boundaries:**
 - Never commit secrets or credentials
 - Never fabricate financial data; document gaps as `not_found`
-- Never create banned folders (services/, helpers/, utils/)
+- Never create banned folders (services/, helpers/, components/, utils/, misc/)
 - Stop and ask if a rule conflicts with the task
 
 ## Prime Directive
@@ -49,9 +49,18 @@ Before writing or modifying any code, you MUST:
 ## Skills System
 
 Before implementing, check `docs/skills/index.md` for relevant skills:
-- **Collection skills** — collect-datapoint, collect-company, adapt-source-response
-- **Shared skills** — record-provenance, record-not-found
-- **Meta skills** — create-migration, upgrade-php-version
+
+**Collection skills:**
+- collect-datapoint, collect-company, collect-macro
+- adapt-source-response, build-source-candidates
+- validate-collection-gate, enforce-rate-limit
+
+**Shared skills:**
+- record-provenance, record-not-found
+
+**Meta skills:**
+- create-migration, upgrade-php-version, access-database-from-host
+- review-changes, review-artifact, review-design-doc, review-and-improve-skill
 
 Follow skill contracts (inputs, outputs, DoD) when they apply.
 
@@ -70,6 +79,13 @@ Follow skill contracts (inputs, outputs, DoD) when they apply.
 - Prefer Edit over sed/awk
 - Use Glob/Grep instead of find/grep commands
 
+### Commits
+
+Claude Code adds `Co-Authored-By` automatically to commits. To follow project rules (no AI attribution):
+- Let Claude Code stage changes (`git add`)
+- Make the commit manually: `git commit -m "TYPE(scope): description"`
+- Or use `/finalize-changes` which suggests a commit message without committing
+
 ### Commands (Docker)
 
 ```bash
@@ -86,6 +102,7 @@ docker exec aimm_yii vendor/bin/php-cs-fixer fix
 ### Slash Commands
 
 - `/finalize-changes` — Validate changes, run linter and tests, prepare commit
+- `/review-changes` — Review code changes for correctness, style, and project compliance
 
 ### Response Format
 
