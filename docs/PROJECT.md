@@ -1,5 +1,71 @@
 # AIMM
 
+# ⚠️ IMPORTANT: AIMM CORE OPERATING PRINCIPLE
+
+## 1. Project Identity
+**AIMM (AI Investment Model Matrix)** is an Automated Forensic Fundamental Analysis Engine.
+
+**Primary Directive:** To simulate the workflow of a rigorous institutional equity analyst. AIMM does not just check if a stock is "cheap" (Valuation); it checks if the business is "broken" (Quality).
+
+**The Goal:** Generate objective **BUY/HOLD/SELL** ratings based on the intersection of three vectors:
+1.  **Earnings Quality** (Is the profit real?)
+2.  **Capital Efficiency** (Is management creating value?)
+3.  **Relative Valuation** (Is the price attractive vs. peers?)
+
+---
+
+## 2. The Logic Framework ("Intelligent Analysis")
+
+AIMM distinguishes itself from standard screeners by applying **Forensic Logic**. It does not take reported numbers at face value but tests their validity.
+
+### Vector A: The Quality Test (The "Moat" Check)
+* **Cash Flow Conversion:** Compares *Net Income* vs. *Free Cash Flow* (FCF).
+    * *Logic:* If Net Income is rising but FCF is falling, flag as "Low Quality" (Aggressive Accounting Risk).
+* **Capital Efficiency:** Calculates *ROIC* (Return on Invested Capital) vs. *WACC* (Weighted Average Cost of Capital).
+    * *Logic:* Growth is only positive if ROIC > WACC. If ROIC < WACC, growth destroys value.
+* **Margin Stability:** Analyzes the variance in *Gross Margins* over 5 years.
+    * *Logic:* Stable/expanding margins imply pricing power. Volatile margins imply a commodity product.
+
+### Vector B: The Valuation Test (Mean Reversion)
+* **Peer Benchmarking:** Uses **Median-based** multiples (P/E, EV/EBITDA, P/FCF) of a strictly defined peer group.
+* **The Safety Margin:** A stock is only "Undervalued" if it trades at a significant discount (>15%) to its peer median, *conditional* on passing Vector A.
+
+---
+
+## 3. Operational Constraints (Guardrails)
+
+* **Context-Blindness:** AIMM is a quantitative tool. It assumes markets are efficient in the long run but inefficient in the short run. It does *not* process news sentiment, geopolitical risks, or CEO scandals unless they impact the financial statements.
+* **Data Minimums:**
+    * **Trend Analysis:** Minimum 5 years of annual data required to determine structural direction.
+    * **Momentum:** Minimum 4 quarters of sequential data required to detect recent inflection points.
+* **Peer Group Integrity:** Comparisons must be sector-specific (GICS). Comparing a Software company to a Hardware manufacturer is a critical failure state.
+
+---
+
+## 4. Verdict Logic (Standardized Output)
+
+The AI agent must synthesize data into one of three strict outcomes. "Maybe" is not an option.
+
+| Rating | Required Conditions |
+| :--- | :--- |
+| **BUY** | **Quality:** Improving ROIC + Stable Margins + Positive FCF Trend.<br>**Value:** Trading at >15% Discount to Peer Median.<br>**Risk:** No "Red Flags" detected. |
+| **SELL** | **Quality:** Deteriorating ROIC OR Declining Margins OR FCF < Net Income (Red Flag).<br>**Value:** Trading at Premium to Peers OR Valuation is average but fundamentals are eroding. |
+| **HOLD** | **Quality:** Stable fundamentals.<br>**Value:** Fairly valued (within +/- 10% of Peer Median).<br>*Note: Used when a good company is expensive, or a cheap company has mixed fundamentals.* |
+
+---
+
+## 5. The "Red Flag" Engine (Risk Detection)
+*Immediate disqualifiers that override valuation metrics:*
+* **Debt Load:** Net Debt / EBITDA > 4.0x (unless in Utility/REIT sector).
+* **Dilution:** Share count increased by >5% YoY without corresponding acquisition growth.
+* **Margin Collapse:** Gross Margin declines >300 basis points in a single year.
+
+---
+**Document Version:** 2.0 (Intelligent Analysis Optimized)
+**Usage:** Mandatory Context for AI Reasoning
+
+---
+
 **Equity intelligence pipeline for smarter investment decisions.**
 
 ## Naming Convention
