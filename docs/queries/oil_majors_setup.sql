@@ -28,7 +28,7 @@ INSERT INTO collection_policy (
     'Global Energy Supermajors',
     NULL,
     5,
-    8,
+    5,
     JSON_ARRAY(
         JSON_OBJECT('key','market_cap','unit','currency','required',TRUE,'required_scope','all'),
         JSON_OBJECT('key','fwd_pe','unit','ratio','required',TRUE,'required_scope','all'),

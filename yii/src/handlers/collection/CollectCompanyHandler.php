@@ -720,10 +720,16 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                     fiscalYear: $year,
                     periodEndDate: isset($row['period_end_date']) ? new DateTimeImmutable($row['period_end_date']) : null,
                     revenue: $this->moneyFromDossier($row['revenue'], $row['currency'], $collectedAt),
+                    grossProfit: $this->moneyFromDossier($row['gross_profit'], $row['currency'], $collectedAt),
+                    operatingIncome: $this->moneyFromDossier($row['operating_income'], $row['currency'], $collectedAt),
                     ebitda: $this->moneyFromDossier($row['ebitda'], $row['currency'], $collectedAt),
                     netIncome: $this->moneyFromDossier($row['net_income'], $row['currency'], $collectedAt),
-                    netDebt: $this->moneyFromDossier($row['net_debt'], $row['currency'], $collectedAt),
                     freeCashFlow: $this->moneyFromDossier($row['free_cash_flow'], $row['currency'], $collectedAt),
+                    totalEquity: $this->moneyFromDossier($row['total_equity'], $row['currency'], $collectedAt),
+                    totalDebt: $this->moneyFromDossier($row['total_debt'], $row['currency'], $collectedAt),
+                    cashAndEquivalents: $this->moneyFromDossier($row['cash_and_equivalents'], $row['currency'], $collectedAt),
+                    netDebt: $this->moneyFromDossier($row['net_debt'], $row['currency'], $collectedAt),
+                    sharesOutstanding: $this->numberFromDossier($row['shares_outstanding'], $collectedAt),
                     additionalMetrics: [],
                 );
             }
@@ -808,6 +814,27 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             cacheSource: 'dossier',
             cacheAgeDays: $ageDays,
             currency: $currency
+        );
+    }
+
+    private function numberFromDossier($value, ?string $collectedAt): DataPointNumber
+    {
+        if ($value === null) {
+            return $this->dataPointFactory->notFound('number', []);
+        }
+
+        $collected = $collectedAt !== null
+            ? new DateTimeImmutable($collectedAt)
+            : new DateTimeImmutable();
+        $now = new DateTimeImmutable();
+        $ageDays = (int) $now->diff($collected)->days;
+
+        return $this->dataPointFactory->fromCache(
+            unit: 'number',
+            value: (float) $value,
+            originalAsOf: $collected,
+            cacheSource: 'dossier',
+            cacheAgeDays: $ageDays,
         );
     }
 
@@ -1221,10 +1248,16 @@ final class CollectCompanyHandler implements CollectCompanyInterface
     ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber|null {
         $known = match ($metric) {
             'revenue' => $annual->revenue,
+            'gross_profit' => $annual->grossProfit,
+            'operating_income' => $annual->operatingIncome,
             'ebitda' => $annual->ebitda,
             'net_income' => $annual->netIncome,
-            'net_debt' => $annual->netDebt,
             'free_cash_flow' => $annual->freeCashFlow,
+            'total_equity' => $annual->totalEquity,
+            'total_debt' => $annual->totalDebt,
+            'cash_and_equivalents' => $annual->cashAndEquivalents,
+            'net_debt' => $annual->netDebt,
+            'shares_outstanding' => $annual->sharesOutstanding,
             default => null,
         };
 

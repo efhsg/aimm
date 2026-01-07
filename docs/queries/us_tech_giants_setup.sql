@@ -26,7 +26,7 @@ INSERT INTO collection_policy (
     'US Tech Giants',
     'Large-cap US technology companies (FMP free tier compatible)',
     5,
-    8,
+    5,
     JSON_ARRAY(
         JSON_OBJECT('key','market_cap','unit','currency','required',TRUE,'required_scope','all'),
         JSON_OBJECT('key','fwd_pe','unit','ratio','required',TRUE,'required_scope','all'),

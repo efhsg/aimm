@@ -27,7 +27,7 @@ INSERT INTO collection_policy (
     'US Energy Majors',
     'US-listed energy companies for FMP free tier compatibility',
     5,
-    8,
+    5,
     JSON_ARRAY(
         JSON_OBJECT('key','market_cap','unit','currency','required',TRUE,'required_scope','all'),
         JSON_OBJECT('key','fwd_pe','unit','ratio','required',TRUE,'required_scope','all'),
