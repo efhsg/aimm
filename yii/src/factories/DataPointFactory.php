@@ -259,7 +259,7 @@ final class DataPointFactory
     /**
      * Create DataPoints from historical extraction, keyed by fiscal year.
      *
-     * @return array<int, DataPointMoney>
+     * @return array<int, DataPointMoney|DataPointNumber>
      */
     public function fromHistoricalExtractionByYear(
         HistoricalExtraction $extraction,
@@ -321,7 +321,7 @@ final class DataPointFactory
     public function fromHistoricalExtractionMostRecent(
         HistoricalExtraction $extraction,
         FetchResult $fetchResult
-    ): ?DataPointMoney {
+    ): DataPointMoney|DataPointNumber|null {
         $mostRecent = null;
 
         foreach ($extraction->periods as $period) {
@@ -345,7 +345,18 @@ final class DataPointFactory
         PeriodValue $period,
         HistoricalExtraction $extraction,
         FetchResult $fetchResult
-    ): DataPointMoney {
+    ): DataPointMoney|DataPointNumber {
+        if ($extraction->unit === 'number') {
+            return new DataPointNumber(
+                value: $period->value,
+                asOf: $period->endDate,
+                sourceUrl: $fetchResult->finalUrl,
+                retrievedAt: $fetchResult->retrievedAt,
+                method: CollectionMethod::WebFetch,
+                sourceLocator: $extraction->locator,
+            );
+        }
+
         return new DataPointMoney(
             value: $period->value,
             currency: $extraction->currency ?? 'USD',

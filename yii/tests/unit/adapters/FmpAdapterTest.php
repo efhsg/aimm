@@ -301,6 +301,85 @@ final class FmpAdapterTest extends Unit
         $this->assertSame(17_100_000_000.0, $netDebt->periods[0]->value);
     }
 
+    public function testParsesBalanceSheetDirectFields(): void
+    {
+        $content = $this->loadFixture('fmp/balance-sheet.json');
+        $adapter = new FmpAdapter();
+
+        $request = new AdaptRequest(
+            fetchResult: new FetchResult(
+                content: $content,
+                contentType: 'application/json',
+                statusCode: 200,
+                url: 'https://financialmodelingprep.com/api/v3/balance-sheet-statement/XOM?period=annual&apikey=demo',
+                finalUrl: 'https://financialmodelingprep.com/api/v3/balance-sheet-statement/XOM?period=annual&apikey=demo',
+                retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            ),
+            datapointKeys: [
+                'financials.total_equity',
+                'financials.total_debt',
+                'financials.cash_and_equivalents',
+            ],
+            ticker: 'XOM',
+        );
+
+        $result = $adapter->adapt($request);
+
+        $this->assertSame([], $result->notFound);
+        $this->assertCount(3, $result->historicalExtractions);
+
+        $totalEquity = $result->historicalExtractions['financials.total_equity'];
+        $this->assertCount(1, $totalEquity->periods);
+        $this->assertSame('currency', $totalEquity->unit);
+        $this->assertSame(218_000_000_000.0, $totalEquity->periods[0]->value);
+
+        $totalDebt = $result->historicalExtractions['financials.total_debt'];
+        $this->assertSame(49_500_000_000.0, $totalDebt->periods[0]->value);
+
+        $cash = $result->historicalExtractions['financials.cash_and_equivalents'];
+        $this->assertSame(32_400_000_000.0, $cash->periods[0]->value);
+    }
+
+    public function testParsesIncomeStatementNewFields(): void
+    {
+        $content = $this->loadFixture('fmp/income-statement.json');
+        $adapter = new FmpAdapter();
+
+        $request = new AdaptRequest(
+            fetchResult: new FetchResult(
+                content: $content,
+                contentType: 'application/json',
+                statusCode: 200,
+                url: 'https://financialmodelingprep.com/api/v3/income-statement/XOM?period=annual&apikey=demo',
+                finalUrl: 'https://financialmodelingprep.com/api/v3/income-statement/XOM?period=annual&apikey=demo',
+                retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
+            ),
+            datapointKeys: [
+                'financials.gross_profit',
+                'financials.operating_income',
+                'financials.shares_outstanding',
+            ],
+            ticker: 'XOM',
+        );
+
+        $result = $adapter->adapt($request);
+
+        $this->assertSame([], $result->notFound);
+        $this->assertCount(3, $result->historicalExtractions);
+
+        $grossProfit = $result->historicalExtractions['financials.gross_profit'];
+        $this->assertCount(2, $grossProfit->periods);
+        $this->assertSame('currency', $grossProfit->unit);
+        $this->assertSame(110_226_000_000.0, $grossProfit->periods[0]->value); // 2023
+
+        $operatingIncome = $result->historicalExtractions['financials.operating_income'];
+        $this->assertSame(50_000_000_000.0, $operatingIncome->periods[0]->value); // 2023
+
+        $sharesOutstanding = $result->historicalExtractions['financials.shares_outstanding'];
+        $this->assertSame('number', $sharesOutstanding->unit);
+        $this->assertSame(3_984_000_000.0, $sharesOutstanding->periods[0]->value); // 2023
+    }
+
     public function testReturnsNotFoundForEmptyQuoteResponse(): void
     {
         $adapter = new FmpAdapter();
@@ -422,9 +501,15 @@ final class FmpAdapterTest extends Unit
         $this->assertContains('valuation.fcf_yield', $keys);
         $this->assertContains('valuation.fwd_pe', $keys);
         $this->assertContains('financials.revenue', $keys);
+        $this->assertContains('financials.gross_profit', $keys);
+        $this->assertContains('financials.operating_income', $keys);
         $this->assertContains('financials.ebitda', $keys);
         $this->assertContains('financials.net_income', $keys);
         $this->assertContains('financials.free_cash_flow', $keys);
+        $this->assertContains('financials.total_equity', $keys);
+        $this->assertContains('financials.total_debt', $keys);
+        $this->assertContains('financials.cash_and_equivalents', $keys);
+        $this->assertContains('financials.shares_outstanding', $keys);
         $this->assertContains('financials.net_debt', $keys);
         $this->assertContains('macro.commodity_benchmark', $keys);
     }

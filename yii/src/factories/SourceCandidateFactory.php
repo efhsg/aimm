@@ -38,6 +38,8 @@ final class SourceCandidateFactory
     private const SYMBOL_GOLD = 'GC=F';
     private const SYMBOL_SP500 = '^GSPC';
     private const SYMBOL_XLE = 'XLE';
+    private const SYMBOL_XLK = 'XLK';
+    private const SYMBOL_QQQ = 'QQQ';
 
     private const EIA_INVENTORY_SERIES_DEFAULT = 'PET.WCRSTUS1.W';
     private const EIA_INVENTORY_URL_TEMPLATE = 'https://api.eia.gov/v2/seriesid/{series}?api_key={api_key}';
@@ -64,11 +66,19 @@ final class SourceCandidateFactory
     ];
     private const FMP_FINANCIALS_STATEMENT_MAP = [
         'financials.revenue' => ['income-statement'],
+        'financials.gross_profit' => ['income-statement'],
+        'financials.operating_income' => ['income-statement'],
         'financials.ebitda' => ['income-statement'],
         'financials.net_income' => ['income-statement'],
         'financials.free_cash_flow' => ['cash-flow-statement'],
+        'financials.total_equity' => ['balance-sheet-statement'],
+        'financials.total_debt' => ['balance-sheet-statement'],
+        'financials.cash_and_equivalents' => ['balance-sheet-statement'],
+        'financials.shares_outstanding' => ['income-statement'],
         'financials.net_debt' => ['balance-sheet-statement'],
         'quarters.revenue' => ['income-statement'],
+        'quarters.gross_profit' => ['income-statement'],
+        'quarters.operating_income' => ['income-statement'],
         'quarters.ebitda' => ['income-statement'],
         'quarters.net_income' => ['income-statement'],
         'quarters.free_cash_flow' => ['cash-flow-statement'],
@@ -359,9 +369,9 @@ final class SourceCandidateFactory
             return $specialCandidates;
         }
 
-        // Note: FMP candidates are NOT added here for macro data.
-        // Per design doc: "Yahoo for valuation [and commodity prices] to save credits".
-        // FMP should only be used for financials/quarters.
+        // FMP as fallback for macro indices (Yahoo is often rate-limited)
+        // Only add FMP for index symbols that work on free tier
+        $fmpIndexSymbols = ['^GSPC'];
 
         $symbolMap = [
             'macro.oil_price' => self::SYMBOL_WTI,
@@ -378,6 +388,8 @@ final class SourceCandidateFactory
             'natural_gas' => self::SYMBOL_NATURAL_GAS,
             'GOLD' => self::SYMBOL_GOLD,
             'XLE' => self::SYMBOL_XLE,
+            'XLK' => self::SYMBOL_XLK,
+            'QQQ' => self::SYMBOL_QQQ,
             'SP500' => self::SYMBOL_SP500,
             'SPX' => self::SYMBOL_SP500,
         ];
@@ -407,6 +419,19 @@ final class SourceCandidateFactory
                 adapterId: $adapterId,
                 priority: $config[self::KEY_PRIORITY],
                 domain: $config[self::KEY_DOMAIN],
+            );
+        }
+
+        // Add FMP as fallback for supported index symbols
+        if (in_array($symbol, $fmpIndexSymbols, true) && $this->fmpApiKey !== null && $this->fmpApiKey !== '') {
+            $fmpUrl = str_replace('{ticker}', urlencode($symbol), self::FMP_QUOTE_URL);
+            $fmpUrl .= '&apikey=' . $this->fmpApiKey;
+
+            $candidates[] = new SourceCandidate(
+                url: $fmpUrl,
+                adapterId: 'fmp',
+                priority: 10, // Lower priority than Yahoo (fallback)
+                domain: self::FMP_DOMAIN,
             );
         }
 

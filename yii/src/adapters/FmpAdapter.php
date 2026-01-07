@@ -90,9 +90,14 @@ final class FmpAdapter implements SourceAdapterInterface
      */
     private const INCOME_STATEMENT_FIELDS = [
         'financials.revenue' => ['field' => 'revenue', 'unit' => 'currency'],
+        'financials.gross_profit' => ['field' => 'grossProfit', 'unit' => 'currency'],
+        'financials.operating_income' => ['field' => 'operatingIncome', 'unit' => 'currency'],
         'financials.ebitda' => ['field' => 'ebitda', 'unit' => 'currency'],
         'financials.net_income' => ['field' => 'netIncome', 'unit' => 'currency'],
+        'financials.shares_outstanding' => ['field' => 'weightedAverageShsOut', 'unit' => 'number'],
         'quarters.revenue' => ['field' => 'revenue', 'unit' => 'currency'],
+        'quarters.gross_profit' => ['field' => 'grossProfit', 'unit' => 'currency'],
+        'quarters.operating_income' => ['field' => 'operatingIncome', 'unit' => 'currency'],
         'quarters.ebitda' => ['field' => 'ebitda', 'unit' => 'currency'],
         'quarters.net_income' => ['field' => 'netIncome', 'unit' => 'currency'],
     ];
@@ -107,9 +112,12 @@ final class FmpAdapter implements SourceAdapterInterface
     ];
 
     /**
-     * Balance sheet field mappings for net_debt derivation (historical).
+     * Balance sheet field mappings (historical).
      */
     private const BALANCE_SHEET_FIELDS = [
+        'financials.total_equity' => ['field' => 'totalStockholdersEquity', 'unit' => 'currency'],
+        'financials.total_debt' => ['field' => 'totalDebt', 'unit' => 'currency'],
+        'financials.cash_and_equivalents' => ['field' => 'cashAndCashEquivalents', 'unit' => 'currency'],
         'financials.net_debt' => [
             'derived' => true,
             'fields' => ['totalDebt', 'cashAndCashEquivalents'],
@@ -555,7 +563,23 @@ final class FmpAdapter implements SourceAdapterInterface
                 continue;
             }
 
-            $notFound[] = $key;
+            // Handle direct field mappings
+            $field = $config['field'];
+            $periods = $this->extractHistoricalPeriods($data, $field);
+
+            if (empty($periods)) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            $historicalExtractions[$key] = new HistoricalExtraction(
+                datapointKey: $key,
+                periods: $periods,
+                unit: $config['unit'],
+                locator: SourceLocator::json("\$[*].{$field}", "periods: " . count($periods)),
+                currency: $config['unit'] === 'currency' ? $currency : null,
+                scale: 'units',
+            );
         }
 
         return new AdaptResult(

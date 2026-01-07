@@ -33,6 +33,11 @@ final class SeedController extends Controller
             return $result;
         }
 
+        $result = $this->actionUsTechGiants();
+        if ($result !== ExitCode::OK) {
+            return $result;
+        }
+
         $this->stdout("\nAll seeders completed.\n", Console::FG_GREEN);
 
         return ExitCode::OK;
@@ -123,6 +128,48 @@ final class SeedController extends Controller
     }
 
     /**
+     * Seeds the US Tech Giants peer group (FMP free tier compatible).
+     *
+     * Creates: collection policy, peer group, companies, and memberships.
+     * All tickers are large-cap tech and work with FMP free tier.
+     */
+    public function actionUsTechGiants(): int
+    {
+        $this->stdout("Seeding US Tech Giants peer group...\n");
+
+        // Check if already seeded
+        $exists = (bool) Yii::$app->db->createCommand(
+            'SELECT 1 FROM collection_policy WHERE slug = :slug'
+        )->bindValue(':slug', 'us-tech-giants')->queryScalar();
+
+        if ($exists) {
+            $this->stdout("  Already seeded.\n", Console::FG_YELLOW);
+            return ExitCode::OK;
+        }
+
+        $sqlFile = Yii::getAlias('@app/../../docs/queries/us_tech_giants_setup.sql');
+
+        if (!file_exists($sqlFile)) {
+            $this->stderr("SQL file not found: {$sqlFile}\n", Console::FG_RED);
+            return ExitCode::DATAERR;
+        }
+
+        $sql = file_get_contents($sqlFile);
+
+        try {
+            $pdo = Yii::$app->db->getMasterPdo();
+            $pdo->exec($sql);
+
+            $this->stdout("  Seeded: collection policy, peer group, 5 tech companies\n", Console::FG_GREEN);
+        } catch (\Exception $e) {
+            $this->stderr("Seeding failed: " . $e->getMessage() . "\n", Console::FG_RED);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        return ExitCode::OK;
+    }
+
+    /**
      * Seeds realistic test data for Global Energy Supermajors.
      *
      * Adds annual financials (5 years), quarterly financials (8 quarters),
@@ -187,6 +234,7 @@ final class SeedController extends Controller
         $this->stdout("  yii seed/all                    Run all seeders\n");
         $this->stdout("  yii seed/oil-majors             Seed Global Energy Supermajors\n");
         $this->stdout("  yii seed/us-energy-majors       Seed US Energy Majors (FMP free tier)\n");
+        $this->stdout("  yii seed/us-tech-giants         Seed US Tech Giants (FMP free tier)\n");
         $this->stdout("  yii seed/supermajors-testdata   Seed realistic test data (no API needed)\n");
         $this->stdout("  yii seed/clear                  Clear all seed data\n");
         $this->stdout("\nDatabase setup:\n\n");

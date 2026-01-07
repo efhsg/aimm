@@ -12,6 +12,8 @@ use app\dto\AdaptResult;
 use app\dto\datapoints\SourceLocator;
 use app\dto\Extraction;
 use app\dto\FetchResult;
+use app\dto\HistoricalExtraction;
+use app\dto\PeriodValue;
 use app\exceptions\BlockedException;
 use Codeception\Test\Unit;
 use DateTimeImmutable;
@@ -253,6 +255,57 @@ final class AdapterChainTest extends Unit
 
         $this->assertStringContainsString('[adapter1] Warning: some data missing', $result->parseError);
         $this->assertStringContainsString('[adapter2] Warning: format changed', $result->parseError);
+    }
+
+    public function testMergesHistoricalExtractionsFromAdapters(): void
+    {
+        $request = $this->createRequest(['financials.revenue', 'financials.ebitda']);
+
+        $historicalRevenue = new HistoricalExtraction(
+            datapointKey: 'financials.revenue',
+            periods: [
+                new PeriodValue(new DateTimeImmutable('2024-12-31'), 339247000000.0),
+                new PeriodValue(new DateTimeImmutable('2023-12-31'), 334697000000.0),
+            ],
+            unit: 'currency',
+            locator: SourceLocator::json('$[*].revenue', 'periods: 2'),
+            currency: 'USD',
+            scale: 'units',
+        );
+
+        $historicalEbitda = new HistoricalExtraction(
+            datapointKey: 'financials.ebitda',
+            periods: [
+                new PeriodValue(new DateTimeImmutable('2024-12-31'), 73311000000.0),
+                new PeriodValue(new DateTimeImmutable('2023-12-31'), 74273000000.0),
+            ],
+            unit: 'currency',
+            locator: SourceLocator::json('$[*].ebitda', 'periods: 2'),
+            currency: 'USD',
+            scale: 'units',
+        );
+
+        $adapter = $this->createStubAdapter('fmp', ['financials.revenue', 'financials.ebitda'], new AdaptResult(
+            adapterId: 'fmp',
+            extractions: [],
+            notFound: [],
+            parseError: null,
+            historicalExtractions: [
+                'financials.revenue' => $historicalRevenue,
+                'financials.ebitda' => $historicalEbitda,
+            ],
+        ));
+
+        $chain = new AdapterChain([$adapter], $this->blockedRegistry, $this->logger);
+
+        $result = $chain->adapt($request);
+
+        $this->assertEmpty($result->notFound);
+        $this->assertCount(2, $result->historicalExtractions);
+        $this->assertArrayHasKey('financials.revenue', $result->historicalExtractions);
+        $this->assertArrayHasKey('financials.ebitda', $result->historicalExtractions);
+        $this->assertSame(2, $result->historicalExtractions['financials.revenue']->getPeriodCount());
+        $this->assertSame(2, $result->historicalExtractions['financials.ebitda']->getPeriodCount());
     }
 
     /**

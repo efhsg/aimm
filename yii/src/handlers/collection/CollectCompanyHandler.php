@@ -208,9 +208,9 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                     $this->valuationQuery->insert([
                         'company_id' => $companyId,
                         'snapshot_date' => $now->format('Y-m-d'),
-                        'market_cap' => $valuation->marketCap->value,
-                        'enterprise_value' => $valuation->additionalMetrics['enterprise_value']?->value ?? null,
-                        'price' => $valuation->additionalMetrics['price']?->value ?? null,
+                        'market_cap' => $valuation->marketCap->getBaseValue(),
+                        'enterprise_value' => ($valuation->additionalMetrics['enterprise_value'] ?? null)?->getBaseValue(),
+                        'price' => ($valuation->additionalMetrics['price'] ?? null)?->value,
                         'trailing_pe' => $valuation->trailingPe?->value,
                         'forward_pe' => $valuation->fwdPe?->value,
                         'price_to_book' => $valuation->priceToBook?->value,
@@ -241,11 +241,17 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                         'company_id' => $companyId,
                         'fiscal_year' => $year,
                         'period_end_date' => $periodEndDate->format('Y-m-d'),
-                        'revenue' => $data->revenue?->value,
-                        'ebitda' => $data->ebitda?->value,
-                        'net_income' => $data->netIncome?->value,
-                        'free_cash_flow' => $data->freeCashFlow?->value,
-                        'net_debt' => $data->netDebt?->value,
+                        'revenue' => $data->revenue?->getBaseValue(),
+                        'gross_profit' => $data->grossProfit?->getBaseValue(),
+                        'operating_income' => $data->operatingIncome?->getBaseValue(),
+                        'ebitda' => $data->ebitda?->getBaseValue(),
+                        'net_income' => $data->netIncome?->getBaseValue(),
+                        'free_cash_flow' => $data->freeCashFlow?->getBaseValue(),
+                        'total_equity' => $data->totalEquity?->getBaseValue(),
+                        'total_debt' => $data->totalDebt?->getBaseValue(),
+                        'cash_and_equivalents' => $data->cashAndEquivalents?->getBaseValue(),
+                        'net_debt' => $data->netDebt?->getBaseValue(),
+                        'shares_outstanding' => $data->sharesOutstanding?->value,
                         'currency' => $currency,
                         'source_adapter' => 'web_fetch',
                         'source_url' => $data->revenue?->sourceUrl,
@@ -283,10 +289,10 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                        'fiscal_year' => $data->fiscalYear,
                        'fiscal_quarter' => $data->fiscalQuarter,
                        'period_end_date' => $data->periodEnd->format('Y-m-d'),
-                       'revenue' => $data->revenue?->value,
-                       'ebitda' => $data->ebitda?->value,
-                       'net_income' => $data->netIncome?->value,
-                       'free_cash_flow' => $data->freeCashFlow?->value,
+                       'revenue' => $data->revenue?->getBaseValue(),
+                       'ebitda' => $data->ebitda?->getBaseValue(),
+                       'net_income' => $data->netIncome?->getBaseValue(),
+                       'free_cash_flow' => $data->freeCashFlow?->getBaseValue(),
                        'currency' => $currency,
                        'source_adapter' => 'web_fetch',
                        'source_url' => $data->revenue?->sourceUrl,
@@ -626,6 +632,20 @@ final class CollectCompanyHandler implements CollectCompanyInterface
         return $allowNotFound && $datapoint->method === CollectionMethod::NotFound ? $datapoint : null;
     }
 
+    private function getAsNumber(array $metrics, string $key, bool $allowNotFound = false): ?DataPointNumber
+    {
+        $datapoint = $metrics[$key] ?? null;
+        if (!$datapoint instanceof DataPointNumber) {
+            return null;
+        }
+
+        if ($datapoint->value !== null) {
+            return $datapoint;
+        }
+
+        return $allowNotFound && $datapoint->method === CollectionMethod::NotFound ? $datapoint : null;
+    }
+
     private function collectFinancials(
         CollectCompanyRequest $request,
         array $sources,
@@ -775,18 +795,18 @@ final class CollectCompanyHandler implements CollectCompanyInterface
             return $this->dataPointFactory->notFound('currency', []);
         }
 
-        $ageDays = 0;
-        if ($collectedAt !== null) {
-            $collected = new \DateTimeImmutable($collectedAt);
-            $now = new \DateTimeImmutable();
-            $ageDays = (int) $now->diff($collected)->days;
-        }
+        $collected = $collectedAt !== null
+            ? new DateTimeImmutable($collectedAt)
+            : new DateTimeImmutable();
+        $now = new DateTimeImmutable();
+        $ageDays = (int) $now->diff($collected)->days;
 
-        return $this->dataPointFactory->cached(
+        return $this->dataPointFactory->fromCache(
             unit: 'currency',
             value: (float) $value,
-            source: 'dossier',
-            ageDays: $ageDays,
+            originalAsOf: $collected,
+            cacheSource: 'dossier',
+            cacheAgeDays: $ageDays,
             currency: $currency
         );
     }
@@ -895,10 +915,16 @@ final class CollectCompanyHandler implements CollectCompanyInterface
                 fiscalYear: $year,
                 periodEndDate: $periodEnd,
                 revenue: $this->getAsMoney($yearMetrics, 'revenue'),
+                grossProfit: $this->getAsMoney($yearMetrics, 'gross_profit'),
+                operatingIncome: $this->getAsMoney($yearMetrics, 'operating_income'),
                 ebitda: $this->getAsMoney($yearMetrics, 'ebitda'),
                 netIncome: $this->getAsMoney($yearMetrics, 'net_income'),
-                netDebt: $this->getAsMoney($yearMetrics, 'net_debt'),
                 freeCashFlow: $this->getAsMoney($yearMetrics, 'free_cash_flow'),
+                totalEquity: $this->getAsMoney($yearMetrics, 'total_equity'),
+                totalDebt: $this->getAsMoney($yearMetrics, 'total_debt'),
+                cashAndEquivalents: $this->getAsMoney($yearMetrics, 'cash_and_equivalents'),
+                netDebt: $this->getAsMoney($yearMetrics, 'net_debt'),
+                sharesOutstanding: $this->getAsNumber($yearMetrics, 'shares_outstanding'),
                 additionalMetrics: $this->extractAdditionalFinancialMetrics($yearMetrics),
             );
             $count++;
@@ -909,7 +935,19 @@ final class CollectCompanyHandler implements CollectCompanyInterface
 
     private function extractAdditionalFinancialMetrics(array $metrics): array
     {
-        $knownKeys = ['revenue', 'ebitda', 'net_income', 'net_debt', 'free_cash_flow'];
+        $knownKeys = [
+            'revenue',
+            'gross_profit',
+            'operating_income',
+            'ebitda',
+            'net_income',
+            'free_cash_flow',
+            'total_equity',
+            'total_debt',
+            'cash_and_equivalents',
+            'net_debt',
+            'shares_outstanding',
+        ];
         $knownLookup = array_fill_keys($knownKeys, true);
         $additional = [];
 

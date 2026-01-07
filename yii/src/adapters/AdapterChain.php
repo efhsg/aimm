@@ -46,6 +46,7 @@ final class AdapterChain implements SourceAdapterInterface
     public function adapt(AdaptRequest $request): AdaptResult
     {
         $allExtractions = [];
+        $allHistoricalExtractions = [];
         $allNotFound = $request->datapointKeys;
         $errors = [];
 
@@ -78,6 +79,11 @@ final class AdapterChain implements SourceAdapterInterface
                     $allNotFound = array_diff($allNotFound, [$key]);
                 }
 
+                foreach ($result->historicalExtractions as $key => $historicalExtraction) {
+                    $allHistoricalExtractions[$key] = $historicalExtraction;
+                    $allNotFound = array_diff($allNotFound, [$key]);
+                }
+
                 if ($result->parseError !== null) {
                     $errors[] = "[{$adapterId}] {$result->parseError}";
                 }
@@ -100,6 +106,7 @@ final class AdapterChain implements SourceAdapterInterface
             extractions: $allExtractions,
             notFound: array_values($allNotFound),
             parseError: empty($errors) ? null : implode('; ', $errors),
+            historicalExtractions: $allHistoricalExtractions,
         );
     }
 }
