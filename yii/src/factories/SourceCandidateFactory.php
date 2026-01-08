@@ -71,6 +71,8 @@ final class SourceCandidateFactory
         'financials.ebitda' => ['income-statement'],
         'financials.net_income' => ['income-statement'],
         'financials.free_cash_flow' => ['cash-flow-statement'],
+        'financials.total_assets' => ['balance-sheet-statement'],
+        'financials.total_liabilities' => ['balance-sheet-statement'],
         'financials.total_equity' => ['balance-sheet-statement'],
         'financials.total_debt' => ['balance-sheet-statement'],
         'financials.cash_and_equivalents' => ['balance-sheet-statement'],

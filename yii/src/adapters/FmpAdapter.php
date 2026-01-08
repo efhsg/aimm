@@ -115,6 +115,8 @@ final class FmpAdapter implements SourceAdapterInterface
      * Balance sheet field mappings (historical).
      */
     private const BALANCE_SHEET_FIELDS = [
+        'financials.total_assets' => ['field' => 'totalAssets', 'unit' => 'currency'],
+        'financials.total_liabilities' => ['field' => 'totalLiabilities', 'unit' => 'currency'],
         'financials.total_equity' => ['field' => 'totalStockholdersEquity', 'unit' => 'currency'],
         'financials.total_debt' => ['field' => 'totalDebt', 'unit' => 'currency'],
         'financials.cash_and_equivalents' => ['field' => 'cashAndCashEquivalents', 'unit' => 'currency'],

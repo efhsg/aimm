@@ -41,6 +41,11 @@ INSERT INTO collection_policy (
         JSON_OBJECT('key','ebitda','unit','currency','required',TRUE,'required_scope','all'),
         JSON_OBJECT('key','net_income','unit','currency','required',TRUE,'required_scope','focal'),
         JSON_OBJECT('key','free_cash_flow','unit','currency','required',TRUE,'required_scope','focal'),
+        JSON_OBJECT('key','total_assets','unit','currency','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','total_liabilities','unit','currency','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','total_equity','unit','currency','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','total_debt','unit','currency','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','cash_and_equivalents','unit','currency','required',TRUE,'required_scope','all'),
         JSON_OBJECT('key','net_debt','unit','currency','required',FALSE)
     ),
     JSON_ARRAY(
