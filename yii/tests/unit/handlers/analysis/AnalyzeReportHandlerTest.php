@@ -1,0 +1,317 @@
+<?php
+
+declare(strict_types=1);
+
+namespace tests\unit\handlers\analysis;
+
+use app\dto\analysis\AnalysisThresholds;
+use app\dto\analysis\AnalyzeReportRequest;
+use app\dto\analysis\RatingDeterminationResult;
+use app\dto\AnnualFinancials;
+use app\dto\CollectionLog;
+use app\dto\CompanyData;
+use app\dto\datapoints\DataPointMoney;
+use app\dto\datapoints\DataPointPercent;
+use app\dto\datapoints\DataPointRatio;
+use app\dto\datapoints\SourceLocator;
+use app\dto\FinancialsData;
+use app\dto\GateError;
+use app\dto\GateResult;
+use app\dto\IndustryDataPack;
+use app\dto\MacroData;
+use app\dto\QuartersData;
+use app\dto\report\FundamentalsBreakdown;
+use app\dto\report\RiskBreakdown;
+use app\dto\report\ValuationGapSummary;
+use app\dto\ValuationData;
+use app\enums\CollectionMethod;
+use app\enums\CollectionStatus;
+use app\enums\DataScale;
+use app\enums\Fundamentals;
+use app\enums\GapDirection;
+use app\enums\Rating;
+use app\enums\RatingRulePath;
+use app\enums\Risk;
+use app\handlers\analysis\AnalyzeReportHandler;
+use app\handlers\analysis\AssessFundamentalsInterface;
+use app\handlers\analysis\AssessRiskInterface;
+use app\handlers\analysis\CalculateGapsInterface;
+use app\handlers\analysis\DetermineRatingInterface;
+use app\transformers\PeerAverageTransformer;
+use app\validators\AnalysisGateValidatorInterface;
+use Codeception\Test\Unit;
+use DateTimeImmutable;
+
+/**
+ * @covers \app\handlers\analysis\AnalyzeReportHandler
+ */
+final class AnalyzeReportHandlerTest extends Unit
+{
+    private AnalyzeReportHandler $handler;
+
+    // Mocks
+    private AnalysisGateValidatorInterface $gateValidator;
+    private PeerAverageTransformer $peerAverageTransformer;
+    private CalculateGapsInterface $calculateGaps;
+    private AssessFundamentalsInterface $assessFundamentals;
+    private AssessRiskInterface $assessRisk;
+    private DetermineRatingInterface $determineRating;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Create mocks
+        $this->gateValidator = $this->createMock(AnalysisGateValidatorInterface::class);
+        $this->peerAverageTransformer = new PeerAverageTransformer();
+        $this->calculateGaps = $this->createMock(CalculateGapsInterface::class);
+        $this->assessFundamentals = $this->createMock(AssessFundamentalsInterface::class);
+        $this->assessRisk = $this->createMock(AssessRiskInterface::class);
+        $this->determineRating = $this->createMock(DetermineRatingInterface::class);
+
+        $this->handler = new AnalyzeReportHandler(
+            $this->gateValidator,
+            $this->peerAverageTransformer,
+            $this->calculateGaps,
+            $this->assessFundamentals,
+            $this->assessRisk,
+            $this->determineRating,
+        );
+    }
+
+    public function testReturnsFailureWhenGateFails(): void
+    {
+        $dataPack = $this->createDataPack();
+        $request = new AnalyzeReportRequest($dataPack, 'AAPL');
+
+        $gateResult = new GateResult(
+            passed: false,
+            errors: [new GateError('TEST_ERROR', 'Test error')],
+            warnings: [],
+        );
+
+        $this->gateValidator->method('validate')->willReturn($gateResult);
+
+        $result = $this->handler->handle($request);
+
+        $this->assertFalse($result->success);
+        $this->assertNull($result->report);
+        $this->assertNotNull($result->gateResult);
+        $this->assertEquals('Gate validation failed', $result->errorMessage);
+    }
+
+    public function testReturnsFailureWhenFocalNotFound(): void
+    {
+        $dataPack = $this->createDataPack();
+        $request = new AnalyzeReportRequest($dataPack, 'NONEXISTENT');
+
+        $gateResult = new GateResult(passed: true, errors: [], warnings: []);
+        $this->gateValidator->method('validate')->willReturn($gateResult);
+
+        $result = $this->handler->handle($request);
+
+        $this->assertFalse($result->success);
+        $this->assertNull($result->report);
+        $this->assertStringContainsString('not found', $result->errorMessage);
+    }
+
+    public function testBuildsCompleteReportOnSuccess(): void
+    {
+        $dataPack = $this->createDataPack();
+        $request = new AnalyzeReportRequest($dataPack, 'AAPL');
+
+        $this->setupSuccessMocks();
+
+        $result = $this->handler->handle($request);
+
+        $this->assertTrue($result->success);
+        $this->assertNotNull($result->report);
+        $this->assertNull($result->errorMessage);
+    }
+
+    public function testReportContainsAllSections(): void
+    {
+        $dataPack = $this->createDataPack();
+        $request = new AnalyzeReportRequest($dataPack, 'AAPL');
+
+        $this->setupSuccessMocks();
+
+        $result = $this->handler->handle($request);
+
+        $report = $result->report;
+        $this->assertNotNull($report);
+
+        // Check metadata
+        $this->assertEquals('us-tech-giants', $report->metadata->industryId);
+        $this->assertEquals('AAPL', $report->metadata->focalTicker);
+        $this->assertEquals('Apple Inc', $report->metadata->focalName);
+        $this->assertEquals(2, $report->metadata->peerCount);
+
+        // Check focal analysis
+        $this->assertEquals(Rating::Buy, $report->focalAnalysis->rating);
+        $this->assertEquals(RatingRulePath::BuyAllConditions, $report->focalAnalysis->rulePath);
+
+        // Check valuation snapshot
+        $this->assertEqualsWithDelta(3000.0, $report->focalAnalysis->valuation->marketCapBillions, 0.1);
+        $this->assertEquals(25.0, $report->focalAnalysis->valuation->fwdPe);
+
+        // Check financials
+        $this->assertCount(2, $report->financials->annualData);
+        $this->assertEquals(2024, $report->financials->annualData[0]->fiscalYear);
+
+        // Check peer comparison
+        $this->assertEquals(2, $report->peerComparison->peerCount);
+        $this->assertCount(2, $report->peerComparison->peers);
+    }
+
+    public function testReportUsesCustomThresholds(): void
+    {
+        $dataPack = $this->createDataPack();
+        $thresholds = new AnalysisThresholds(buyGapThreshold: 25.0);
+        $request = new AnalyzeReportRequest($dataPack, 'AAPL', $thresholds);
+
+        $this->setupSuccessMocks();
+
+        $result = $this->handler->handle($request);
+
+        $this->assertTrue($result->success);
+    }
+
+    private function setupSuccessMocks(): void
+    {
+        $gateResult = new GateResult(passed: true, errors: [], warnings: []);
+        $this->gateValidator->method('validate')->willReturn($gateResult);
+
+        $valuationGap = new ValuationGapSummary(
+            compositeGap: 20.0,
+            direction: GapDirection::Undervalued,
+            individualGaps: [],
+            metricsUsed: 3,
+        );
+        $this->calculateGaps->method('handle')->willReturn($valuationGap);
+
+        $fundamentals = new FundamentalsBreakdown(
+            assessment: Fundamentals::Improving,
+            compositeScore: 0.5,
+            components: [],
+        );
+        $this->assessFundamentals->method('handle')->willReturn($fundamentals);
+
+        $risk = new RiskBreakdown(
+            assessment: Risk::Acceptable,
+            compositeScore: 0.8,
+            factors: [],
+        );
+        $this->assessRisk->method('handle')->willReturn($risk);
+
+        $ratingResult = new RatingDeterminationResult(
+            rating: Rating::Buy,
+            rulePath: RatingRulePath::BuyAllConditions,
+        );
+        $this->determineRating->method('handle')->willReturn($ratingResult);
+    }
+
+    private function createDataPack(): IndustryDataPack
+    {
+        $companies = [
+            'AAPL' => $this->createCompany('AAPL', 'Apple Inc', 3_000_000_000_000),
+            'MSFT' => $this->createCompany('MSFT', 'Microsoft Corp', 2_800_000_000_000),
+            'GOOGL' => $this->createCompany('GOOGL', 'Alphabet Inc', 1_800_000_000_000),
+        ];
+
+        $collectedAt = new DateTimeImmutable();
+
+        return new IndustryDataPack(
+            industryId: 'us-tech-giants',
+            datapackId: 'test-datapack-123',
+            collectedAt: $collectedAt,
+            macro: new MacroData(),
+            companies: $companies,
+            collectionLog: new CollectionLog(
+                startedAt: $collectedAt,
+                completedAt: $collectedAt,
+                durationSeconds: 60,
+                companyStatuses: array_fill_keys(array_keys($companies), CollectionStatus::Complete),
+                macroStatus: CollectionStatus::Complete,
+                totalAttempts: count($companies),
+            ),
+        );
+    }
+
+    private function createCompany(string $ticker, string $name, float $marketCap): CompanyData
+    {
+        $annualData = [
+            new AnnualFinancials(
+                fiscalYear: 2024,
+                revenue: $this->createMoney(100_000_000_000),
+                ebitda: $this->createMoney(30_000_000_000),
+                netIncome: $this->createMoney(20_000_000_000),
+                freeCashFlow: $this->createMoney(25_000_000_000),
+                netDebt: $this->createMoney(50_000_000_000),
+            ),
+            new AnnualFinancials(
+                fiscalYear: 2023,
+                revenue: $this->createMoney(90_000_000_000),
+                ebitda: $this->createMoney(27_000_000_000),
+                netIncome: $this->createMoney(18_000_000_000),
+                freeCashFlow: $this->createMoney(22_000_000_000),
+                netDebt: $this->createMoney(55_000_000_000),
+            ),
+        ];
+
+        return new CompanyData(
+            ticker: $ticker,
+            name: $name,
+            listingExchange: 'NASDAQ',
+            listingCurrency: 'USD',
+            reportingCurrency: 'USD',
+            valuation: new ValuationData(
+                marketCap: $this->createMoney($marketCap),
+                fwdPe: $this->createRatio(25.0),
+                evEbitda: $this->createRatio(18.0),
+                fcfYield: $this->createPercent(3.5),
+                divYield: $this->createPercent(0.5),
+            ),
+            financials: new FinancialsData(historyYears: 2, annualData: $annualData),
+            quarters: new QuartersData(quarters: []),
+        );
+    }
+
+    private function createMoney(float $value): DataPointMoney
+    {
+        return new DataPointMoney(
+            value: $value,
+            currency: 'USD',
+            scale: DataScale::Units,
+            asOf: new DateTimeImmutable(),
+            sourceUrl: 'https://example.com',
+            retrievedAt: new DateTimeImmutable(),
+            method: CollectionMethod::Api,
+            sourceLocator: SourceLocator::json('$.value', (string) $value),
+        );
+    }
+
+    private function createRatio(float $value): DataPointRatio
+    {
+        return new DataPointRatio(
+            value: $value,
+            asOf: new DateTimeImmutable(),
+            sourceUrl: 'https://example.com',
+            retrievedAt: new DateTimeImmutable(),
+            method: CollectionMethod::Api,
+            sourceLocator: SourceLocator::json('$.ratio', (string) $value),
+        );
+    }
+
+    private function createPercent(float $value): DataPointPercent
+    {
+        return new DataPointPercent(
+            value: $value,
+            asOf: new DateTimeImmutable(),
+            sourceUrl: 'https://example.com',
+            retrievedAt: new DateTimeImmutable(),
+            method: CollectionMethod::Api,
+            sourceLocator: SourceLocator::json('$.percent', (string) $value),
+        );
+    }
+}

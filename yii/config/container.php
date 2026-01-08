@@ -34,6 +34,16 @@ use app\factories\CompanyDataFactory;
 use app\factories\DataPointFactory;
 use app\factories\IndustryDataPackFactory;
 use app\factories\SourceCandidateFactory;
+use app\handlers\analysis\AnalyzeReportHandler;
+use app\handlers\analysis\AnalyzeReportInterface;
+use app\handlers\analysis\AssessFundamentalsHandler;
+use app\handlers\analysis\AssessFundamentalsInterface;
+use app\handlers\analysis\AssessRiskHandler;
+use app\handlers\analysis\AssessRiskInterface;
+use app\handlers\analysis\CalculateGapsHandler;
+use app\handlers\analysis\CalculateGapsInterface;
+use app\handlers\analysis\DetermineRatingHandler;
+use app\handlers\analysis\DetermineRatingInterface;
 use app\handlers\collection\CollectCompanyHandler;
 use app\handlers\collection\CollectCompanyInterface;
 use app\handlers\collection\CollectDatapointHandler;
@@ -78,6 +88,9 @@ use app\queries\PeerGroupMemberQuery;
 use app\queries\PeerGroupQuery;
 use app\queries\SourceBlockRepository;
 use app\queries\SourceBlockRepositoryInterface;
+use app\transformers\PeerAverageTransformer;
+use app\validators\AnalysisGateValidator;
+use app\validators\AnalysisGateValidatorInterface;
 use app\validators\CollectionGateValidator;
 use app\validators\CollectionGateValidatorInterface;
 use app\validators\SchemaValidator;
@@ -446,6 +459,30 @@ return [
         app\handlers\dossier\RecalculateTtmOnQuarterlyCollected::class => static function (Container $container) {
             return new app\handlers\dossier\RecalculateTtmOnQuarterlyCollected(
                 $container->get(app\handlers\dossier\TtmCalculator::class)
+            );
+        },
+
+        // Analysis Handlers
+        PeerAverageTransformer::class => PeerAverageTransformer::class,
+
+        AnalysisGateValidatorInterface::class => AnalysisGateValidator::class,
+
+        CalculateGapsInterface::class => CalculateGapsHandler::class,
+
+        AssessFundamentalsInterface::class => AssessFundamentalsHandler::class,
+
+        AssessRiskInterface::class => AssessRiskHandler::class,
+
+        DetermineRatingInterface::class => DetermineRatingHandler::class,
+
+        AnalyzeReportInterface::class => static function (Container $container): AnalyzeReportInterface {
+            return new AnalyzeReportHandler(
+                gateValidator: $container->get(AnalysisGateValidatorInterface::class),
+                peerAverageTransformer: $container->get(PeerAverageTransformer::class),
+                calculateGaps: $container->get(CalculateGapsInterface::class),
+                assessFundamentals: $container->get(AssessFundamentalsInterface::class),
+                assessRisk: $container->get(AssessRiskInterface::class),
+                determineRating: $container->get(DetermineRatingInterface::class),
             );
         },
     ],

@@ -111,4 +111,24 @@ class CollectionPolicyQuery
             )
             ->execute();
     }
+
+    /**
+     * Find analysis thresholds JSON for a policy.
+     *
+     * @return string|null The raw JSON string, or null if not found/not set
+     */
+    public function findAnalysisThresholds(int $id): ?string
+    {
+        $result = $this->db->createCommand(
+            'SELECT analysis_thresholds FROM {{%collection_policy}} WHERE id = :id'
+        )
+            ->bindValue(':id', $id)
+            ->queryScalar();
+
+        if ($result === false || $result === null) {
+            return null;
+        }
+
+        return (string) $result;
+    }
 }
