@@ -1,0 +1,120 @@
+// AIMM Design System - SCSS Variables
+// Converted from tokens.css for PDF report styling
+// Version: 1.2.0
+
+// ========================================
+// BRAND COLORS
+// ========================================
+$brand-primary: #1a4a55;
+$brand-primary-hover: #153d47;
+$brand-primary-active: #0d2a32;
+$brand-dark: #0d2a32;
+$brand-light: #2a6a78;
+$brand-accent: #a68248;
+
+// ========================================
+// SEMANTIC COLORS
+// ========================================
+$color-success: #3b755f;
+$color-success-light: #e8f0ec;
+$color-error: #a5443f;
+$color-error-light: #f5e8e7;
+$color-warning: #b8860b;
+$color-warning-light: #fdf6e3;
+$color-info: #1a4a55;
+$color-info-light: #e6eef0;
+
+// ========================================
+// TEXT COLORS
+// ========================================
+$text-primary: #1a3540;
+$text-secondary: #5a7a88;
+$text-tertiary: #8a9da6;
+$text-inverse: #ffffff;
+
+// ========================================
+// BACKGROUND COLORS
+// ========================================
+$bg-page: #f0f4f5;
+$bg-surface: #ffffff;
+$bg-elevated: #f8fafa;
+$bg-muted: #e6eef0;
+
+// ========================================
+// BORDER COLORS
+// ========================================
+$border-default: #d0dce0;
+$border-subtle: #e6eef0;
+
+// ========================================
+// DATA VISUALIZATION
+// ========================================
+$viz-positive: #3b755f;
+$viz-negative: #a5443f;
+$viz-neutral: #5a7a88;
+
+// ========================================
+// TYPOGRAPHY
+// ========================================
+$font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-mono: 'IBM Plex Mono', 'Fira Code', 'Consolas', monospace;
+
+// Font sizes (pt for PDF)
+$text-xs: 8pt;
+$text-sm: 9pt;
+$text-base: 11pt;
+$text-lg: 12pt;
+$text-xl: 14pt;
+$text-2xl: 18pt;
+$text-3xl: 24pt;
+$text-4xl: 30pt;
+
+// Font weights
+$font-regular: 400;
+$font-medium: 500;
+$font-semibold: 600;
+$font-bold: 700;
+
+// Line heights
+$leading-tight: 1.1;
+$leading-snug: 1.25;
+$leading-normal: 1.5;
+$leading-relaxed: 1.625;
+
+// ========================================
+// SPACING (mm for PDF)
+// ========================================
+$space-1: 1mm;
+$space-2: 2mm;
+$space-3: 3mm;
+$space-4: 4mm;
+$space-5: 5mm;
+$space-6: 6mm;
+$space-8: 8mm;
+$space-10: 10mm;
+$space-12: 12mm;
+$space-16: 16mm;
+
+// ========================================
+// PAGE DIMENSIONS (A4)
+// ========================================
+$page-width: 210mm;
+$page-height: 297mm;
+$page-margin-top: 25mm;
+$page-margin-bottom: 20mm;
+$page-margin-left: 15mm;
+$page-margin-right: 15mm;
+
+// ========================================
+// BORDER RADIUS
+// ========================================
+$radius-sm: 1mm;
+$radius-md: 2mm;
+$radius-lg: 3mm;
+
+// ========================================
+// TABLE COLUMN WIDTHS
+// ========================================
+$col-year: 15mm;
+$col-amount: 25mm;
+$col-percent: 18mm;

@@ -1,0 +1,133 @@
+// Institutional table styling for PDF reports
+// Ensures proper page break handling and numeric alignment
+
+@use 'tokens';
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: tokens.$text-base;
+
+  // Repeat header on page breaks
+  thead {
+    display: table-header-group;
+  }
+
+  // Repeat footer on page breaks (for totals)
+  tfoot {
+    display: table-footer-group;
+  }
+
+  th,
+  td {
+    padding: tokens.$space-2 tokens.$space-3;
+    border-bottom: 1px solid tokens.$border-default;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    font-weight: tokens.$font-semibold;
+    background: tokens.$bg-muted;
+    color: tokens.$text-primary;
+    white-space: nowrap;
+  }
+
+  // Zebra striping
+  tbody tr:nth-child(even) {
+    background: tokens.$bg-elevated;
+  }
+
+  // Avoid row splits across pages
+  tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  // Numeric columns - right aligned with tabular figures
+  .col-numeric {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-family: tokens.$font-mono;
+  }
+
+  // Fixed column widths for consistency
+  .col-year {
+    width: tokens.$col-year;
+    text-align: center;
+  }
+
+  .col-amount {
+    width: tokens.$col-amount;
+  }
+
+  .col-percent {
+    width: tokens.$col-percent;
+  }
+
+  .col-label {
+    width: auto;
+  }
+
+  // Positive/negative value indicators
+  .value-positive {
+    color: tokens.$viz-positive;
+  }
+
+  .value-negative {
+    color: tokens.$viz-negative;
+  }
+
+  .value-neutral {
+    color: tokens.$viz-neutral;
+  }
+
+  // Total row styling
+  .row-total {
+    font-weight: tokens.$font-semibold;
+    border-top: 2px solid tokens.$border-default;
+    background: tokens.$bg-muted;
+
+    td {
+      padding-top: tokens.$space-3;
+      padding-bottom: tokens.$space-3;
+    }
+  }
+
+  // Subtotal row
+  .row-subtotal {
+    font-weight: tokens.$font-medium;
+    border-top: 1px solid tokens.$border-default;
+  }
+
+  // Section header within table
+  .row-section {
+    background: tokens.$brand-primary;
+    color: tokens.$text-inverse;
+
+    th,
+    td {
+      font-weight: tokens.$font-semibold;
+      padding-top: tokens.$space-3;
+      padding-bottom: tokens.$space-3;
+    }
+  }
+}
+
+// Compact table variant
+.report-table--compact {
+  font-size: tokens.$text-sm;
+
+  th,
+  td {
+    padding: tokens.$space-1 tokens.$space-2;
+  }
+}
+
+// Wide table variant (for landscape)
+.report-table--wide {
+  .col-amount {
+    width: tokens.$col-amount * 1.2;
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "aimm-yii",
+  "private": true,
+  "scripts": {
+    "build:css": "sass web/scss/report.scss web/css/report.css --style=compressed",
+    "watch:css": "sass web/scss/report.scss web/css/report.css --watch"
+  },
+  "devDependencies": {
+    "sass": "^1.70.0"
+  }
+}

@@ -1,0 +1,76 @@
+// Print and page break rules for PDF generation
+// These styles ensure proper pagination in Gotenberg/Chromium
+
+@use 'tokens';
+
+// A4 page setup
+@page {
+  size: A4;
+  margin: tokens.$page-margin-top tokens.$page-margin-right tokens.$page-margin-bottom tokens.$page-margin-left;
+}
+
+// Print media styles
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+
+  // Hide elements in print
+  .no-print {
+    display: none !important;
+  }
+
+  // Force page break after element
+  .page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  // Force page break before element
+  .page-break-before {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  // Avoid page breaks inside element
+  .avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  // Keep with next element (e.g., heading with following content)
+  .keep-together {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  // Links - don't show URLs in print
+  a {
+    text-decoration: none;
+    color: inherit;
+
+    &::after {
+      content: none !important;
+    }
+  }
+}
+
+// Orphan/widow control for text blocks
+.text-block {
+  orphans: 3;
+  widows: 3;
+}
+
+// Section that should start on a new page
+.section-break {
+  break-before: page;
+  page-break-before: always;
+}
+
+// Content that must stay together
+.content-group {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}

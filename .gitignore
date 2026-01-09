@@ -1,4 +1,7 @@
 /yii/vendor/
+/yii/node_modules/
+/yii/package-lock.json
+/yii/web/css/report.css.map
 /yii/runtime/
 /yii/tests/_output/
 /data/

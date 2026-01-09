@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace tests\unit\factories\pdf;
 
 use app\dto\pdf\RenderBundle;
-use app\factories\pdf\RenderBundleFactory;
 use app\exceptions\BundleSizeExceededException;
 use app\exceptions\RenderBundleValidationException;
 use app\exceptions\SecurityException;
+use app\factories\pdf\RenderBundleFactory;
 use Codeception\Test\Unit;
 
 /**

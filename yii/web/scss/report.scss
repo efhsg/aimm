@@ -1,0 +1,273 @@
+// AIMM PDF Report Stylesheet
+// Entry point for PDF report styling
+// Compiled to web/css/report.css
+
+@use 'tokens';
+@use 'tables';
+@use 'print';
+
+// ========================================
+// BASE RESET
+// ========================================
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+// ========================================
+// DOCUMENT
+// ========================================
+html {
+  font-size: tokens.$text-base;
+}
+
+body {
+  font-family: tokens.$font-sans;
+  font-size: tokens.$text-base;
+  line-height: tokens.$leading-normal;
+  color: tokens.$text-primary;
+  background: tokens.$bg-surface;
+  margin: 0;
+  padding: 0;
+}
+
+// ========================================
+// REPORT CONTAINER
+// ========================================
+.report {
+  max-width: tokens.$page-width;
+  margin: 0 auto;
+
+  // ========================================
+  // HEADER SECTION
+  // ========================================
+  &__header {
+    margin-bottom: tokens.$space-10;
+    padding-bottom: tokens.$space-6;
+    border-bottom: 2px solid tokens.$brand-primary;
+  }
+
+  &__title {
+    font-size: tokens.$text-3xl;
+    font-weight: tokens.$font-bold;
+    color: tokens.$brand-primary;
+    margin: 0 0 tokens.$space-3;
+    line-height: tokens.$leading-tight;
+  }
+
+  &__subtitle {
+    font-size: tokens.$text-lg;
+    color: tokens.$text-secondary;
+    margin: 0;
+    line-height: tokens.$leading-snug;
+  }
+
+  // ========================================
+  // METADATA
+  // ========================================
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: tokens.$space-6;
+    margin-top: tokens.$space-4;
+    font-size: tokens.$text-sm;
+    color: tokens.$text-secondary;
+  }
+
+  &__meta-item {
+    display: flex;
+    align-items: center;
+    gap: tokens.$space-2;
+
+    strong {
+      color: tokens.$text-primary;
+      font-weight: tokens.$font-medium;
+    }
+  }
+
+  // ========================================
+  // SECTIONS
+  // ========================================
+  &__section {
+    margin-bottom: tokens.$space-10;
+    break-inside: avoid;
+    page-break-inside: avoid;
+
+    &-title {
+      font-size: tokens.$text-xl;
+      font-weight: tokens.$font-semibold;
+      color: tokens.$brand-primary;
+      border-bottom: 2px solid tokens.$brand-accent;
+      padding-bottom: tokens.$space-2;
+      margin: 0 0 tokens.$space-5;
+    }
+
+    &-subtitle {
+      font-size: tokens.$text-base;
+      color: tokens.$text-secondary;
+      margin: tokens.$space-2 0 tokens.$space-4;
+    }
+  }
+
+  // ========================================
+  // CHARTS
+  // ========================================
+  &__chart {
+    width: 100%;
+    height: auto;
+    margin: tokens.$space-4 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  &__chart-container {
+    margin: tokens.$space-6 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  &__chart-caption {
+    font-size: tokens.$text-sm;
+    color: tokens.$text-secondary;
+    text-align: center;
+    margin-top: tokens.$space-2;
+  }
+
+  // ========================================
+  // FIGURES
+  // ========================================
+  &__figure {
+    margin: tokens.$space-6 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  &__figcaption {
+    font-size: tokens.$text-sm;
+    color: tokens.$text-secondary;
+    text-align: center;
+    margin-top: tokens.$space-2;
+  }
+
+  // ========================================
+  // TEXT CONTENT
+  // ========================================
+  &__paragraph {
+    margin: 0 0 tokens.$space-4;
+    orphans: 3;
+    widows: 3;
+  }
+
+  &__list {
+    margin: 0 0 tokens.$space-4;
+    padding-left: tokens.$space-6;
+
+    li {
+      margin-bottom: tokens.$space-2;
+    }
+  }
+
+  // ========================================
+  // HIGHLIGHTS / CALLOUTS
+  // ========================================
+  &__callout {
+    background: tokens.$bg-muted;
+    border-left: 4px solid tokens.$brand-primary;
+    padding: tokens.$space-4 tokens.$space-5;
+    margin: tokens.$space-5 0;
+    break-inside: avoid;
+
+    &--success {
+      border-color: tokens.$color-success;
+      background: tokens.$color-success-light;
+    }
+
+    &--warning {
+      border-color: tokens.$color-warning;
+      background: tokens.$color-warning-light;
+    }
+
+    &--error {
+      border-color: tokens.$color-error;
+      background: tokens.$color-error-light;
+    }
+  }
+
+  // ========================================
+  // KEY METRICS
+  // ========================================
+  &__metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: tokens.$space-4;
+    margin: tokens.$space-5 0;
+  }
+
+  &__metric {
+    flex: 1 1 calc(50% - tokens.$space-4);
+    min-width: 60mm;
+    padding: tokens.$space-4;
+    background: tokens.$bg-elevated;
+    border: 1px solid tokens.$border-subtle;
+    border-radius: tokens.$radius-md;
+    break-inside: avoid;
+
+    &-label {
+      font-size: tokens.$text-sm;
+      color: tokens.$text-secondary;
+      margin-bottom: tokens.$space-1;
+    }
+
+    &-value {
+      font-size: tokens.$text-2xl;
+      font-weight: tokens.$font-bold;
+      color: tokens.$brand-primary;
+      font-variant-numeric: tabular-nums;
+    }
+
+    &-change {
+      font-size: tokens.$text-sm;
+      margin-top: tokens.$space-1;
+
+      &.positive {
+        color: tokens.$viz-positive;
+      }
+
+      &.negative {
+        color: tokens.$viz-negative;
+      }
+    }
+  }
+}
+
+// ========================================
+// UTILITY CLASSES
+// ========================================
+.text-right {
+  text-align: right;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: tokens.$text-secondary;
+}
+
+.font-mono {
+  font-family: tokens.$font-mono;
+}
+
+.font-bold {
+  font-weight: tokens.$font-bold;
+}
+
+.mt-0 {
+  margin-top: 0;
+}
+
+.mb-0 {
+  margin-bottom: 0;
+}
