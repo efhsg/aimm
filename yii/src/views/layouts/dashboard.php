@@ -18,6 +18,7 @@ $this->beginPage();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" type="image/svg+xml" href="<?= Url::to('@web/favicon.svg') ?>">
     <?= Html::csrfMetaTags() ?>
     <title><?= Html::encode($this->title ?? 'AIMM') ?></title>
     <link rel="stylesheet" href="<?= Url::to('@web/css/tokens.css') ?>">
