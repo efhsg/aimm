@@ -13,35 +13,29 @@ description: Validate changes, run linter and tests, prepare commit (project)
 git status --porcelain
 ```
 
-- always Ignore unrelated file changes. Leave these files unchanged.
+- Ignore unrelated file changes. Leave these files unchanged.
 
 ### 2. Check rules compliance
 
 Read and verify compliance with:
-- `docs/rules/coding-standards.md`
-- `docs/rules/architecture.md`
+- `.claude/rules/coding-standards.md`
+- `.claude/rules/architecture.md`
 
 Report any violations found in changed files.
 
 ### 3. Run linter
 
+See `.claude/config/project.md` for linter command.
+
 ```bash
-make fix-changed
+docker exec aimm_yii vendor/bin/php-cs-fixer fix
 ```
 
 ### 4. Run relevant tests
 
-Map changed files to test files:
-- `src/handlers/Foo.php` → `tests/unit/handlers/FooTest.php`
-- `src/queries/Foo.php` → `tests/unit/queries/FooTest.php`
-- `src/validators/Foo.php` → `tests/unit/validators/FooTest.php`
-- `src/transformers/Foo.php` → `tests/unit/transformers/FooTest.php`
-- `src/factories/Foo.php` → `tests/unit/factories/FooTest.php`
-- `src/adapters/Foo.php` → `tests/unit/adapters/FooTest.php`
-- `src/models/Foo.php` → `tests/unit/models/FooTest.php`
-- `src/dto/Foo.php` → `tests/unit/dto/FooTest.php`
-- `src/enums/Foo.php` → `tests/unit/enums/FooTest.php`
-- `src/exceptions/Foo.php` → (no tests required for simple exceptions)
+See `.claude/config/project.md` for test path mappings.
+
+Map changed source files to test files by replacing `src` with `tests/unit`.
 
 ```bash
 # Run all unit tests
@@ -61,7 +55,7 @@ git status
 git diff --staged
 ```
 
-Suggest commit message per `docs/rules/commits.md`.
+Suggest commit message per `.claude/rules/commits.md`.
 
 Ask user for confirmation before committing.
 

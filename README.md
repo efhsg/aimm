@@ -37,6 +37,6 @@ Connection settings:
 ## Docs and workflow
 
 - `docs/README.md` — documentation entry points
-- `docs/RULES.md` — global guardrails (conventions, folder taxonomy, testing baseline)
-- `docs/skills/index.md` — skill catalog used for feature work
+- `.claude/rules/` — global guardrails (conventions, folder taxonomy, testing baseline)
+- `.claude/skills/index.md` — skill catalog used for feature work
 

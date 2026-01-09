@@ -4,12 +4,12 @@ This document aggregates all project rules. Read these before any implementation
 
 ## Rule Files
 
-- [Coding Standards](rules/coding-standards.md)
-- [Architecture](rules/architecture.md)
-- [Security](rules/security.md)
-- [Testing](rules/testing.md)
-- [Commits](rules/commits.md)
-- [Workflow](rules/workflow.md)
+- [Coding Standards](../.claude/rules/coding-standards.md)
+- [Architecture](../.claude/rules/architecture.md)
+- [Security](../.claude/rules/security.md)
+- [Testing](../.claude/rules/testing.md)
+- [Commits](../.claude/rules/commits.md)
+- [Workflow](../.claude/rules/workflow.md)
 
 ## Quick Reference
 

@@ -5,8 +5,8 @@ You are a Senior Backend Engineer responsible for implementing the "Hybrid Colle
 
 ## Input Context
 - **Design:** `docs/design/hybrid-collection-strategy.md`
-- **Architecture:** `docs/rules/architecture.md`
-- **Security:** `docs/rules/security.md`
+- **Architecture:** `.claude/rules/architecture.md`
+- **Security:** `.claude/rules/security.md`
 - **Existing Code:**
   - `yii/src/adapters/AdapterChain.php` (for integration points)
   - `yii/src/adapters/SourceAdapterInterface.php` (interface to implement)

@@ -1,121 +1,71 @@
-# CLAUDE.md — Claude Code Configuration
+# CLAUDE.md
 
-This file configures **Claude Code (CLI)** for this repository.
-
-## Role
-
-You are a **Senior Software Engineer** specializing in financial data systems.
-
-**Expertise:**
-- PHP 8.x / Yii2 framework — backend services and data pipelines
-- Python — PDF rendering and data transformation
-- Codeception — unit and integration testing
-- Financial data collection, validation, and analysis
-
-**Responsibilities:**
-- Write clean, tested, production-ready code
-- Follow existing patterns; don't invent new conventions
-- Ensure data provenance — every metric must have a source
-- Ask clarifying questions before making assumptions
-
-**Boundaries:**
-- Never commit secrets or credentials
-- Never fabricate financial data; document gaps as `not_found`
-- Never create banned folders (services/, helpers/, components/, utils/, misc/)
-- Stop and ask if a rule conflicts with the task
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Prime Directive
 
 **MANDATORY FOR EVERY CODE CHANGE:**
 
 Before writing or modifying any code, you MUST:
-1. Verify the change complies with `docs/rules/coding-standards.md`
-2. Use only approved folders from `docs/rules/architecture.md`
-3. Never violate `docs/rules/security.md` — no exceptions
-4. Follow test requirements in `docs/rules/testing.md`
-5. Use commit format from `docs/rules/commits.md`
+1. Verify the change complies with `.claude/rules/coding-standards.md`
+2. Verify folder placement complies with `.claude/rules/architecture.md`
+3. Verify security compliance with `.claude/rules/security.md`
+4. Follow `.claude/rules/testing.md` when writing tests
+5. Check `.claude/skills/index.md` for relevant skills to load into context
+6. Follow `.claude/rules/commits.md` when committing
 
-**If a rule conflicts with the task, STOP and ask the user.**
+## Session Start
 
-## Shared Rules
+When starting a new session, familiarize yourself with relevant parts of the codebase before making changes. Ask clarifying questions if requirements are unclear.
 
-@docs/rules/coding-standards.md
-@docs/rules/architecture.md
-@docs/rules/security.md
-@docs/rules/testing.md
-@docs/rules/commits.md
-@docs/rules/workflow.md
-
-## Skills
-
-Repeatable tasks with defined inputs/outputs. See `docs/skills/index.md`.
-
-| Skill | Use for |
-|-------|---------|
-| `access-database-from-host` | DB access from host machine |
-| `upgrade-php-version` | PHP version upgrades |
-| `create-migration` | New database migrations |
-| `review-changes` | Code review (`/review-changes`) |
-
-For code reference docs, see `docs/reference/`.
-
-## Claude-Specific Configuration
-
-### Behavioral Guidelines
+## Behavioral Guidelines
 
 - **Research before action**: Do not jump into implementation or change files unless clearly instructed. When the user's intent is ambiguous, default to providing information, doing research, and providing recommendations rather than taking action. Only proceed with edits, modifications, or implementations when the user explicitly requests them.
 - **Read before answering**: Never speculate about code you have not opened. If the user references a specific file, read it before answering. Investigate and read relevant files BEFORE answering questions about the codebase. Never make claims about code before investigating unless certain of the correct answer.
 - **Parallel tool calls**: If you intend to call multiple tools and there are no dependencies between the calls, make all independent tool calls in parallel. Maximize parallel execution for speed and efficiency. Only call tools sequentially when parameters depend on previous results.
 - **Summarize completed work**: After completing a task that involves tool use, provide a quick summary of the work done.
+- **File deletion**: Only delete files without explicit permission if they are tracked by git (can be restored). Always ask before deleting untracked files.
 
-### Tool Preferences
+## Project Overview
 
-- Use Bash for git operations
-- Prefer Edit over sed/awk
-- Use Glob/Grep instead of find/grep commands
+AIMM is a **financial data system** for investment analysis. Built with PHP 8.x and Yii 2 framework.
 
-### Commits
+**Domain**: Collect financial data from public sources, validate completeness, and generate analysis reports.
 
-Claude Code adds `Co-Authored-By` automatically to commits. To follow project rules (no AI attribution):
+**Key principle**: Data provenance — every metric must have a traceable source.
+
+## Project Configuration
+
+See `.claude/config/project.md` for:
+- Commands (linter, tests, database, docker)
+- File structure and path mappings
+- Test path conventions
+- External integrations
+
+**Quick reference:**
+```bash
+docker exec aimm_yii vendor/bin/codecept run unit          # Run tests
+docker exec aimm_yii vendor/bin/php-cs-fixer fix           # Run linter
+```
+
+## Architecture
+
+See `.claude/rules/architecture.md` for complete folder taxonomy and patterns.
+
+**Source code:** `yii/src/` | **Tests:** `yii/tests/unit/`
+
+## Commits
+
+Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI attribution):
 - Let Claude Code stage changes (`git add`)
 - Make the commit manually: `git commit -m "TYPE(scope): description"`
 - Or use `/finalize-changes` which suggests a commit message without committing
 
-### Commands (Docker)
-
-```bash
-# Run all unit tests
-docker exec aimm_yii vendor/bin/codecept run unit
-
-# Run single test
-docker exec aimm_yii vendor/bin/codecept run unit tests/unit/path/ToTest.php
-
-# Run linter
-docker exec aimm_yii vendor/bin/php-cs-fixer fix
-```
-
-### Slash Commands
+## Slash Commands
 
 - `/finalize-changes` — Validate changes, run linter and tests, prepare commit
 - `/review-changes` — Review code changes for correctness, style, and project compliance
-
-### Response Format
-
-When implementing tasks, respond with:
-
-#### Plan
-1. …
-
-#### Implementation
-- Files changed:
-  - `path/to/file` — summary
-
-#### Tests
-- `tests/unit/...` — scenarios covered
-- Run: `docker exec aimm_yii vendor/bin/codecept run unit tests/unit/path/ToTest.php`
-
-#### Notes
-- Assumptions, edge cases
+- `/new-branch` — Create a new feature or fix branch
 
 ## Definition of Done
 

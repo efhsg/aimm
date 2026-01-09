@@ -10,12 +10,12 @@ This folder contains project documentation and the workflow contracts used by de
 
 - `docs/PROJECT.md` — architecture, data flow, key concepts, glossary
 - `docs/RULES.md` — global guardrails (coding conventions, architecture rules, testing baseline)
-- `docs/skills/index.md` — skill catalog (what capabilities exist)
+- `.claude/skills/index.md` — skill catalog (what capabilities exist)
 - `docs/design/phase-1-collection.md` — Phase 1 technical design document
 
 ## How to contribute
 
 - Keep docs focused and actionable.
 - Prefer updating an existing skill over creating a new one.
-- If a capability is missing, add a new skill under `docs/skills/<area>/...` and register it in `docs/skills/index.md`.
+- If a capability is missing, add a new skill under `.claude/skills/` and register it in `.claude/skills/index.md`.
 

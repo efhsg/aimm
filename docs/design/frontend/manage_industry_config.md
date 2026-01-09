@@ -63,10 +63,10 @@ This UI is administrative and must not be publicly accessible.
 
 ### Architecture Constraints (Project Rules)
 
-- No business logic in controllers; delegate to **handlers** (`docs/rules/coding-standards.md`).
-- Use specific folders; do not introduce catch-all folders, and never create banned folders (`docs/rules/architecture.md`).
-- Security requirements: scope enforcement, no secrets in code, don’t log sensitive values (`docs/rules/security.md`).
-- Testing: unit tests for validators/handlers; integration tests where needed (`docs/rules/testing.md`).
+- No business logic in controllers; delegate to **handlers** (`.claude/rules/coding-standards.md`).
+- Use specific folders; do not introduce catch-all folders, and never create banned folders (`.claude/rules/architecture.md`).
+- Security requirements: scope enforcement, no secrets in code, don’t log sensitive values (`.claude/rules/security.md`).
+- Testing: unit tests for validators/handlers; integration tests where needed (`.claude/rules/testing.md`).
 
 ---
 
@@ -226,7 +226,7 @@ Validation on toggle:
 
 ### Out of Scope
 
-- No tests for Yii view templates or widgets (per `docs/rules/testing.md`).
+- No tests for Yii view templates or widgets (per `.claude/rules/testing.md`).
 
 ---
 

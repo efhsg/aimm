@@ -21,7 +21,7 @@ Reusable template for setting up consistent AI agent configuration in PHP/Yii2 p
 3. **Customize templates:**
    - Update Role section with domain expertise
    - Update Commands section for Docker/non-Docker
-   - Create initial skills in `docs/skills/index.md`
+   - Create initial skills in `.claude/skills/index.md`
    - Adjust rules files for project conventions
 
 4. **Verify setup:**
@@ -37,21 +37,18 @@ Reusable template for setting up consistent AI agent configuration in PHP/Yii2 p
 
 ```bash
 # 1. Create directory structure
-mkdir -p docs/rules docs/skills .claude
+mkdir -p .claude/rules .claude/skills
 
 # 2. Create shared rules files
-touch docs/rules/{coding-standards,architecture,security,testing,commits,workflow}.md
+touch .claude/rules/{coding-standards,architecture,security,testing,commits,workflow}.md
 
 # 3. Create skills index
-touch docs/skills/index.md
+touch .claude/skills/index.md
 
 # 4. Create agent entry files
 touch CLAUDE.md AGENTS.md GEMINI.md
 
-# 5. Create symlink for Claude
-ln -s ../docs/rules .claude/rules
-
-# 6. Add php-cs-fixer (optional but recommended)
+# 5. Add php-cs-fixer (optional but recommended)
 composer require --dev friendsofphp/php-cs-fixer
 ```
 
@@ -74,7 +71,7 @@ After copying the templates, customize these for your project:
 
 ### Skills System
 - [ ] Create skill categories relevant to your domain
-- [ ] List actual skills in `docs/skills/index.md`
+- [ ] List actual skills in `.claude/skills/index.md`
 - [ ] Update agent files to reference your specific skills
 
 ### Slash Commands (Claude only)
@@ -110,14 +107,14 @@ project/
 ├── GEMINI.md                     # ENTRY LAYER: Gemini wrapper
 │
 └── .claude/
-    └── rules -> ../docs/rules    # Symlink for Claude directory access
+    └── rules/                     # Project rules (coding-standards, architecture, etc.)
 ```
 
-### Layer 1: Shared Rules (`docs/rules/`)
+### Layer 1: Shared Rules (`.claude/rules/`)
 
 Tool-agnostic markdown containing your actual standards. Write these as plain documentation that any agent can understand.
 
-### Layer 2: Skills (`docs/skills/`)
+### Layer 2: Skills (`.claude/skills/`)
 
 Reusable task templates with defined inputs, outputs, and completion criteria. Skills are atomic, executable capabilities that agents can reference.
 
@@ -135,7 +132,7 @@ Thin wrappers that:
 
 Skills are atomic, executable capabilities with defined inputs, outputs, and completion criteria.
 
-### `docs/skills/index.md`
+### `.claude/skills/index.md`
 
 ```markdown
 # Skills Index
@@ -144,7 +141,7 @@ Skills are atomic, executable capabilities with defined inputs, outputs, and com
 
 ## How to Use
 
-1. **Read rules first** — `docs/rules/` applies to everything
+1. **Read rules first** — `.claude/rules/` applies to everything
 2. **Scan this index** — find relevant skills for your task
 3. **Load only needed skills** — minimize context
 4. **Follow skill contracts** — inputs, outputs, DoD
@@ -216,7 +213,7 @@ One paragraph explaining what this skill does.
 
 ## Shared Rules Templates (PHP/Yii2)
 
-### `docs/rules/coding-standards.md`
+### `.claude/rules/coding-standards.md`
 
 ```markdown
 # Coding Standards
@@ -236,7 +233,7 @@ One paragraph explaining what this skill does.
 - **No silent failures** — log or throw
 ```
 
-### `docs/rules/architecture.md`
+### `.claude/rules/architecture.md`
 
 ```markdown
 # Architecture & Folder Taxonomy
@@ -259,7 +256,7 @@ Use specific folders, not catch-alls:
 **Banned folders:** `services/`, `helpers/`, `components/` (except Yii framework), `utils/`, `misc/`
 ```
 
-### `docs/rules/security.md`
+### `.claude/rules/security.md`
 
 ```markdown
 # Security Policies
@@ -277,7 +274,7 @@ Use specific folders, not catch-alls:
 - Never log sensitive values
 ```
 
-### `docs/rules/testing.md`
+### `.claude/rules/testing.md`
 
 ```markdown
 # Testing Requirements
@@ -310,7 +307,7 @@ public function testReturnsNullWhenInputIsEmpty(): void
 - Third-party libraries
 ```
 
-### `docs/rules/commits.md`
+### `.claude/rules/commits.md`
 
 ```markdown
 # Commit Message Format
@@ -342,15 +339,15 @@ TYPE(scope): description
 - Footer references issues: `Closes #123`
 ```
 
-### `docs/rules/workflow.md`
+### `.claude/rules/workflow.md`
 
 ```markdown
 # Development Workflow
 
 ## Before Coding
 
-1. Read project rules in `docs/rules/`
-2. Check `docs/skills/index.md` for relevant skills
+1. Read project rules in `.claude/rules/`
+2. Check `.claude/skills/index.md` for relevant skills
 3. Understand existing patterns in codebase
 4. Plan changes before implementing
 
@@ -398,26 +395,26 @@ You are a **Senior PHP Developer** specializing in Yii2 applications.
 **MANDATORY FOR EVERY CODE CHANGE:**
 
 Before writing or modifying any code, you MUST:
-1. Verify the change complies with `docs/rules/coding-standards.md`
-2. Use only approved folders from `docs/rules/architecture.md`
-3. Never violate `docs/rules/security.md` — no exceptions
-4. Follow test requirements in `docs/rules/testing.md`
-5. Use commit format from `docs/rules/commits.md`
+1. Verify the change complies with `.claude/rules/coding-standards.md`
+2. Use only approved folders from `.claude/rules/architecture.md`
+3. Never violate `.claude/rules/security.md` — no exceptions
+4. Follow test requirements in `.claude/rules/testing.md`
+5. Use commit format from `.claude/rules/commits.md`
 
 **If a rule conflicts with the task, STOP and ask the user.**
 
 ## Shared Rules
 
-@docs/rules/coding-standards.md
-@docs/rules/architecture.md
-@docs/rules/security.md
-@docs/rules/testing.md
-@docs/rules/commits.md
-@docs/rules/workflow.md
+@.claude/rules/coding-standards.md
+@.claude/rules/architecture.md
+@.claude/rules/security.md
+@.claude/rules/testing.md
+@.claude/rules/commits.md
+@.claude/rules/workflow.md
 
 ## Skills System
 
-Before implementing, check `docs/skills/index.md` for relevant skills.
+Before implementing, check `.claude/skills/index.md` for relevant skills.
 Follow skill contracts (inputs, outputs, DoD) when they apply.
 
 ## Claude-Specific Configuration
@@ -489,11 +486,11 @@ You are a **Senior PHP Developer** specializing in Yii2 applications.
 **MANDATORY FOR EVERY CODE CHANGE:**
 
 Before writing or modifying any code, you MUST:
-1. Read and comply with `docs/rules/coding-standards.md`
-2. Use only approved folders from `docs/rules/architecture.md`
-3. Never violate `docs/rules/security.md` — no exceptions
-4. Follow test requirements in `docs/rules/testing.md`
-5. Use commit format from `docs/rules/commits.md`
+1. Read and comply with `.claude/rules/coding-standards.md`
+2. Use only approved folders from `.claude/rules/architecture.md`
+3. Never violate `.claude/rules/security.md` — no exceptions
+4. Follow test requirements in `.claude/rules/testing.md`
+5. Use commit format from `.claude/rules/commits.md`
 
 **If a rule conflicts with the task, STOP and ask the user.**
 
@@ -501,16 +498,16 @@ Before writing or modifying any code, you MUST:
 
 Read and follow these rule files:
 
-- `docs/rules/coding-standards.md` — PSR-12, type hints, DI patterns
-- `docs/rules/architecture.md` — Folder taxonomy, banned patterns
-- `docs/rules/security.md` — Access control, secrets
-- `docs/rules/testing.md` — Codeception, coverage requirements
-- `docs/rules/commits.md` — Commit message format
-- `docs/rules/workflow.md` — Development process
+- `.claude/rules/coding-standards.md` — PSR-12, type hints, DI patterns
+- `.claude/rules/architecture.md` — Folder taxonomy, banned patterns
+- `.claude/rules/security.md` — Access control, secrets
+- `.claude/rules/testing.md` — Codeception, coverage requirements
+- `.claude/rules/commits.md` — Commit message format
+- `.claude/rules/workflow.md` — Development process
 
 ## Skills System
 
-Before implementing, check `docs/skills/index.md` for relevant skills.
+Before implementing, check `.claude/skills/index.md` for relevant skills.
 Follow skill contracts (inputs, outputs, DoD) when they apply.
 
 ## Commands
@@ -558,26 +555,26 @@ You are a **Senior PHP Developer** specializing in Yii2 applications.
 **MANDATORY FOR EVERY CODE CHANGE:**
 
 Before writing or modifying any code, you MUST:
-1. Read and comply with `docs/rules/coding-standards.md`
-2. Use only approved folders from `docs/rules/architecture.md`
-3. Never violate `docs/rules/security.md` — no exceptions
-4. Follow test requirements in `docs/rules/testing.md`
-5. Use commit format from `docs/rules/commits.md`
+1. Read and comply with `.claude/rules/coding-standards.md`
+2. Use only approved folders from `.claude/rules/architecture.md`
+3. Never violate `.claude/rules/security.md` — no exceptions
+4. Follow test requirements in `.claude/rules/testing.md`
+5. Use commit format from `.claude/rules/commits.md`
 
 **If a rule conflicts with the task, STOP and ask the user.**
 
 ## Shared Rules
 
-@docs/rules/coding-standards.md
-@docs/rules/architecture.md
-@docs/rules/security.md
-@docs/rules/testing.md
-@docs/rules/commits.md
-@docs/rules/workflow.md
+@.claude/rules/coding-standards.md
+@.claude/rules/architecture.md
+@.claude/rules/security.md
+@.claude/rules/testing.md
+@.claude/rules/commits.md
+@.claude/rules/workflow.md
 
 ## Skills System
 
-Before implementing, check `docs/skills/index.md` for relevant skills.
+Before implementing, check `.claude/skills/index.md` for relevant skills.
 Follow skill contracts (inputs, outputs, DoD) when they apply.
 
 ## Commands
@@ -600,21 +597,21 @@ Follow skill contracts (inputs, outputs, DoD) when they apply.
 
 | Tool | Import Syntax | Notes |
 |------|---------------|-------|
-| Claude | `@docs/rules/file.md` | Inlines content automatically |
+| Claude | `@.claude/rules/file.md` | Inlines content automatically |
 | Codex | List files to read | Agent reads on demand |
-| Gemini | `@docs/rules/file.md` | Similar to Claude |
+| Gemini | `@.claude/rules/file.md` | Similar to Claude |
 
 **Codex workaround:** If Codex doesn't read files reliably, use a build script:
 ```bash
-cat docs/rules/*.md > AGENTS.generated.md
+cat .claude/rules/*.md > AGENTS.generated.md
 ```
 
 ---
 
 ## Benefits
 
-- **Single source of truth** — Rules defined once in `docs/rules/`
-- **Reusable skills** — Common tasks documented in `docs/skills/`
+- **Single source of truth** — Rules defined once in `.claude/rules/`
+- **Reusable skills** — Common tasks documented in `.claude/skills/`
 - **Consistent behavior** — All agents follow the same standards
 - **Easy maintenance** — Update rules/skills in one place
 - **Agent flexibility** — Customize tool-specific behavior in wrappers

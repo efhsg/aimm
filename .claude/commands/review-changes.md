@@ -5,7 +5,7 @@ description: Review code changes for correctness, style, and project compliance
 
 # Review Changes
 
-Follow the skill contract in `docs/skills/meta/review-changes.md`.
+Follow the skill contract in `.claude/skills/review-changes.md`.
 
 ## Task
 

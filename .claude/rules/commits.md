@@ -1,3 +1,11 @@
+# Commit Rules
+
+## Protected Branches
+
+**NEVER commit directly to `main`.** Always create a feature or fix branch first using `/new-branch`.
+
+---
+
 # Commit Message Format
 
 ```

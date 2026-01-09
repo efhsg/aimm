@@ -4,20 +4,20 @@
 You are a **Senior Software Architect** and **Technical Technical Writer**. Your task is to critically review the design document `docs/design/hybrid-collection-strategy.md` against the project's established architectural standards, security policies, and documentation guidelines.
 
 ## Context & Constraints
-This project follows strict architectural rules defined in `docs/rules/`. You must not assume standard practices if they conflict with these explicit rules.
+This project follows strict architectural rules defined in `.claude/rules/`. You must not assume standard practices if they conflict with these explicit rules.
 
 - **Target File:** `docs/design/hybrid-collection-strategy.md`
-- **Context Sources:** `docs/rules/architecture.md`, `docs/rules/security.md`, `docs/rules/workflow.md`, `docs/skills/index.md`
+- **Context Sources:** `.claude/rules/architecture.md`, `.claude/rules/security.md`, `.claude/rules/workflow.md`, `.claude/skills/index.md`
 
 ## Workflow
 
 ### 1. Discovery Phase
 - **Read** the target file: `docs/design/hybrid-collection-strategy.md`.
 - **Read** the project rules to establish the baseline for compliance:
-  - `docs/rules/architecture.md` (Folder taxonomy, banned folders)
-  - `docs/rules/security.md` (Data provenance, secrets, access control)
-  - `docs/rules/workflow.md` (Skill-driven development)
-- **Scan** `docs/skills/index.md` to identify if the design leverages existing skills or proposes redundant ones.
+  - `.claude/rules/architecture.md` (Folder taxonomy, banned folders)
+  - `.claude/rules/security.md` (Data provenance, secrets, access control)
+  - `.claude/rules/workflow.md` (Skill-driven development)
+- **Scan** `.claude/skills/index.md` to identify if the design leverages existing skills or proposes redundant ones.
 
 ### 2. Analysis Phase
 Analyze the design document for:

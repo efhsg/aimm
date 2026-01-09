@@ -5,7 +5,7 @@
 For every task:
 
 1. Read project rules first — these apply to everything
-2. Check `docs/skills/index.md` — find relevant skills
+2. Check `.claude/skills/index.md` — find relevant skills
 3. Load only needed skills — minimize context
 4. Follow DoD — skill is done when Definition of Done passes
 5. Create skills for gaps — if behavior isn't covered, write a skill

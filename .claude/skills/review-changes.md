@@ -6,10 +6,10 @@ provides:
   - code_review
   - compliance_check
 depends_on:
-  - docs/rules/coding-standards.md
-  - docs/rules/architecture.md
-  - docs/rules/security.md
-  - docs/rules/testing.md
+  - .claude/rules/coding-standards.md
+  - .claude/rules/architecture.md
+  - .claude/rules/security.md
+  - .claude/rules/testing.md
 ---
 
 # ReviewChanges
@@ -18,7 +18,7 @@ Perform a structured code review of staged or unstaged changes against project r
 
 ## Persona
 
-- Senior PHP 8.2 engineer with 20 years of production PHP experience, including 10 years specializing in Yii 2.
+- Senior PHP 8.x engineer with 20 years of production PHP experience, including 10 years specializing in Yii 2.
 - Write concise, PSR-12-compliant, fully type-hinted code that follows Yii 2 conventions.
 - Expert test engineer fluent with Unit and Codeception tests.
 
@@ -49,7 +49,7 @@ Perform a structured code review of staged or unstaged changes against project r
 
 ### 2. Style & Standards
 
-Per `docs/rules/coding-standards.md`, plus:
+Per `.claude/rules/coding-standards.md`, plus:
 
 - No unnecessary curly braces (single-statement blocks)
 - Never fully-qualified class names in method bodies — use imports
@@ -60,7 +60,7 @@ Per `docs/rules/coding-standards.md`, plus:
 
 ### 3. Architecture
 
-Per `docs/rules/architecture.md`
+Per `.claude/rules/architecture.md`
 
 ### 4. SOLID/DRY
 
@@ -68,18 +68,18 @@ Apply judiciously — stop when goal is met, don't over-abstract.
 
 ### 5. Security
 
-Per `docs/rules/security.md`
+Per `.claude/rules/security.md`
 
 ### 6. Tests
 
-Per `docs/rules/testing.md`
+Per `.claude/rules/testing.md`
 
 ## Algorithm
 
 1. Run `git status --porcelain` to identify changed files
 2. Run `git diff` (or `git diff --staged`) to see specific changes
 3. Read each changed file to understand full context
-4. Load project rules from `docs/rules/`
+4. Load project rules from `.claude/rules/`
 5. Evaluate each file against the review checklist
 6. Categorize findings by severity
 7. Compile report with actionable recommendations
