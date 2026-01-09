@@ -1,7 +1,7 @@
 # PDF Generation Strategy: HTML/CSS + Headless Browser (Implementation-Ready)
 
 **Date:** 2026-01-09  
-**Status:** Design  
+**Status:** Definitive  
 **Context:** Moving from Python/ReportLab stub to a robust HTML-to-PDF pipeline.
 
 ## 1. Executive Summary
@@ -134,74 +134,141 @@ services:
 
 ### 5.1 RenderBundle Contract
 
-Rendering input is strictly defined and validated. Large assets may be streamed.
+Rendering input is strictly defined and validated. Uses a builder pattern for consistent construction and immutable output.
 
 ```php
-final class RenderBundle
+final readonly class RenderBundle
 {
-    public string $traceId;
+    /**
+     * @param array<string, string|resource> $files relative path => bytes OR stream
+     */
+    private function __construct(
+        public string $traceId,
+        public string $indexHtml,
+        public ?string $headerHtml,
+        public ?string $footerHtml,
+        public array $files,
+        public int $totalBytes,
+    ) {}
 
-    public string $indexHtml;
-    public ?string $headerHtml = null;
-    public ?string $footerHtml = null;
-
-    /** @var array<string, string|resource> relative path => bytes OR stream resource */
-    public array $files = [];
-
-    /** Total bundle size in bytes (estimated). */
-    public int $totalBytes = 0;
-
-    public function setIndexHtml(string $html): void
+    public static function builder(string $traceId): RenderBundleBuilder
     {
-        $this->assertNoExternalRefs($html);
+        return new RenderBundleBuilder($traceId);
+    }
+}
+
+final class RenderBundleBuilder
+{
+    private string $indexHtml = '';
+    private ?string $headerHtml = null;
+    private ?string $footerHtml = null;
+
+    /** @var array<string, string|resource> */
+    private array $files = [];
+    private int $totalBytes = 0;
+
+    private const SIZE_WARN_BYTES = 10 * 1024 * 1024;  // 10MB
+    private const SIZE_FAIL_BYTES = 50 * 1024 * 1024;  // 50MB
+
+    private const CSS_EXTENSIONS = ['css', 'scss'];
+
+    public function __construct(
+        private readonly string $traceId,
+    ) {}
+
+    public function withIndexHtml(string $html): self
+    {
+        $this->assertNoExternalRefs($html, 'index.html');
         $this->indexHtml = $html;
+        return $this;
     }
 
-    public function setHeaderHtml(?string $html): void
+    public function withHeaderHtml(?string $html): self
     {
         if ($html !== null) {
-            $this->assertNoExternalRefs($html);
+            $this->assertNoExternalRefs($html, 'header.html');
         }
         $this->headerHtml = $html;
+        return $this;
     }
 
-    public function setFooterHtml(?string $html): void
+    public function withFooterHtml(?string $html): self
     {
         if ($html !== null) {
-            $this->assertNoExternalRefs($html);
+            $this->assertNoExternalRefs($html, 'footer.html');
         }
         $this->footerHtml = $html;
+        return $this;
     }
 
-    public function addFile(string $path, $content, ?int $byteSize = null): void
+    /**
+     * @param string|resource $content
+     */
+    public function addFile(string $path, $content, ?int $byteSize = null): self
     {
         $this->validatePath($path);
+
+        // Validate CSS/text files for external references
+        if ($this->isTextAsset($path) && is_string($content)) {
+            $this->assertNoExternalRefs($content, $path);
+        }
+
         $this->files[$path] = $content;
 
         if ($byteSize !== null) {
             $this->totalBytes += $byteSize;
         }
+
+        return $this;
+    }
+
+    public function build(): RenderBundle
+    {
+        if ($this->indexHtml === '') {
+            throw new \InvalidArgumentException('indexHtml is required');
+        }
+
+        if ($this->totalBytes > self::SIZE_FAIL_BYTES) {
+            throw new BundleSizeExceededException(
+                "Bundle size {$this->totalBytes} exceeds limit " . self::SIZE_FAIL_BYTES
+            );
+        }
+
+        if ($this->totalBytes > self::SIZE_WARN_BYTES) {
+            \Yii::warning("RenderBundle size {$this->totalBytes} exceeds warning threshold");
+        }
+
+        return new RenderBundle(
+            $this->traceId,
+            $this->indexHtml,
+            $this->headerHtml,
+            $this->footerHtml,
+            $this->files,
+            $this->totalBytes,
+        );
+    }
+
+    private function isTextAsset(string $path): bool
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        return in_array($ext, self::CSS_EXTENSIONS, true);
     }
 
     private function validatePath(string $path): void
     {
-        // Must be relative, allow subdirs, forbid traversal.
         if ($path === '' || str_starts_with($path, '/')) {
             throw new SecurityException('Absolute paths forbidden');
         }
         if (str_contains($path, '../') || str_contains($path, '..\\')) {
             throw new SecurityException('Path traversal forbidden');
         }
-        // Allowed: letters, digits, dot, underscore, dash, slash
         if (!preg_match('#^[a-zA-Z0-9._/-]+$#', $path)) {
             throw new SecurityException('Invalid path characters');
         }
     }
 
-    private function assertNoExternalRefs(string $text): void
+    private function assertNoExternalRefs(string $text, string $source): void
     {
-        // Reject http(s), protocol-relative, and other external refs in HTML/CSS text.
-        // Apply to HTML strings AND to any text/css content we add.
         $patterns = [
             '#(src|href|srcset)\s*=\s*["\']\s*(https?:|//)#i',
             '#url\s*\(\s*["\']?\s*(https?:|//)#i',
@@ -209,18 +276,32 @@ final class RenderBundle
         ];
         foreach ($patterns as $p) {
             if (preg_match($p, $text)) {
-                throw new SecurityException('External resources forbidden in RenderBundle');
+                throw new SecurityException(
+                    "External resources forbidden in RenderBundle: {$source}"
+                );
             }
         }
     }
 }
 ```
 
-**Bundle size budgets:**
-- Warn when `totalBytes > 10MB`
-- Hard fail when `totalBytes > 50MB`
+**Usage:**
 
-**Enforcement note:** `assertNoExternalRefs()` must also run against **CSS text** (e.g., compiled `report.css`) before sending to Gotenberg.
+```php
+$bundle = RenderBundle::builder($traceId)
+    ->withIndexHtml($indexHtml)
+    ->withHeaderHtml($headerHtml)
+    ->withFooterHtml($footerHtml)
+    ->addFile('assets/report.css', $cssContent, strlen($cssContent))
+    ->addFile('assets/fonts/franklin.woff2', $fontBytes, strlen($fontBytes))
+    ->addFile('charts/revenue.png', $chartPng, strlen($chartPng))
+    ->build();
+```
+
+**Validation enforced:**
+- Path traversal and absolute paths blocked
+- External refs (`http://`, `https://`, `//`) blocked in HTML and CSS
+- Bundle size: warn > 10MB, fail > 50MB
 
 ### 5.2 GotenbergClient
 
@@ -264,6 +345,170 @@ Responsibilities:
 
 - **Prod:** log with `traceId`, store `error_code/error_message` in `jobs`. **No artifact dumping**.
 - **Dev:** dump bundle to `runtime/debug/pdf_failure_{traceId}/` for inspection (includes a manifest with sizes and filenames).
+
+### 5.6 PDF Render Options
+
+Gotenberg accepts render options via form fields. We define a `PdfOptions` DTO with sensible defaults.
+
+```php
+final readonly class PdfOptions
+{
+    public function __construct(
+        public string $paperWidth = '210mm',      // A4 width
+        public string $paperHeight = '297mm',     // A4 height
+        public string $marginTop = '25mm',        // Space for header
+        public string $marginBottom = '20mm',     // Space for footer
+        public string $marginLeft = '15mm',
+        public string $marginRight = '15mm',
+        public float $scale = 1.0,                // 0.1 - 2.0
+        public bool $landscape = false,
+        public bool $printBackground = true,      // Include CSS backgrounds
+        public string $preferCssPageSize = 'false', // Let Gotenberg control size
+    ) {}
+
+    /** @return array<string, string> Form fields for Gotenberg */
+    public function toFormFields(): array
+    {
+        return [
+            'paperWidth' => $this->paperWidth,
+            'paperHeight' => $this->paperHeight,
+            'marginTop' => $this->marginTop,
+            'marginBottom' => $this->marginBottom,
+            'marginLeft' => $this->marginLeft,
+            'marginRight' => $this->marginRight,
+            'scale' => (string) $this->scale,
+            'landscape' => $this->landscape ? 'true' : 'false',
+            'printBackground' => $this->printBackground ? 'true' : 'false',
+            'preferCssPageSize' => $this->preferCssPageSize,
+        ];
+    }
+}
+```
+
+**Presets:**
+
+| Preset | Use case | Orientation | Margins |
+|--------|----------|-------------|---------|
+| `standard` | Default company report | Portrait | 25/20/15/15mm |
+| `detailed` | Multi-page financials | Portrait | 20/15/12/12mm |
+| `landscape` | Wide comparison tables | Landscape | 15/15/20/20mm |
+
+**Integration with GotenbergClient:**
+
+```php
+public function render(RenderBundle $bundle, PdfOptions $options): string
+{
+    $multipart = $this->buildMultipart($bundle);
+
+    foreach ($options->toFormFields() as $name => $value) {
+        $multipart[] = ['name' => $name, 'contents' => $value];
+    }
+
+    // ... send request
+}
+```
+
+### 5.7 Report Data Flow
+
+Data flows from persistence through transformation to templates in a strict pipeline.
+
+**Flow:**
+```
+ReportQuery → ReportData (DTO) → ViewRenderer → RenderBundle
+```
+
+**Components:**
+
+1. **ReportQuery** (`src/queries/ReportQuery.php`)
+   - Fetches report metadata, company info, financials, peer group data.
+   - Returns raw DB rows; no business logic.
+
+2. **ReportDataFactory** (`src/factories/ReportDataFactory.php`)
+   - Transforms query results into typed DTOs.
+   - Calls Analytics Service for chart data.
+   - Assembles `ReportData` DTO.
+
+3. **ReportData** (`src/dto/ReportData.php`)
+   - Immutable DTO containing all data needed for rendering.
+   - Strongly typed: `CompanyDto`, `FinancialsDto`, `PeerGroupDto`, `ChartDto[]`.
+
+4. **ViewRenderer** (`src/handlers/pdf/ViewRenderer.php`)
+   - Receives `ReportData`, renders Yii2 views.
+   - Produces HTML strings for index, header, footer.
+   - Collects asset paths (CSS, fonts, chart PNGs).
+
+**Example DTO structure:**
+
+```php
+final readonly class ReportData
+{
+    public function __construct(
+        public string $reportId,
+        public string $traceId,
+        public CompanyDto $company,
+        public FinancialsDto $financials,
+        public PeerGroupDto $peerGroup,
+        /** @var ChartDto[] */
+        public array $charts,
+        public \DateTimeImmutable $generatedAt,
+    ) {}
+}
+
+final readonly class FinancialsDto
+{
+    public function __construct(
+        /** @var FinancialYearDto[] */
+        public array $years,
+        public ?MetricDto $revenue,
+        public ?MetricDto $ebitda,
+        public ?MetricDto $netIncome,
+        // ... other metrics
+    ) {}
+}
+
+final readonly class ChartDto
+{
+    public function __construct(
+        public string $id,
+        public string $type,           // 'bar', 'line', 'pie'
+        public string $pngBytes,       // Base64 or raw bytes
+        public int $width,
+        public int $height,
+        public int $dpi,
+    ) {}
+}
+```
+
+**Worker orchestration:**
+
+```php
+final class PdfGenerationHandler
+{
+    public function handle(string $jobId): void
+    {
+        $job = $this->jobRepository->findAndLock($jobId);
+
+        // 1. Fetch data
+        $queryResult = $this->reportQuery->execute($job->reportId);
+
+        // 2. Transform to DTO
+        $reportData = $this->reportDataFactory->create($queryResult, $job->traceId);
+
+        // 3. Render views to HTML
+        $renderedViews = $this->viewRenderer->render($reportData);
+
+        // 4. Assemble bundle
+        $bundle = $this->bundleAssembler->assemble($renderedViews, $reportData);
+
+        // 5. Generate PDF
+        $pdfBytes = $this->gotenbergClient->render($bundle, $job->pdfOptions);
+
+        // 6. Store and complete
+        $uri = $this->storage->store($pdfBytes, $job->outputFilename());
+        $this->jobRepository->complete($jobId, $uri);
+    }
+}
+```
 
 ---
 
@@ -337,7 +582,116 @@ yii/web/fonts/
 
 ---
 
-## 8. Migration Checklist
+## 8. Retention & Cleanup Policy
+
+### 8.1 Job Lifecycle Retention
+
+| Job Status | Retention | Cleanup Action |
+|------------|-----------|----------------|
+| `completed` | 90 days after `finished_at` | Delete job record |
+| `failed` | 30 days after `finished_at` | Delete job record |
+| `queued` | 24 hours (stale) | Transition to `failed` with `STALE_JOB` |
+| `processing` | 1 hour (stuck) | Transition to `failed` with `STUCK_JOB` |
+
+### 8.2 PDF File Retention
+
+| Storage Type | Retention | Notes |
+|--------------|-----------|-------|
+| Local disk | 30 days | Cleanup via cron |
+| S3/Object storage | 90 days | Lifecycle policy |
+| User-downloaded | Indefinite | Not our responsibility |
+
+**Important:** PDFs are regenerable. Deletion is safe as long as the source data exists.
+
+### 8.3 Cleanup Implementation
+
+**Cron job:** Daily at 03:00 UTC.
+
+```php
+final class JobCleanupHandler
+{
+    private const COMPLETED_RETENTION_DAYS = 90;
+    private const FAILED_RETENTION_DAYS = 30;
+    private const STALE_QUEUED_HOURS = 24;
+    private const STUCK_PROCESSING_HOURS = 1;
+
+    public function handle(): CleanupResult
+    {
+        $result = new CleanupResult();
+
+        // 1. Mark stale queued jobs as failed
+        $result->staleJobsMarked = $this->markStaleJobs();
+
+        // 2. Mark stuck processing jobs as failed
+        $result->stuckJobsMarked = $this->markStuckJobs();
+
+        // 3. Delete expired completed jobs + their PDFs
+        $result->completedJobsDeleted = $this->deleteExpiredJobs(
+            'completed',
+            self::COMPLETED_RETENTION_DAYS
+        );
+
+        // 4. Delete expired failed jobs (no PDFs to delete)
+        $result->failedJobsDeleted = $this->deleteExpiredJobs(
+            'failed',
+            self::FAILED_RETENTION_DAYS
+        );
+
+        return $result;
+    }
+
+    private function deleteExpiredJobs(string $status, int $retentionDays): int
+    {
+        $cutoff = new \DateTimeImmutable("-{$retentionDays} days");
+
+        $jobs = $this->jobRepository->findExpired($status, $cutoff);
+
+        foreach ($jobs as $job) {
+            if ($job->outputUri !== null) {
+                $this->storage->delete($job->outputUri);
+            }
+            $this->jobRepository->delete($job->id);
+        }
+
+        return count($jobs);
+    }
+}
+```
+
+### 8.4 Storage Interface
+
+```php
+interface StorageInterface
+{
+    /** Store PDF bytes, return URI (local path or s3://...) */
+    public function store(string $bytes, string $filename): string;
+
+    /** Delete by URI. Idempotent (no error if missing). */
+    public function delete(string $uri): void;
+
+    /** Stream PDF bytes for download. */
+    public function stream(string $uri): StreamInterface;
+
+    /** Check if file exists. */
+    public function exists(string $uri): bool;
+}
+```
+
+### 8.5 Monitoring
+
+Track via metrics:
+- `pdf_jobs_cleaned_total{status="completed|failed|stale|stuck"}` — counter
+- `pdf_storage_bytes` — gauge (total storage used)
+- `pdf_jobs_pending` — gauge (queued + processing count)
+
+**Alerts:**
+- `pdf_jobs_pending > 100` for 15 minutes → queue backup
+- `pdf_storage_bytes > 10GB` → storage pressure
+- `pdf_jobs_cleaned_total{status="stuck"} > 0` → investigate worker health
+
+---
+
+## 9. Migration Checklist
 
 - [ ] Docker: add Gotenberg service + healthcheck (via derived image).
 - [ ] Queue: configure `yii2-queue` (Redis) + worker supervisor.
