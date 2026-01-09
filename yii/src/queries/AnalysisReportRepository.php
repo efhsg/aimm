@@ -11,7 +11,7 @@ use yii\helpers\Json;
 /**
  * Repository for analysis report persistence.
  */
-final class AnalysisReportRepository
+final class AnalysisReportRepository implements AnalysisReportReader
 {
     public function __construct(
         private readonly Connection $db,

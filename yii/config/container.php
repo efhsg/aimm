@@ -9,11 +9,13 @@ use app\adapters\BloombergAdapter;
 use app\adapters\EcbAdapter;
 use app\adapters\EiaInventoryAdapter;
 use app\adapters\FmpAdapter;
+use app\adapters\LocalStorageAdapter;
 use app\adapters\MorningstarAdapter;
 use app\adapters\ReutersAdapter;
 use app\adapters\SeekingAlphaAdapter;
 use app\adapters\SourceAdapterInterface;
 use app\adapters\StockAnalysisAdapter;
+use app\adapters\StorageInterface;
 use app\adapters\WsjAdapter;
 use app\adapters\YahooFinanceAdapter;
 use app\alerts\AlertDispatcher;
@@ -34,6 +36,7 @@ use app\clients\WebFetchClientInterface;
 use app\factories\CompanyDataFactory;
 use app\factories\DataPointFactory;
 use app\factories\IndustryDataPackFactory;
+use app\factories\pdf\ReportDataFactory;
 use app\factories\SourceCandidateFactory;
 use app\handlers\analysis\AnalyzeReportHandler;
 use app\handlers\analysis\AnalyzeReportInterface;
@@ -75,11 +78,17 @@ use app\handlers\industry\ToggleIndustryHandler;
 use app\handlers\industry\ToggleIndustryInterface;
 use app\handlers\industry\UpdateIndustryHandler;
 use app\handlers\industry\UpdateIndustryInterface;
+use app\handlers\pdf\BundleAssembler;
+use app\handlers\pdf\PdfGenerationHandler;
+use app\handlers\pdf\ViewRenderer;
+use app\queries\AnalysisReportReader;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
 use app\queries\IndustryListQuery;
 use app\queries\IndustryMemberQuery;
 use app\queries\IndustryQuery;
+use app\queries\PdfJobRepository;
+use app\queries\PdfJobRepositoryInterface;
 use app\queries\SectorQuery;
 use app\queries\SourceBlockRepository;
 use app\queries\SourceBlockRepositoryInterface;
@@ -477,6 +486,56 @@ return [
                 assessRisk: $container->get(AssessRiskInterface::class),
                 determineRating: $container->get(DetermineRatingInterface::class),
                 rankCompanies: $container->get(RankCompaniesInterface::class),
+            );
+        },
+
+        // PDF Generation (Phase 3)
+        StorageInterface::class => static function (): StorageInterface {
+            return new LocalStorageAdapter(Yii::getAlias('@runtime/pdf-storage'));
+        },
+
+        PdfJobRepository::class => static function (): PdfJobRepository {
+            return new PdfJobRepository(Yii::$app->db);
+        },
+
+        PdfJobRepositoryInterface::class => static function (Container $container): PdfJobRepositoryInterface {
+            return $container->get(PdfJobRepository::class);
+        },
+
+        AnalysisReportReader::class => static function (Container $container): AnalysisReportReader {
+            return $container->get(app\queries\AnalysisReportRepository::class);
+        },
+
+        ReportDataFactory::class => static function (Container $container): ReportDataFactory {
+            return new ReportDataFactory(
+                $container->get(AnalysisReportReader::class),
+            );
+        },
+
+        ViewRenderer::class => static function (): ViewRenderer {
+            return new ViewRenderer(
+                new yii\base\View(),
+                Yii::getAlias('@app/views/report'),
+            );
+        },
+
+        BundleAssembler::class => static function (): BundleAssembler {
+            return new BundleAssembler(
+                Yii::getAlias('@webroot/css'),
+                Yii::getAlias('@webroot/fonts'),
+            );
+        },
+
+        PdfGenerationHandler::class => static function (Container $container): PdfGenerationHandler {
+            return new PdfGenerationHandler(
+                jobRepository: $container->get(PdfJobRepositoryInterface::class),
+                reportDataFactory: $container->get(ReportDataFactory::class),
+                viewRenderer: $container->get(ViewRenderer::class),
+                bundleAssembler: $container->get(BundleAssembler::class),
+                gotenbergClient: $container->get(GotenbergClient::class),
+                storage: $container->get(StorageInterface::class),
+                logger: Yii::getLogger(),
+                db: Yii::$app->db,
             );
         },
     ],

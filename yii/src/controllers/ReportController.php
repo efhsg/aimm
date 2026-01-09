@@ -4,21 +4,52 @@ declare(strict_types=1);
 
 namespace app\controllers;
 
+use app\adapters\StorageInterface;
+use app\enums\PdfJobStatus;
+use app\handlers\pdf\PdfGenerationHandler;
+use app\queries\PdfJobRepositoryInterface;
 use DateTimeImmutable;
 use Yii;
 use yii\web\Controller;
 use yii\web\ForbiddenHttpException;
+use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 /**
  * Report controller for PDF report preview and generation.
  *
- * The preview action is only available in development mode.
+ * Provides:
+ * - Preview routes (dev only): /report/preview, /report/preview-full
+ * - API routes: /api/reports/generate, /api/jobs/{id}, /api/reports/{reportId}/download
  */
 final class ReportController extends Controller
 {
     /** @var string|false */
     public $layout = false;
+
+    public function __construct(
+        $id,
+        $module,
+        private readonly PdfJobRepositoryInterface $jobRepository,
+        private readonly PdfGenerationHandler $pdfHandler,
+        private readonly StorageInterface $storage,
+        $config = [],
+    ) {
+        parent::__construct($id, $module, $config);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function beforeAction($action): bool
+    {
+        // Disable CSRF for API actions
+        if (in_array($action->id, ['generate', 'job-status', 'download'], true)) {
+            $this->enableCsrfValidation = false;
+        }
+
+        return parent::beforeAction($action);
+    }
 
     /**
      * Preview report HTML (dev only).
@@ -218,5 +249,163 @@ HTML;
         $response->data = $html;
 
         return $response;
+    }
+
+    // =========================================================================
+    // API Endpoints
+    // =========================================================================
+
+    /**
+     * Generate a PDF report.
+     *
+     * POST /api/reports/generate
+     * Body: {"reportId": "rpt_...", "options": {...}}
+     *
+     * @return array{jobId: int}
+     */
+    public function actionGenerate(): array
+    {
+        Yii::$app->response->format = Response::FORMAT_JSON;
+
+        $request = Yii::$app->request;
+        $reportId = $request->post('reportId');
+
+        if (empty($reportId)) {
+            Yii::$app->response->statusCode = 400;
+
+            return ['error' => 'reportId is required'];
+        }
+
+        // Compute stable params hash for idempotency
+        $options = $request->post('options', []);
+        $paramsHash = $this->computeParamsHash($options);
+
+        // Generate trace ID
+        $traceId = sprintf('pdf-%s-%s', date('Ymd-His'), substr(md5(uniqid('', true)), 0, 8));
+
+        // Get requester ID if user component is configured
+        $requesterId = null;
+        try {
+            if (Yii::$app->has('user') && !Yii::$app->user->isGuest) {
+                $requesterId = (string) Yii::$app->user->id;
+            }
+        } catch (\Throwable) {
+            // User component not configured - leave requesterId as null
+        }
+
+        // Create or get existing job
+        $job = $this->jobRepository->findOrCreate(
+            $reportId,
+            $paramsHash,
+            $traceId,
+            $requesterId,
+        );
+
+        // If job is pending, process it synchronously
+        if ($job->status === PdfJobStatus::Pending->value) {
+            $this->pdfHandler->handle((int) $job->id);
+
+            // Refresh job to get final status
+            $job = $this->jobRepository->findById((int) $job->id);
+        }
+
+        return ['jobId' => (int) $job->id];
+    }
+
+    /**
+     * Get job status.
+     *
+     * GET /api/jobs/{id}
+     *
+     * @return array{jobId: int, status: string, reportId: string, outputUri: ?string, error: ?array{code: string, message: string}}
+     * @throws NotFoundHttpException
+     */
+    public function actionJobStatus(int $id): array
+    {
+        Yii::$app->response->format = Response::FORMAT_JSON;
+
+        $job = $this->jobRepository->findById($id);
+
+        if ($job === null) {
+            throw new NotFoundHttpException('Job not found');
+        }
+
+        return [
+            'jobId' => (int) $job->id,
+            'status' => $job->status,
+            'reportId' => $job->report_id,
+            'outputUri' => $job->output_uri,
+            'error' => $job->error_code !== null ? [
+                'code' => $job->error_code,
+                'message' => $job->error_message,
+            ] : null,
+        ];
+    }
+
+    /**
+     * Download the generated PDF.
+     *
+     * GET /api/reports/{reportId}/download
+     *
+     * @throws NotFoundHttpException
+     */
+    public function actionDownload(string $reportId): Response
+    {
+        $job = $this->jobRepository->findLatestCompleted($reportId);
+
+        if ($job === null || $job->output_uri === null) {
+            throw new NotFoundHttpException('PDF not available');
+        }
+
+        if (!$this->storage->exists($job->output_uri)) {
+            throw new NotFoundHttpException('PDF file not found');
+        }
+
+        $filename = basename($job->output_uri);
+
+        return Yii::$app->response->sendFile(
+            $job->output_uri,
+            $filename,
+            ['mimeType' => 'application/pdf'],
+        );
+    }
+
+    /**
+     * Compute a stable hash for request options.
+     *
+     * @param mixed $options
+     */
+    private function computeParamsHash(mixed $options): string
+    {
+        $normalized = $this->normalizeOptions($options);
+
+        return hash('sha256', json_encode($normalized, JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Recursively normalize options for stable hashing.
+     *
+     * @param mixed $value
+     * @return mixed
+     */
+    private function normalizeOptions(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        // Check if sequential array (list)
+        if (array_values($value) === $value) {
+            return array_map([$this, 'normalizeOptions'], $value);
+        }
+
+        // Associative array: sort keys
+        ksort($value);
+
+        foreach ($value as $key => $item) {
+            $value[$key] = $this->normalizeOptions($item);
+        }
+
+        return $value;
     }
 }

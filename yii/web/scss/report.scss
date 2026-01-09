@@ -134,6 +134,21 @@ body {
     margin-top: tokens.$space-2;
   }
 
+  &__chart-placeholder {
+    width: 100%;
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: tokens.$bg-muted;
+    border: 2px dashed tokens.$border-subtle;
+    border-radius: tokens.$radius-md;
+    color: tokens.$text-secondary;
+    font-size: tokens.$text-sm;
+    font-style: italic;
+    padding: tokens.$space-4;
+  }
+
   // ========================================
   // FIGURES
   // ========================================

@@ -26,6 +26,7 @@ if (empty($charts)) {
 
     <?php foreach ($charts as $chart): ?>
     <figure class="report__figure avoid-break">
+        <?php if ($chart->available ?? false): ?>
         <img
             src="charts/<?= htmlspecialchars($chart->id ?? 'unknown', ENT_QUOTES, 'UTF-8') ?>.png"
             alt="<?= htmlspecialchars(ucfirst($chart->type ?? 'chart'), ENT_QUOTES, 'UTF-8') ?> chart"
@@ -33,6 +34,11 @@ if (empty($charts)) {
             width="<?= (int) ($chart->width ?? 800) ?>"
             height="<?= (int) ($chart->height ?? 400) ?>"
         >
+        <?php else: ?>
+        <div class="report__chart-placeholder">
+            <?= htmlspecialchars($chart->placeholderMessage ?? 'Chart not available', ENT_QUOTES, 'UTF-8') ?>
+        </div>
+        <?php endif; ?>
         <?php if (!empty($chart->caption)): ?>
         <figcaption class="report__figcaption">
             <?= htmlspecialchars($chart->caption, ENT_QUOTES, 'UTF-8') ?>

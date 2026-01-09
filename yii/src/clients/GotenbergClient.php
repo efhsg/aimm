@@ -17,7 +17,7 @@ use Yii;
  *
  * It supports multi-part requests with index.html, header.html, footer.html, and additional assets.
  */
-final class GotenbergClient
+class GotenbergClient
 {
     private const ENDPOINT = '/forms/chromium/convert/html';
     private const CONNECT_TIMEOUT = 2.0;

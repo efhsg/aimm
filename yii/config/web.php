@@ -27,6 +27,9 @@ return [
         'request' => [
             'cookieValidationKey' => getenv('COOKIE_VALIDATION_KEY') ?: 'dev-only-change-me',
             'enableCsrfValidation' => true,
+            'parsers' => [
+                'application/json' => 'yii\web\JsonParser',
+            ],
         ],
         'session' => [
             'class' => 'yii\web\Session',
@@ -75,6 +78,15 @@ return [
                 'admin/collection-policy/<slug:[a-z0-9-]+>/export' => 'collection-policy/export',
                 'admin/collection-policy/<slug:[a-z0-9-]+>/set-default' => 'collection-policy/set-default',
                 'admin/collection-policy/validate-json' => 'collection-policy/validate-json',
+
+                // Report API
+                'POST api/reports/generate' => 'report/generate',
+                'GET api/jobs/<id:\d+>' => 'report/job-status',
+                'GET api/reports/<reportId:[a-zA-Z0-9_-]+>/download' => 'report/download',
+
+                // Report preview (dev only)
+                'report/preview' => 'report/preview',
+                'report/preview-full' => 'report/preview-full',
             ],
         ],
         'db' => $db,
