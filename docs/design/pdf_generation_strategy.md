@@ -13,36 +13,38 @@ This document defines the technical design for "institutional-grade" PDF reporti
 **Core Principles:**
 - **Determinism:** Rendering is driven by a self-contained `RenderBundle` (HTML + assets). **No external network calls** during render.
 - **Visual Fidelity:** Pixel-perfect layout using SCSS compiled to CSS.
-- **Observability:** Every render is traceable via `traceId`. **Debug artifacts are Dev-only**.
-- **Resilience:** Queue-based generation to prevent concurrency saturation; bounded retries for transient failures.
+- **Observability:** Every render is traceable via `traceId` with per-step timings. **Debug artifacts are Dev-only**.
+- **Resilience:** Sync-first generation when render time is ≤10s; queue-based processing is enabled when p95 exceeds 10s or bursts saturate PHP-FPM/Gotenberg, with bounded retries for transient failures.
 
 ---
 
 ## 2. Architecture
 
-### 2.1 High-Level Flow (Lightweight Enqueue)
+### 2.1 High-Level Flow (Sync-first, Queue-enabled When Needed)
 
 1. **User Request:** User requests a report via Web UI or API.
-2. **Validation & Enqueue (Yii2 Web):**
-   - Validates request and access to `reportId`.
-   - Computes `params_hash` from request options (stable ordering).
+2. **Validation & Job Record (Yii2 Web):**
+   - Validates request (authorization is out of scope for initial implementation).
+   - Computes `params_hash` from request options (recursive, stable key ordering).
    - Creates/gets a `jobs` record via idempotent insert:
      - On success: `status=queued`, set `trace_id`.
      - On unique conflict `(report_id, params_hash)`: return the existing `jobId`.
-   - Pushes `jobId` to Redis queue.
-   - Returns `jobId`.
-3. **Processing (Yii2 Worker):**
+3. **Mode Decision:**
+   - **Sync mode (`PDF_GENERATION_MODE=sync`)**: if expected end-to-end time is ≤10s, transition `queued → processing` and run inline.
+   - **Queue mode (`PDF_GENERATION_MODE=queue`)**: push `jobId` to the queue and return immediately.
+4. **Processing (Yii2 Worker or Inline):**
+   - Acquire row lock (`SELECT ... FOR UPDATE`) inside a DB transaction.
    - Atomically transitions job `queued → processing` (guard against double-processing).
    - Fetches data from MySQL (financials, peer groups).
    - Calls Analytics Service (Python) to obtain chart **bytes** (PNG @ 2x/3x).
    - Renders Yii2 view templates into standalone HTML (`index.html`), plus `header.html` / `footer.html`.
    - Assembles `RenderBundle` (HTML + compiled CSS + fonts + images).
    - Sends bundle to Gotenberg `POST /forms/chromium/convert/html`.
-4. **Rendering (Gotenberg):**
+5. **Rendering (Gotenberg):**
    - Chromium renders HTML using provided assets.
    - Prints to PDF using provided header/footer HTML.
    - Returns PDF bytes.
-5. **Delivery:**
+6. **Delivery:**
    - Worker stores PDF via `StorageInterface`, persists `output_uri` in `jobs`.
    - Updates job status to `completed` (or `failed` with error details).
 
@@ -53,9 +55,13 @@ This document defines the technical design for "institutional-grade" PDF reporti
 - `GET /api/jobs/{jobId}` → `{"status":"queued|processing|completed|failed","reportId":"...","outputUri":null|"...","error":null|{...}}`
 - `GET /api/reports/{reportId}/download` → streams PDF
 
-**Access Control:** `requester_id === user.id` OR `user.role === 'admin'`.
+**Access Control:** Out of scope for initial implementation (add later).
 
-**Transitions:** `queued → processing → completed` (or `failed`).
+**Transitions:** `queued → processing → completed` (or `failed`). In sync mode, `queued` is transient within the request.
+
+**Jobs Table:** Always used (both sync and queue modes) for idempotency, auditing, and cacheability.
+
+**Configuration:** set `pdfGenerationMode` and `pdfRenderBudgetMs` in `yii/config/params.php` (env-backed, defaults to `sync` and `10000`).
 
 ---
 
@@ -78,6 +84,7 @@ This document defines the technical design for "institutional-grade" PDF reporti
 
 **Idempotency:** Unique index on `(report_id, params_hash)`.
 - Enqueue must be implemented as **insert-or-return-existing** (no race-prone “check then insert”).
+- `params_hash` must be computed from recursively normalized options (stable key ordering).
 
 ---
 
@@ -120,11 +127,12 @@ services:
 
 ### 4.2 Concurrency & Scaling
 
-- **Queue:** `yiisoft/yii2-queue` (Redis driver).
-- **Retries:** `Max Attempts = 3` (**1 initial + 2 retries**) with backoff `10s, 20s`.
+- **Generation mode:** `PDF_GENERATION_MODE=sync` by default; enable queue mode when p95 render time exceeds 10s or bursts saturate PHP-FPM/Gotenberg.
+- **Queue (queue mode):** `yiisoft/yii2-queue` (Redis driver).
+- **Retries (queue mode):** `Max Attempts = 3` (**1 initial + 2 retries**) with backoff `10s, 20s`.
 - **Retryable failures:** network errors, timeouts, HTTP 5xx.
 - **Non-retryable failures:** validation errors / HTTP 4xx.
-- **Worker concurrency:** bounded via `supervisord numprocs=N`.
+- **Worker concurrency (queue mode):** bounded via `supervisord numprocs=N`.
   - Start with `N=2` and tune based on memory and p95 render time.
 - **Circuit breaker:** if Gotenberg healthcheck fails, job transitions to `failed` with `error_code=GOTENBERG_UNHEALTHY` (non-retryable until fixed operationally).
 
@@ -312,6 +320,8 @@ Responsibilities:
 - Send to `POST /forms/chromium/convert/html` with strict timeouts.
 - Attach `X-Trace-Id: {traceId}` header.
 - Map response errors into retryable vs non-retryable exceptions.
+  - HTTP 4xx → non-retryable (include status + response body snippet in logs).
+  - HTTP 5xx/timeouts/network → retryable.
 
 **Timeouts (initial defaults):**
 - Connect: `2.0s`
@@ -344,7 +354,11 @@ Responsibilities:
 ### 5.5 Worker Failure Handling
 
 - **Prod:** log with `traceId`, store `error_code/error_message` in `jobs`. **No artifact dumping**.
-- **Dev:** dump bundle to `runtime/debug/pdf_failure_{traceId}/` for inspection (includes a manifest with sizes and filenames).
+- **Dev:** dump bundle to `runtime/debug/pdf_failure_{traceId}/` for inspection:
+  - `manifest.json` (traceId, jobId, generation mode, totalBytes, file list with bytes + sha256, `timings_ms` summary, `pdf_bytes`, `memory_peak_kb`, versions: app git SHA, gotenberg image tag, PHP version)
+  - `error.json` (exception class/message/stack, retryable flag, HTTP status/body snippet if available)
+  - `pdf_options.json` (exact form fields)
+  - `index.html`, `header.html`, `footer.html`, `assets/`, `charts/`
 
 ### 5.6 PDF Render Options
 
@@ -564,7 +578,7 @@ yii/web/fonts/
 1. Add `aimm/gotenberg:8` derived image + docker-compose service.
 2. Implement `RenderBundle` + `GotenbergClient`.
 3. Add a console command that sends a tiny bundle (HTML + CSS + one image) and stores output.
-4. Add worker job skeleton + status transitions (`queued → processing → completed/failed`).
+4. Implement generation handler + status transitions (`queued → processing → completed/failed`) usable inline; add queue worker skeleton only if queue mode is enabled.
 
 ### Phase 2: Templating Foundation
 1. Add SCSS build script.
@@ -685,7 +699,7 @@ Track via metrics:
 - `pdf_jobs_pending` — gauge (queued + processing count)
 
 **Alerts:**
-- `pdf_jobs_pending > 100` for 15 minutes → queue backup
+- `pdf_jobs_pending > 100` for 15 minutes → queue backup (queue mode only)
 - `pdf_storage_bytes > 10GB` → storage pressure
 - `pdf_jobs_cleaned_total{status="stuck"} > 0` → investigate worker health
 
@@ -694,7 +708,7 @@ Track via metrics:
 ## 9. Migration Checklist
 
 - [ ] Docker: add Gotenberg service + healthcheck (via derived image).
-- [ ] Queue: configure `yii2-queue` (Redis) + worker supervisor.
+- [ ] Queue (if p95 > 10s or bursty traffic): configure `yii2-queue` (Redis) + worker supervisor.
 - [ ] Persistence: implement `jobs` table + idempotent enqueue.
 - [ ] Contract: implement `RenderBundle` validation (HTML + CSS checks).
 - [ ] Client: implement `GotenbergClient` (timeouts, trace header, error mapping).

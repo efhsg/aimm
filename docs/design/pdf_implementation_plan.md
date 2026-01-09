@@ -17,6 +17,51 @@ Before starting, ensure:
 
 ---
 
+## Generation Mode Decision (Sync-first)
+
+Default to synchronous generation if p95 end-to-end render time is ≤10s. Switch to queue mode if render time exceeds the budget or concurrency/bursts saturate PHP-FPM/Gotenberg.
+
+- **Config:** `PDF_GENERATION_MODE=sync|queue` (default `sync`)
+- **Budget:** `PDF_RENDER_BUDGET_MS=10000` (used for operational monitoring)
+- **Measurement:** instrument timings for data fetch, analytics, HTML render, bundle assembly, Gotenberg round-trip, and storage
+- **Config wiring:** in `yii/config/params.php`, set:
+  - `pdfGenerationMode` from `getenv('PDF_GENERATION_MODE') ?: 'sync'`
+  - `pdfRenderBudgetMs` from `getenv('PDF_RENDER_BUDGET_MS') ?: 10000`
+
+**Validation (p50/p95/p99):**
+1. Pick 10-20 representative report IDs (small, medium, large, chart-heavy).
+2. Run 3-5 generations per report in sync mode to warm caches.
+3. Collect per-step timings from logs (or metrics) for total, data fetch, analytics, render, bundle assembly, Gotenberg, store.
+4. Compute p50/p95/p99 for total and Gotenberg round-trip; if p95 ≤ 10s, keep sync; else switch to queue.
+
+**Logging shape (required):**
+```json
+{
+  "event": "pdf.render.completed",
+  "traceId": "...",
+  "jobId": "...",
+  "mode": "sync",
+  "pdf_bytes": 1234567,
+  "memory_peak_kb": 512000,
+  "timings_ms": {
+    "total": 9123,
+    "data_fetch": 820,
+    "analytics": 2300,
+    "view_render": 410,
+    "bundle_assemble": 180,
+    "gotenberg": 4700,
+    "store": 120
+  }
+}
+```
+
+**Benchmark command (required for validation):**
+- **Create** `yii/src/commands/PdfBenchmarkController.php`
+- **Usage:** `php yii pdf-benchmark/run --reportIds=ID1,ID2 --runs=5 --mode=sync`
+- **Behavior:** for each report ID, invoke the PDF generation handler inline, log `timings_ms`, `pdf_bytes`, `memory_peak_kb`, and output a JSON summary suitable for p50/p95/p99 aggregation.
+
+---
+
 ## Phase 1: Infrastructure + Hello World
 
 **Goal:** Gotenberg running, basic PDF generation working via console command.
@@ -201,9 +246,33 @@ final class GotenbergClient
                 'body' => new MultipartStream($multipart),
                 'connect_timeout' => self::CONNECT_TIMEOUT,
                 'timeout' => self::TIMEOUT,
+                'http_errors' => false,
             ]);
 
-            return $response->getBody()->getContents();
+            $status = $response->getStatusCode();
+            $body = $response->getBody()->getContents();
+
+            if ($status >= 400) {
+                $snippet = substr($body, 0, 2000);
+                $retryable = $status >= 500;
+
+                $this->logger->error('Gotenberg render failed', [
+                    'traceId' => $bundle->traceId,
+                    'status' => $status,
+                    'body' => $snippet,
+                ]);
+
+                throw new GotenbergException(
+                    "Failed to render PDF (HTTP {$status})",
+                    $status,
+                    null,
+                    retryable: $retryable,
+                    statusCode: $status,
+                    responseBodySnippet: $snippet,
+                );
+            }
+
+            return $body;
         } catch (GuzzleException $e) {
             $this->logger->error('Gotenberg render failed', [
                 'traceId' => $bundle->traceId,
@@ -213,7 +282,8 @@ final class GotenbergClient
             throw new GotenbergException(
                 "Failed to render PDF: {$e->getMessage()}",
                 $e->getCode(),
-                $e
+                $e,
+                retryable: true,
             );
         }
     }
@@ -278,6 +348,16 @@ namespace app\clients;
 
 final class GotenbergException extends \RuntimeException
 {
+    public function __construct(
+        string $message,
+        int $code = 0,
+        ?\Throwable $previous = null,
+        public readonly bool $retryable = false,
+        public readonly ?int $statusCode = null,
+        public readonly ?string $responseBodySnippet = null,
+    ) {
+        parent::__construct($message, $code, $previous);
+    }
 }
 ```
 
@@ -763,6 +843,8 @@ cat yii/web/css/report.css | head -20
 
 ### 3.1 Database Migration: Jobs Table
 
+The `jobs` table is required in both sync and queue modes for idempotency, auditing, and cacheability.
+
 **Create** `yii/migrations/m260110_000000_create_jobs_table.php`:
 ```php
 <?php
@@ -1099,6 +1181,7 @@ final class JobRepository
 
     public function findAndLock(string $jobId): ?array
     {
+        // Caller must be inside an active DB transaction.
         return $this->db->createCommand(
             'SELECT * FROM jobs WHERE id = :id FOR UPDATE',
             [':id' => $jobId]
@@ -1278,6 +1361,7 @@ use app\factories\ReportDataFactory;
 use app\queries\JobRepository;
 use app\queries\ReportQuery;
 use Psr\Log\LoggerInterface;
+use yii\db\Connection;
 
 final class PdfGenerationHandler
 {
@@ -1292,28 +1376,40 @@ final class PdfGenerationHandler
         private readonly GotenbergClient $gotenbergClient,
         private readonly StorageInterface $storage,
         private readonly LoggerInterface $logger,
+        private readonly Connection $db,
     ) {}
 
     public function handle(string $jobId): void
     {
-        $job = $this->jobRepository->findAndLock($jobId);
+        $transaction = $this->db->beginTransaction();
 
-        if ($job === null) {
-            $this->logger->warning('Job not found', ['jobId' => $jobId]);
-            return;
+        try {
+            $job = $this->jobRepository->findAndLock($jobId);
+
+            if ($job === null) {
+                $this->logger->warning('Job not found', ['jobId' => $jobId]);
+                $transaction->rollBack();
+                return;
+            }
+
+            if ($job['status'] !== 'queued') {
+                $this->logger->info('Job not in queued status', ['jobId' => $jobId, 'status' => $job['status']]);
+                $transaction->rollBack();
+                return;
+            }
+
+            if (!$this->jobRepository->transitionTo($jobId, 'queued', 'processing')) {
+                $this->logger->info('Failed to acquire job', ['jobId' => $jobId]);
+                $transaction->rollBack();
+                return;
+            }
+
+            $this->jobRepository->incrementAttempts($jobId);
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            throw $e;
         }
-
-        if ($job['status'] !== 'queued') {
-            $this->logger->info('Job not in queued status', ['jobId' => $jobId, 'status' => $job['status']]);
-            return;
-        }
-
-        if (!$this->jobRepository->transitionTo($jobId, 'queued', 'processing')) {
-            $this->logger->info('Failed to acquire job', ['jobId' => $jobId]);
-            return;
-        }
-
-        $this->jobRepository->incrementAttempts($jobId);
 
         try {
             $this->process($job);
@@ -1366,8 +1462,10 @@ final class PdfGenerationHandler
         $attempts = (int) $job['attempts'] + 1;
         $isRetryable = $this->isRetryable($e);
 
-        if ($isRetryable && $attempts < self::MAX_ATTEMPTS) {
-            // Return to queue for retry
+        $mode = \Yii::$app->params['pdfGenerationMode'] ?? 'sync';
+
+        if ($isRetryable && $attempts < self::MAX_ATTEMPTS && $mode === 'queue') {
+            // Return to queue for retry (queue mode only)
             $this->jobRepository->transitionTo($jobId, 'processing', 'queued');
         } else {
             // Final failure
@@ -1378,6 +1476,10 @@ final class PdfGenerationHandler
 
     private function isRetryable(\Throwable $e): bool
     {
+        if ($e instanceof \app\clients\GotenbergException) {
+            return $e->retryable;
+        }
+
         // Network errors, timeouts are retryable
         // Validation errors, security exceptions are not
         return !($e instanceof \app\exceptions\SecurityException
@@ -1390,12 +1492,20 @@ final class PdfGenerationHandler
         return match (true) {
             $e instanceof \app\exceptions\SecurityException => 'SECURITY_VIOLATION',
             $e instanceof \app\exceptions\BundleSizeExceededException => 'BUNDLE_TOO_LARGE',
+            $e instanceof \app\clients\GotenbergException && $e->statusCode !== null && $e->statusCode < 500 => 'GOTENBERG_4XX',
+            $e instanceof \app\clients\GotenbergException && $e->statusCode !== null => 'GOTENBERG_5XX',
             $e instanceof \app\clients\GotenbergException => 'GOTENBERG_ERROR',
             default => 'UNKNOWN_ERROR',
         };
     }
 }
 ```
+
+**Dev-only debug artifacts (required):** when `YII_DEBUG` and a failure occurs after bundle assembly, dump to `runtime/debug/pdf_failure_{traceId}/` with:
+- `manifest.json` (traceId, jobId, generation mode, totalBytes, file list with bytes + sha256, `timings_ms` summary, `pdf_bytes`, `memory_peak_kb`, versions: app git SHA, gotenberg image tag, PHP version)
+- `error.json` (exception class/message/stack, retryable flag, HTTP status/body snippet if available)
+- `pdf_options.json` (exact form fields)
+- `index.html`, `header.html`, `footer.html`, `assets/`, `charts/`
 
 ### 3.6 API Endpoints
 
@@ -1410,20 +1520,26 @@ public function actionGenerate(): array
 {
     $request = \Yii::$app->request;
     $reportId = $request->post('reportId');
-    $userId = \Yii::$app->user->id;
+    $userId = \Yii::$app->user->id; // Authorization checks are out of scope here.
 
     // Compute params hash
-    $options = $request->post('options', []);
-    ksort($options);
+    $options = $this->normalizeOptions($request->post('options', []));
     $paramsHash = hash('sha256', json_encode($options));
 
     $traceId = sprintf('pdf-%s-%s', date('Ymd'), substr(md5(uniqid()), 0, 8));
 
     $job = $this->jobRepository->findOrCreate($reportId, $paramsHash, $userId, $traceId);
 
-    // Push to queue if newly created
     if ($job['status'] === 'queued') {
-        \Yii::$app->queue->push(new \app\jobs\PdfGenerationJob(['jobId' => $job['id']]));
+        $mode = \Yii::$app->params['pdfGenerationMode'] ?? 'sync';
+
+        if ($mode === 'sync') {
+            /** @var \app\handlers\pdf\PdfGenerationHandler $handler */
+            $handler = \Yii::$container->get(\app\handlers\pdf\PdfGenerationHandler::class);
+            $handler->handle($job['id']);
+        } else {
+            \Yii::$app->queue->push(new \app\jobs\PdfGenerationJob(['jobId' => $job['id']]));
+        }
     }
 
     return ['jobId' => $job['id']];
@@ -1471,9 +1587,28 @@ public function actionDownload(string $reportId): \yii\web\Response
         ['mimeType' => 'application/pdf']
     );
 }
+
+private function normalizeOptions(mixed $value): mixed
+{
+    if (!is_array($value)) {
+        return $value;
+    }
+
+    $isList = array_keys($value) === range(0, count($value) - 1);
+    if ($isList) {
+        return array_map([$this, __FUNCTION__], $value);
+    }
+
+    ksort($value);
+    foreach ($value as $key => $item) {
+        $value[$key] = $this->normalizeOptions($item);
+    }
+
+    return $value;
+}
 ```
 
-### 3.7 Queue Job
+### 3.7 Queue Job (queue mode only)
 
 **Create** `yii/src/jobs/PdfGenerationJob.php`:
 ```php
@@ -1558,11 +1693,12 @@ PdfGenerationHandler::class => static function () {
         \Yii::$container->get(GotenbergClient::class),
         \Yii::$container->get(StorageInterface::class),
         \Yii::getLogger(),
+        \Yii::$app->db,
     );
 },
 ```
 
-### 3.9 Queue Configuration
+### 3.9 Queue Configuration (queue mode only)
 
 **Update** `yii/config/console.php` - add queue component:
 ```php
@@ -1594,11 +1730,11 @@ curl -X POST http://localhost:8080/api/reports/generate \
 # Check job status
 curl http://localhost:8080/api/jobs/{jobId}
 
-# Run queue worker
+# Run queue worker (queue mode only)
 docker exec aimm_yii php yii queue/listen
 ```
 
-**Expected:** Job created, processed, PDF stored, status updated to completed.
+**Expected:** Job created, PDF stored, status updated to completed. In sync mode this happens during the request; in queue mode it completes after the worker runs.
 
 ---
 
@@ -1776,6 +1912,6 @@ rm -rf python-renderer/
 | 3 | `src/queries/JobRepository.php` | Job CRUD |
 | 3 | `src/handlers/pdf/*.php` | PDF generation logic |
 | 3 | `src/adapters/LocalStorageAdapter.php` | File storage |
-| 3 | `src/jobs/PdfGenerationJob.php` | Queue job |
+| 3 | `src/jobs/PdfGenerationJob.php` | Queue job (queue mode only) |
 | 4 | `src/clients/AnalyticsClient.php` | Chart generation |
 | 4 | `tests/unit/handlers/pdf/*.php` | Unit tests |
