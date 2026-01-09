@@ -50,7 +50,7 @@ body { font-family: sans-serif; padding: 20mm; }
 h1 { color: #333; }
 CSS;
 
-        $bundle = RenderBundle::builder($traceId)
+        $bundle = RenderBundle::factory($traceId)
             ->withIndexHtml($html)
             ->addFile('assets/test.css', $css, strlen($css))
             ->build();

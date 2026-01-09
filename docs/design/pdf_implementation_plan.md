@@ -198,8 +198,8 @@ final readonly class PdfOptions
 **Create** `yii/src/dto/pdf/RenderBundle.php`:
 Copy the `RenderBundle` class from `pdf_generation_strategy.md` section 5.1.
 
-**Create** `yii/src/dto/pdf/RenderBundleBuilder.php`:
-Copy the `RenderBundleBuilder` class from `pdf_generation_strategy.md` section 5.1.
+**Create** `yii/src/factories/pdf/RenderBundleFactory.php`:
+Copy the `RenderBundleFactory` class from `pdf_generation_strategy.md` section 5.1.
 
 ### 1.4 Client: GotenbergClient
 
@@ -415,7 +415,7 @@ body { font-family: sans-serif; padding: 20mm; }
 h1 { color: #333; }
 CSS;
 
-        $bundle = RenderBundle::builder($traceId)
+        $bundle = RenderBundle::factory($traceId)
             ->withIndexHtml($html)
             ->addFile('assets/test.css', $css, strlen($css))
             ->build();
@@ -1322,32 +1322,32 @@ final class BundleAssembler
 
     public function assemble(RenderedViews $views, ReportData $data): RenderBundle
     {
-        $builder = RenderBundle::builder($data->traceId)
+        $factory = RenderBundle::factory($data->traceId)
             ->withIndexHtml($views->indexHtml)
             ->withHeaderHtml($views->headerHtml)
             ->withFooterHtml($views->footerHtml);
 
         // Add CSS
         $css = file_get_contents($this->cssPath . '/report.css');
-        $builder->addFile('assets/report.css', $css, strlen($css));
+        $factory->addFile('assets/report.css', $css, strlen($css));
 
         // Add fonts
         foreach (glob($this->fontsPath . '/*.woff2') as $fontFile) {
             $fontBytes = file_get_contents($fontFile);
             $fontName = basename($fontFile);
-            $builder->addFile("assets/fonts/{$fontName}", $fontBytes, strlen($fontBytes));
+            $factory->addFile("assets/fonts/{$fontName}", $fontBytes, strlen($fontBytes));
         }
 
         // Add charts
         foreach ($data->charts as $chart) {
-            $builder->addFile(
+            $factory->addFile(
                 "charts/{$chart->id}.png",
                 $chart->pngBytes,
                 strlen($chart->pngBytes)
             );
         }
 
-        return $builder->build();
+        return $factory->build();
     }
 }
 ```
@@ -1902,7 +1902,7 @@ Completed: `python-renderer/` and the `aimm_python` service have been removed.
 | 1 | `docker/gotenberg/Dockerfile` | Gotenberg with curl |
 | 1 | `docker-compose.yml` | Add gotenberg service |
 | 1 | `src/dto/pdf/RenderBundle.php` | Immutable render bundle |
-| 1 | `src/dto/pdf/RenderBundleBuilder.php` | Builder with validation |
+| 1 | `src/factories/pdf/RenderBundleFactory.php` | Factory with validation |
 | 1 | `src/dto/pdf/PdfOptions.php` | Gotenberg options |
 | 1 | `src/clients/GotenbergClient.php` | HTTP client |
 | 1 | `src/commands/PdfController.php` | Console commands |

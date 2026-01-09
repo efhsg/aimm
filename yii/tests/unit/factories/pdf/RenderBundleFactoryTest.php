@@ -2,75 +2,75 @@
 
 declare(strict_types=1);
 
-namespace tests\unit\dto\pdf;
+namespace tests\unit\factories\pdf;
 
 use app\dto\pdf\RenderBundle;
-use app\dto\pdf\RenderBundleBuilder;
+use app\factories\pdf\RenderBundleFactory;
 use app\exceptions\BundleSizeExceededException;
 use app\exceptions\RenderBundleValidationException;
 use app\exceptions\SecurityException;
 use Codeception\Test\Unit;
 
 /**
- * @covers \app\dto\pdf\RenderBundleBuilder
+ * @covers \app\factories\pdf\RenderBundleFactory
  * @covers \app\dto\pdf\RenderBundle
  */
-final class RenderBundleBuilderTest extends Unit
+final class RenderBundleFactoryTest extends Unit
 {
     public function testBuildThrowsWhenMissingIndexHtml(): void
     {
-        $builder = new RenderBundleBuilder('trace');
+        $factory = new RenderBundleFactory('trace');
 
         $this->expectException(RenderBundleValidationException::class);
 
-        $builder->build();
+        $factory->build();
     }
 
     public function testRejectsExternalRefsInIndexHtml(): void
     {
-        $builder = new RenderBundleBuilder('trace');
+        $factory = new RenderBundleFactory('trace');
 
         $this->expectException(SecurityException::class);
 
-        $builder->withIndexHtml('<img src="https://example.com/logo.png">');
+        $factory->withIndexHtml('<img src="https://example.com/logo.png">');
     }
 
     public function testRejectsExternalRefsInCss(): void
     {
-        $builder = new RenderBundleBuilder('trace');
-        $builder->withIndexHtml('<html></html>');
+        $factory = new RenderBundleFactory('trace');
+        $factory->withIndexHtml('<html></html>');
 
         $this->expectException(SecurityException::class);
 
-        $builder->addFile('assets/test.css', 'body { background: url(https://example.com/bg.png); }');
+        $factory->addFile('assets/test.css', 'body { background: url(https://example.com/bg.png); }');
     }
 
     public function testRejectsPathTraversal(): void
     {
-        $builder = new RenderBundleBuilder('trace');
-        $builder->withIndexHtml('<html></html>');
+        $factory = new RenderBundleFactory('trace');
+        $factory->withIndexHtml('<html></html>');
 
         $this->expectException(SecurityException::class);
 
-        $builder->addFile('../secrets.txt', 'secret');
+        $factory->addFile('../secrets.txt', 'secret');
     }
 
     public function testThrowsWhenBundleExceedsLimit(): void
     {
-        $builder = new RenderBundleBuilder('trace');
-        $builder->withIndexHtml('<html></html>');
+        $factory = new RenderBundleFactory('trace');
+        $factory->withIndexHtml('<html></html>');
 
         $this->expectException(BundleSizeExceededException::class);
 
-        $builder->addFile('assets/big.bin', 'x', 50 * 1024 * 1024 + 1);
-        $builder->build();
+        $factory->addFile('assets/big.bin', 'x', 50 * 1024 * 1024 + 1);
+        $factory->build();
     }
 
     public function testBuildReturnsRenderBundle(): void
     {
-        $builder = new RenderBundleBuilder('trace');
+        $factory = new RenderBundleFactory('trace');
 
-        $bundle = $builder
+        $bundle = $factory
             ->withIndexHtml('<html></html>')
             ->withHeaderHtml('<header>Header</header>')
             ->withFooterHtml('<footer>Footer</footer>')

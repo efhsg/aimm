@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace app\dto\pdf;
 
+use app\factories\pdf\RenderBundleFactory;
+
 /**
  * RenderBundle represents a complete set of files required to render a PDF.
  *
@@ -24,8 +26,8 @@ final readonly class RenderBundle
     ) {
     }
 
-    public static function builder(string $traceId): RenderBundleBuilder
+    public static function factory(string $traceId): RenderBundleFactory
     {
-        return new RenderBundleBuilder($traceId);
+        return new RenderBundleFactory($traceId);
     }
 }

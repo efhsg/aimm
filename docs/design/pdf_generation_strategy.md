@@ -144,7 +144,7 @@ services:
 
 ### 5.1 RenderBundle Contract
 
-Rendering input is strictly defined and validated. Uses a builder pattern for consistent construction and immutable output.
+Rendering input is strictly defined and validated. Uses a factory-style fluent interface for consistent construction and immutable output.
 
 ```php
 final readonly class RenderBundle
@@ -161,13 +161,13 @@ final readonly class RenderBundle
         public int $totalBytes,
     ) {}
 
-    public static function builder(string $traceId): RenderBundleBuilder
+    public static function factory(string $traceId): RenderBundleFactory
     {
-        return new RenderBundleBuilder($traceId);
+        return new RenderBundleFactory($traceId);
     }
 }
 
-final class RenderBundleBuilder
+final class RenderBundleFactory
 {
     private string $indexHtml = '';
     private ?string $headerHtml = null;
@@ -298,7 +298,7 @@ final class RenderBundleBuilder
 **Usage:**
 
 ```php
-$bundle = RenderBundle::builder($traceId)
+$bundle = RenderBundle::factory($traceId)
     ->withIndexHtml($indexHtml)
     ->withHeaderHtml($headerHtml)
     ->withFooterHtml($footerHtml)

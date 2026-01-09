@@ -90,7 +90,7 @@ final class GotenbergClientTest extends Unit
 
     private function createBundle(): RenderBundle
     {
-        return RenderBundle::builder('trace')
+        return RenderBundle::factory('trace')
             ->withIndexHtml('<html></html>')
             ->build();
     }

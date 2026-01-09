@@ -2,19 +2,20 @@
 
 declare(strict_types=1);
 
-namespace app\dto\pdf;
+namespace app\factories\pdf;
 
+use app\dto\pdf\RenderBundle;
 use app\exceptions\BundleSizeExceededException;
 use app\exceptions\RenderBundleValidationException;
 use app\exceptions\SecurityException;
 use Yii;
 
 /**
- * RenderBundleBuilder provides a fluent interface for creating a RenderBundle.
+ * RenderBundleFactory provides a fluent interface for creating a RenderBundle.
  *
  * It enforces security constraints (no external resources, no path traversal) and size limits.
  */
-final class RenderBundleBuilder
+final class RenderBundleFactory
 {
     private string $indexHtml = '';
     private ?string $headerHtml = null;
