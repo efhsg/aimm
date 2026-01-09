@@ -8,27 +8,20 @@ use app\dto\CompanyData;
 use app\dto\report\PeerAverages;
 
 /**
- * Calculates average valuation metrics across peer companies.
- *
- * Always excludes the focal company from averages.
+ * Calculates average valuation metrics across all companies in a group.
  */
 final class PeerAverageTransformer
 {
     private const BILLIONS = 1_000_000_000;
 
     /**
-     * Calculate average valuations across peers (excluding focal).
+     * Calculate average valuations across all companies.
      *
      * @param array<string, CompanyData> $companies Indexed by ticker
      */
-    public function transform(array $companies, string $focalTicker): PeerAverages
+    public function transform(array $companies): PeerAverages
     {
-        $peers = array_filter(
-            $companies,
-            static fn (CompanyData $c): bool => $c->ticker !== $focalTicker
-        );
-
-        if ($peers === []) {
+        if ($companies === []) {
             return new PeerAverages(
                 fwdPe: null,
                 evEbitda: null,
@@ -40,28 +33,28 @@ final class PeerAverageTransformer
         }
 
         return new PeerAverages(
-            fwdPe: $this->average($peers, static fn (CompanyData $p): ?float => $p->valuation->fwdPe?->value),
-            evEbitda: $this->average($peers, static fn (CompanyData $p): ?float => $p->valuation->evEbitda?->value),
-            fcfYieldPercent: $this->average($peers, static fn (CompanyData $p): ?float => $p->valuation->fcfYield?->value),
-            divYieldPercent: $this->average($peers, static fn (CompanyData $p): ?float => $p->valuation->divYield?->value),
+            fwdPe: $this->average($companies, static fn (CompanyData $c): ?float => $c->valuation->fwdPe?->value),
+            evEbitda: $this->average($companies, static fn (CompanyData $c): ?float => $c->valuation->evEbitda?->value),
+            fcfYieldPercent: $this->average($companies, static fn (CompanyData $c): ?float => $c->valuation->fcfYield?->value),
+            divYieldPercent: $this->average($companies, static fn (CompanyData $c): ?float => $c->valuation->divYield?->value),
             marketCapBillions: $this->average(
-                $peers,
-                fn (CompanyData $p): ?float => $this->toMarketCapBillions($p)
+                $companies,
+                fn (CompanyData $c): ?float => $this->toMarketCapBillions($c)
             ),
-            companiesIncluded: count($peers),
+            companiesIncluded: count($companies),
         );
     }
 
     /**
      * Calculate average of non-null values.
      *
-     * @param array<string, CompanyData> $peers
+     * @param array<string, CompanyData> $companies
      * @param callable(CompanyData): ?float $extractor
      */
-    private function average(array $peers, callable $extractor): ?float
+    private function average(array $companies, callable $extractor): ?float
     {
         $values = array_filter(
-            array_map($extractor, $peers),
+            array_map($extractor, $companies),
             static fn (?float $v): bool => $v !== null
         );
 

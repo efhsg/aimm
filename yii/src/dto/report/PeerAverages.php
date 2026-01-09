@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace app\dto\report;
 
 /**
- * Average valuation metrics across peer companies (excluding focal).
+ * Average valuation metrics across all companies in the industry.
  */
 final readonly class PeerAverages
 {

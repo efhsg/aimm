@@ -92,15 +92,14 @@ final class CollectionPolicyController extends Controller
             return ExitCode::OK;
         }
 
-        $this->stdout(str_pad('Slug', 30) . str_pad('Name', 30) . str_pad('History', 10) . str_pad('Quarters', 10) . "Default For\n", Console::BOLD);
-        $this->stdout(str_repeat('-', 90) . "\n");
+        $this->stdout(str_pad('Slug', 30) . str_pad('Name', 30) . str_pad('History', 10) . "Quarters\n", Console::BOLD);
+        $this->stdout(str_repeat('-', 80) . "\n");
 
         foreach ($policies as $policy) {
             $this->stdout(str_pad($policy['slug'], 30));
             $this->stdout(str_pad($policy['name'], 30));
             $this->stdout(str_pad($policy['history_years'] . ' yrs', 10));
-            $this->stdout(str_pad((string) $policy['quarters_to_fetch'], 10));
-            $this->stdout(($policy['is_default_for_sector'] ?? '-') . "\n");
+            $this->stdout((string) $policy['quarters_to_fetch'] . "\n");
         }
 
         return ExitCode::OK;
@@ -127,7 +126,6 @@ final class CollectionPolicyController extends Controller
         $this->stdout("Description:    " . ($policy['description'] ?? '-') . "\n");
         $this->stdout("History Years:  {$policy['history_years']}\n");
         $this->stdout("Quarters:       {$policy['quarters_to_fetch']}\n");
-        $this->stdout("Default For:    " . ($policy['is_default_for_sector'] ?? '-') . "\n");
 
         $this->stdout("\nMacro Settings:\n", Console::BOLD);
         $this->stdout("  Commodity:    " . ($policy['commodity_benchmark'] ?? '-') . "\n");
@@ -143,39 +141,6 @@ final class CollectionPolicyController extends Controller
         $this->stdout("\nIndicators:\n", Console::BOLD);
         $this->printJsonField('  Required', $policy['required_indicators']);
         $this->printJsonField('  Optional', $policy['optional_indicators']);
-
-        return ExitCode::OK;
-    }
-
-    /**
-     * Sets a policy as the default for a sector.
-     *
-     * @param string $slug The policy slug
-     * @param string $sector The sector name
-     */
-    public function actionSetDefault(string $slug, string $sector): int
-    {
-        $policy = $this->policyQuery->findBySlug($slug);
-        if ($policy === null) {
-            $this->stderr("Error: Policy '{$slug}' not found\n", Console::FG_RED);
-            return ExitCode::DATAERR;
-        }
-
-        $this->policyQuery->setDefaultForSector((int) $policy['id'], $sector);
-        $this->stdout("Set '{$slug}' as default policy for sector: {$sector}\n", Console::FG_GREEN);
-
-        return ExitCode::OK;
-    }
-
-    /**
-     * Clears the default policy for a sector.
-     *
-     * @param string $sector The sector name
-     */
-    public function actionClearDefault(string $sector): int
-    {
-        $this->policyQuery->clearDefaultForSector($sector);
-        $this->stdout("Cleared default policy for sector: {$sector}\n", Console::FG_YELLOW);
 
         return ExitCode::OK;
     }

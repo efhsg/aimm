@@ -44,14 +44,14 @@ final class SeedController extends Controller
     }
 
     /**
-     * Seeds the Global Energy Supermajors peer group.
+     * Seeds the Global Energy Supermajors industry.
      *
-     * Creates: collection policy, peer group, companies, and memberships.
+     * Creates: collection policy, industry, companies, and memberships.
      * Safe to run multiple times - checks for existing data.
      */
     public function actionOilMajors(): int
     {
-        $this->stdout("Seeding Oil Majors peer group...\n");
+        $this->stdout("Seeding Oil Majors industry...\n");
 
         // Check if already seeded
         $exists = (bool) Yii::$app->db->createCommand(
@@ -76,7 +76,7 @@ final class SeedController extends Controller
             $pdo = Yii::$app->db->getMasterPdo();
             $pdo->exec($sql);
 
-            $this->stdout("  Seeded: collection policy, peer group, 5 companies\n", Console::FG_GREEN);
+            $this->stdout("  Seeded: collection policy, industry, 5 companies\n", Console::FG_GREEN);
         } catch (\Exception $e) {
             $this->stderr("Seeding failed: " . $e->getMessage() . "\n", Console::FG_RED);
             return ExitCode::UNSPECIFIED_ERROR;
@@ -86,14 +86,14 @@ final class SeedController extends Controller
     }
 
     /**
-     * Seeds the US Energy Majors peer group (FMP free tier compatible).
+     * Seeds the US Energy Majors industry (FMP free tier compatible).
      *
-     * Creates: collection policy, peer group, companies, and memberships.
+     * Creates: collection policy, industry, companies, and memberships.
      * All tickers are US-listed and work with FMP free tier.
      */
     public function actionUsEnergyMajors(): int
     {
-        $this->stdout("Seeding US Energy Majors peer group...\n");
+        $this->stdout("Seeding US Energy Majors industry...\n");
 
         // Check if already seeded
         $exists = (bool) Yii::$app->db->createCommand(
@@ -118,7 +118,7 @@ final class SeedController extends Controller
             $pdo = Yii::$app->db->getMasterPdo();
             $pdo->exec($sql);
 
-            $this->stdout("  Seeded: collection policy, peer group, 5 US companies\n", Console::FG_GREEN);
+            $this->stdout("  Seeded: collection policy, industry, 5 US companies\n", Console::FG_GREEN);
         } catch (\Exception $e) {
             $this->stderr("Seeding failed: " . $e->getMessage() . "\n", Console::FG_RED);
             return ExitCode::UNSPECIFIED_ERROR;
@@ -128,14 +128,14 @@ final class SeedController extends Controller
     }
 
     /**
-     * Seeds the US Tech Giants peer group (FMP free tier compatible).
+     * Seeds the US Tech Giants industry (FMP free tier compatible).
      *
-     * Creates: collection policy, peer group, companies, and memberships.
+     * Creates: collection policy, industry, companies, and memberships.
      * All tickers are large-cap tech and work with FMP free tier.
      */
     public function actionUsTechGiants(): int
     {
-        $this->stdout("Seeding US Tech Giants peer group...\n");
+        $this->stdout("Seeding US Tech Giants industry...\n");
 
         // Check if already seeded
         $exists = (bool) Yii::$app->db->createCommand(
@@ -160,7 +160,7 @@ final class SeedController extends Controller
             $pdo = Yii::$app->db->getMasterPdo();
             $pdo->exec($sql);
 
-            $this->stdout("  Seeded: collection policy, peer group, 5 tech companies\n", Console::FG_GREEN);
+            $this->stdout("  Seeded: collection policy, industry, 5 tech companies\n", Console::FG_GREEN);
         } catch (\Exception $e) {
             $this->stderr("Seeding failed: " . $e->getMessage() . "\n", Console::FG_RED);
             return ExitCode::UNSPECIFIED_ERROR;
@@ -176,19 +176,19 @@ final class SeedController extends Controller
      * and valuation snapshots for all 5 supermajors. Use this for phase 2
      * development when API quotas are exhausted.
      *
-     * Requires: oil-majors peer group must be seeded first.
+     * Requires: oil-majors industry must be seeded first.
      */
     public function actionSupermajorsTestdata(): int
     {
         $this->stdout("Seeding Global Energy Supermajors test data...\n");
 
-        // Check if peer group exists
-        $peerGroupExists = (bool) Yii::$app->db->createCommand(
-            'SELECT 1 FROM industry_peer_group WHERE slug = :slug'
+        // Check if industry exists
+        $industryExists = (bool) Yii::$app->db->createCommand(
+            'SELECT 1 FROM industry WHERE slug = :slug'
         )->bindValue(':slug', 'global-energy-supermajors')->queryScalar();
 
-        if (!$peerGroupExists) {
-            $this->stderr("  Peer group 'global-energy-supermajors' not found.\n", Console::FG_RED);
+        if (!$industryExists) {
+            $this->stderr("  Industry 'global-energy-supermajors' not found.\n", Console::FG_RED);
             $this->stderr("  Run 'yii seed/oil-majors' first.\n", Console::FG_YELLOW);
             return ExitCode::DATAERR;
         }
@@ -250,16 +250,16 @@ final class SeedController extends Controller
      */
     public function actionClear(): int
     {
-        if (!$this->confirm('This will delete ALL peer groups, companies, and policies. Continue?')) {
+        if (!$this->confirm('This will delete ALL industries, companies, sectors, and policies. Continue?')) {
             $this->stdout("Cancelled.\n");
             return ExitCode::OK;
         }
 
         $db = Yii::$app->db;
 
-        $db->createCommand('DELETE FROM industry_peer_group_member')->execute();
-        $db->createCommand('DELETE FROM industry_peer_group')->execute();
         $db->createCommand('DELETE FROM company')->execute();
+        $db->createCommand('DELETE FROM industry')->execute();
+        $db->createCommand('DELETE FROM sector')->execute();
         $db->createCommand('DELETE FROM collection_policy')->execute();
 
         $this->stdout("All seed data cleared.\n", Console::FG_YELLOW);

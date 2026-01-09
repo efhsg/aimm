@@ -45,9 +45,9 @@ $currentController = Yii::$app->controller->id;
             </div>
         </a>
         <nav class="admin-header__nav">
-            <a href="<?= Url::to(['/peer-group/index']) ?>"
-               class="admin-nav__link<?= $currentController === 'peer-group' ? ' admin-nav__link--active' : '' ?>">
-                Peer Groups
+            <a href="<?= Url::to(['/industry/index']) ?>"
+               class="admin-nav__link<?= $currentController === 'industry' ? ' admin-nav__link--active' : '' ?>">
+                Industries
             </a>
             <a href="<?= Url::to(['/collection-policy/index']) ?>"
                class="admin-nav__link<?= $currentController === 'collection-policy' ? ' admin-nav__link--active' : '' ?>">

@@ -15,7 +15,7 @@ use yii\db\ActiveQuery;
  */
 final class CollectionRunQuery extends ActiveQuery
 {
-    public function forIndustry(string $industryId): self
+    public function forIndustry(int $industryId): self
     {
         return $this->andWhere(['industry_id' => $industryId]);
     }

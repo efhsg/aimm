@@ -56,8 +56,8 @@ $statusClass = match ($run['status']) {
 <div class="page-header">
     <h1 class="page-header__title"><?= Html::encode($this->title) ?></h1>
     <div class="toolbar">
-        <a href="<?= Url::to(['peer-group/index']) ?>" class="btn btn--secondary">
-            Back to Peer Groups
+        <a href="<?= Url::to(['industry/index']) ?>" class="btn btn--secondary">
+            Back to Industries
         </a>
     </div>
 </div>
@@ -76,7 +76,7 @@ $statusClass = match ($run['status']) {
     </div>
     <div class="card__body">
         <div class="detail-grid">
-            <div class="detail-label">Industry / Peer Group</div>
+            <div class="detail-label">Industry</div>
             <div class="detail-value"><?= Html::encode($run['industry_id']) ?></div>
 
             <div class="detail-label">Datapack ID</div>
@@ -346,7 +346,7 @@ $statusClass = match ($run['status']) {
     <div class="card__body">
         <div class="empty-state">
             <h3 class="empty-state__title">No collected data</h3>
-            <p class="empty-state__text">No financial data, valuations, or macro indicators found for this peer group.</p>
+            <p class="empty-state__text">No financial data, valuations, or macro indicators found for this industry.</p>
         </div>
     </div>
 </div>

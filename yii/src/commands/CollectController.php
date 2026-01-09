@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace app\commands;
 
-use app\dto\peergroup\CollectPeerGroupRequest;
+use app\dto\industry\CollectIndustryRequest;
 use app\enums\CollectionStatus;
-use app\handlers\peergroup\CollectPeerGroupInterface;
-use app\queries\PeerGroupQuery;
+use app\handlers\industry\CollectIndustryInterface;
+use app\queries\IndustryQuery;
 use Throwable;
 use Yii;
 use yii\base\Module;
@@ -18,22 +18,17 @@ use yii\log\Logger;
 final class CollectController extends Controller
 {
     private const LOG_CATEGORY = 'collection';
-    private const HEADER_GROUP = 'Peer Group';
+    private const HEADER_INDUSTRY = 'Industry';
     private const HEADER_DATAPACK = 'Datapack ID';
     private const HEADER_STATUS = 'Status';
     private const HEADER_DURATION = 'Duration';
     private const DURATION_FORMAT = '%.2fs';
 
-    /**
-     * Comma-separated list of additional focal tickers.
-     */
-    public ?string $focals = null;
-
     public function __construct(
         string $id,
         Module $module,
-        private CollectPeerGroupInterface $collector,
-        private PeerGroupQuery $peerGroupQuery,
+        private CollectIndustryInterface $collector,
+        private IndustryQuery $industryQuery,
         private Logger $logger,
         array $config = []
     ) {
@@ -41,70 +36,48 @@ final class CollectController extends Controller
     }
 
     /**
-     * @return list<string>
-     */
-    public function options($actionID): array
-    {
-        return array_merge(parent::options($actionID), ['focals']);
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    public function optionAliases(): array
-    {
-        return array_merge(parent::optionAliases(), [
-            'focal' => 'focals', // Deprecated: use --focals instead
-        ]);
-    }
-
-    /**
-     * Collect data for a peer group.
+     * Collect data for an industry.
      *
-     * @param string $slug The peer group slug
+     * @param string $slug The industry slug
      */
-    public function actionPeerGroup(string $slug): int
+    public function actionIndustry(string $slug): int
     {
         $startedAt = microtime(true);
-        $group = $this->peerGroupQuery->findBySlug($slug);
+        $industry = $this->industryQuery->findBySlug($slug);
 
-        if ($group === null) {
+        if ($industry === null) {
             $this->logger->log(
                 [
-                    'message' => 'Peer group not found',
+                    'message' => 'Industry not found',
                     'slug' => $slug,
                 ],
                 Logger::LEVEL_WARNING,
                 self::LOG_CATEGORY
             );
-            $this->stderr("Peer group not found: {$slug}\n");
+            $this->stderr("Industry not found: {$slug}\n");
             return ExitCode::DATAERR;
         }
 
         Yii::$app->params['collectionIndustryId'] = $slug;
 
-        $additionalFocals = $this->parseAdditionalFocals($this->focals);
-        Yii::$app->params['collectionFocalTickers'] = $additionalFocals;
-
         try {
             $result = $this->collector->collect(
-                new CollectPeerGroupRequest(
-                    groupId: (int) $group['id'],
+                new CollectIndustryRequest(
+                    industryId: (int) $industry['id'],
                     actorUsername: 'cli',
-                    additionalFocals: $additionalFocals,
                 )
             );
         } catch (Throwable $exception) {
             $this->logger->log(
                 [
-                    'message' => 'Peer group collection failed',
+                    'message' => 'Industry collection failed',
                     'slug' => $slug,
                     'error' => $exception->getMessage(),
                 ],
                 Logger::LEVEL_ERROR,
                 self::LOG_CATEGORY
             );
-            $this->stderr('Peer group collection failed: ' . $exception->getMessage() . "\n");
+            $this->stderr('Industry collection failed: ' . $exception->getMessage() . "\n");
             return ExitCode::UNSPECIFIED_ERROR;
         }
 
@@ -127,19 +100,19 @@ final class CollectController extends Controller
     }
 
     private function renderSummaryTable(
-        string $groupSlug,
+        string $industrySlug,
         string $datapackId,
         string $status,
         float $durationSeconds
     ): string {
         $headers = [
-            self::HEADER_GROUP,
+            self::HEADER_INDUSTRY,
             self::HEADER_DATAPACK,
             self::HEADER_STATUS,
             self::HEADER_DURATION,
         ];
         $values = [
-            $groupSlug,
+            $industrySlug,
             $datapackId,
             $status,
             sprintf(self::DURATION_FORMAT, $durationSeconds),
@@ -174,29 +147,5 @@ final class CollectController extends Controller
         }
 
         return '| ' . implode(' | ', $cells) . " |\n";
-    }
-
-    /**
-     * Parse comma-separated focals string into normalized array.
-     *
-     * @return list<string>
-     */
-    private function parseAdditionalFocals(?string $focals): array
-    {
-        if ($focals === null || $focals === '') {
-            return [];
-        }
-
-        $tickers = explode(',', $focals);
-        $normalized = [];
-
-        foreach ($tickers as $ticker) {
-            $ticker = strtoupper(trim($ticker));
-            if ($ticker !== '') {
-                $normalized[] = $ticker;
-            }
-        }
-
-        return array_values(array_unique($normalized));
     }
 }

@@ -24,11 +24,11 @@ use app\enums\Risk;
 final class AssessRiskHandler implements AssessRiskInterface
 {
     public function handle(
-        CompanyData $focal,
+        CompanyData $company,
         RiskThresholds $thresholds
     ): RiskBreakdown {
         // Get latest year of annual data
-        $annualData = $focal->financials->annualData;
+        $annualData = $company->financials->annualData;
         usort($annualData, static fn (AnnualFinancials $a, AnnualFinancials $b): int => $b->fiscalYear <=> $a->fiscalYear);
 
         if (count($annualData) === 0) {

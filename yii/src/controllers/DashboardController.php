@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace app\controllers;
 
 use app\queries\CollectionRunRepository;
-use app\queries\PeerGroupListQuery;
+use app\queries\IndustryListQuery;
 use Yii;
 use yii\web\Controller;
 
@@ -21,7 +21,7 @@ final class DashboardController extends Controller
     public function __construct(
         $id,
         $module,
-        private readonly PeerGroupListQuery $peerGroupQuery,
+        private readonly IndustryListQuery $industryQuery,
         private readonly CollectionRunRepository $runRepository,
         $config = []
     ) {
@@ -30,13 +30,13 @@ final class DashboardController extends Controller
 
     public function actionIndex(): string
     {
-        $peerGroupCounts = $this->peerGroupQuery->getCounts();
+        $industryCounts = $this->industryQuery->getCounts();
         $recentRuns = $this->runRepository->listRecent(limit: 5);
         $policyCount = $this->getPolicyCount();
         $runStats = $this->getRunStats();
 
         return $this->render('index', [
-            'peerGroupCounts' => $peerGroupCounts,
+            'industryCounts' => $industryCounts,
             'recentRuns' => $recentRuns,
             'policyCount' => $policyCount,
             'runStats' => $runStats,

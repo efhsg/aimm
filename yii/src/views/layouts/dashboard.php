@@ -44,7 +44,7 @@ $this->beginPage();
             </div>
         </a>
         <nav class="admin-header__nav">
-            <a href="<?= Url::to(['/peer-group/index']) ?>" class="admin-nav__link">
+            <a href="<?= Url::to(['/industry/index']) ?>" class="admin-nav__link">
                 Admin
             </a>
         </nav>

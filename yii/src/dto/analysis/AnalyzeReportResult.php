@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace app\dto\analysis;
 
 use app\dto\GateResult;
-use app\dto\report\ReportDTO;
+use app\dto\report\RankedReportDTO;
 
 /**
  * Result of analysis pipeline.
@@ -14,13 +14,13 @@ final readonly class AnalyzeReportResult
 {
     private function __construct(
         public bool $success,
-        public ?ReportDTO $report,
+        public ?RankedReportDTO $report,
         public ?GateResult $gateResult,
         public ?string $errorMessage,
     ) {
     }
 
-    public static function success(ReportDTO $report): self
+    public static function success(RankedReportDTO $report): self
     {
         return new self(
             success: true,

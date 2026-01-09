@@ -100,7 +100,7 @@ final class CollectIndustryHandlerTest extends Unit
         $this->assertSame([], $alertNotifier->events);
 
         $run = $this->getRunRow();
-        $this->assertSame($config->id, $run['industry_id']);
+        $this->assertSame($config->industryId, (int) $run['industry_id']);
         $this->assertSame($result->datapackId, $run['datapack_id']);
         $this->assertSame(CollectionStatus::Complete->value, $run['status']);
         $this->assertSame(2, (int) $run['companies_total']);
@@ -220,169 +220,6 @@ final class CollectIndustryHandlerTest extends Unit
         $this->assertSame(0, (int) $run['companies_failed']);
     }
 
-    public function testPeerCompaniesReceiveRelaxedRequirementsForFocalScopeMetrics(): void
-    {
-        $config = $this->createIndustryConfigWithFocalScope(['FOCAL', 'PEER1', 'PEER2'], ['FOCAL']);
-        $macroResult = new CollectMacroResult(
-            data: new MacroData(),
-            sourceAttempts: [],
-            status: CollectionStatus::Complete,
-        );
-
-        $macroCollector = $this->createMock(CollectMacroInterface::class);
-        $macroCollector->method('collect')->willReturn($macroResult);
-
-        $capturedRequests = [];
-        $companyCollector = $this->createMock(CollectCompanyInterface::class);
-        $companyCollector->method('collect')
-            ->willReturnCallback(function (CollectCompanyRequest $request) use (&$capturedRequests): CollectCompanyResult {
-                $capturedRequests[$request->ticker] = $request;
-
-                return $this->createCompanyResult($request->config, CollectionStatus::Complete);
-            });
-
-        $gateValidator = $this->createMock(CollectionGateValidatorInterface::class);
-        $gateValidator->method('validateResults')->willReturn(new GateResult(true, [], []));
-
-        $alertNotifier = new TestAlertNotifier();
-        $alertDispatcher = new AlertDispatcher([$alertNotifier]);
-        $runRepository = $this->createRunRepository();
-
-        $handler = $this->createHandler(
-            $companyCollector,
-            $macroCollector,
-            $gateValidator,
-            $alertDispatcher,
-            $runRepository
-        );
-
-        $handler->collect(new CollectIndustryRequest(
-            config: $config,
-            batchSize: 10,
-            enableMemoryManagement: false,
-        ));
-
-        $this->assertCount(3, $capturedRequests);
-
-        // Focal company should have fcf_yield as required (scope=focal means required for focal)
-        $focalFcfYield = $this->findMetric($capturedRequests['FOCAL']->requirements->valuationMetrics, 'fcf_yield');
-        $this->assertNotNull($focalFcfYield, 'fcf_yield metric should exist for focal');
-        $this->assertTrue($focalFcfYield->required, 'fcf_yield should be required for focal company');
-
-        // Peer companies should have fcf_yield as NOT required (scope=focal relaxes for peers)
-        $peer1FcfYield = $this->findMetric($capturedRequests['PEER1']->requirements->valuationMetrics, 'fcf_yield');
-        $this->assertNotNull($peer1FcfYield, 'fcf_yield metric should exist for peer');
-        $this->assertFalse($peer1FcfYield->required, 'fcf_yield should NOT be required for peer company');
-
-        $peer2FcfYield = $this->findMetric($capturedRequests['PEER2']->requirements->valuationMetrics, 'fcf_yield');
-        $this->assertNotNull($peer2FcfYield, 'fcf_yield metric should exist for peer');
-        $this->assertFalse($peer2FcfYield->required, 'fcf_yield should NOT be required for peer company');
-
-        // market_cap with scope=all should remain required for all
-        $peer1MarketCap = $this->findMetric($capturedRequests['PEER1']->requirements->valuationMetrics, 'market_cap');
-        $this->assertNotNull($peer1MarketCap);
-        $this->assertTrue($peer1MarketCap->required, 'market_cap (scope=all) should remain required for peers');
-    }
-
-    public function testDefaultsFirstCompanyAsFocalWhenNoneProvided(): void
-    {
-        $config = $this->createIndustryConfigWithFocalScope(['FIRST', 'PEER'], []);
-        $macroResult = new CollectMacroResult(
-            data: new MacroData(),
-            sourceAttempts: [],
-            status: CollectionStatus::Complete,
-        );
-
-        $macroCollector = $this->createMock(CollectMacroInterface::class);
-        $macroCollector->method('collect')->willReturn($macroResult);
-
-        $capturedRequests = [];
-        $companyCollector = $this->createMock(CollectCompanyInterface::class);
-        $companyCollector->method('collect')
-            ->willReturnCallback(function (CollectCompanyRequest $request) use (&$capturedRequests): CollectCompanyResult {
-                $capturedRequests[$request->ticker] = $request;
-
-                return $this->createCompanyResult($request->config, CollectionStatus::Complete);
-            });
-
-        $gateValidator = $this->createMock(CollectionGateValidatorInterface::class);
-        $gateValidator->method('validateResults')->willReturn(new GateResult(true, [], []));
-
-        $alertNotifier = new TestAlertNotifier();
-        $alertDispatcher = new AlertDispatcher([$alertNotifier]);
-        $runRepository = $this->createRunRepository();
-
-        $handler = $this->createHandler(
-            $companyCollector,
-            $macroCollector,
-            $gateValidator,
-            $alertDispatcher,
-            $runRepository
-        );
-
-        $handler->collect(new CollectIndustryRequest(
-            config: $config,
-            batchSize: 10,
-            enableMemoryManagement: false,
-        ));
-
-        $this->assertCount(2, $capturedRequests);
-
-        $firstFcfYield = $this->findMetric($capturedRequests['FIRST']->requirements->valuationMetrics, 'fcf_yield');
-        $this->assertNotNull($firstFcfYield, 'fcf_yield should exist for fallback focal');
-        $this->assertTrue($firstFcfYield->required, 'fcf_yield should be required for fallback focal');
-
-        $peerFcfYield = $this->findMetric($capturedRequests['PEER']->requirements->valuationMetrics, 'fcf_yield');
-        $this->assertNotNull($peerFcfYield, 'fcf_yield should exist for peer');
-        $this->assertFalse($peerFcfYield->required, 'fcf_yield should NOT be required for peer');
-    }
-
-    /**
-     * @param list<MetricDefinition> $metrics
-     */
-    private function findMetric(array $metrics, string $key): ?MetricDefinition
-    {
-        foreach ($metrics as $metric) {
-            if ($metric->key === $key) {
-                return $metric;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param list<string> $tickers
-     * @param list<string> $focalTickers
-     */
-    private function createIndustryConfigWithFocalScope(array $tickers, array $focalTickers): IndustryConfig
-    {
-        $companies = array_map(
-            fn (string $ticker): CompanyConfig => $this->createCompanyConfig($ticker),
-            $tickers
-        );
-
-        return new IndustryConfig(
-            id: 'energy',
-            name: 'Energy',
-            sector: 'Energy',
-            companies: $companies,
-            macroRequirements: new MacroRequirements(),
-            dataRequirements: new DataRequirements(
-                historyYears: 1,
-                quartersToFetch: 4,
-                valuationMetrics: [
-                    new MetricDefinition('market_cap', MetricDefinition::UNIT_CURRENCY, true, MetricDefinition::SCOPE_ALL),
-                    new MetricDefinition('fcf_yield', MetricDefinition::UNIT_PERCENT, true, MetricDefinition::SCOPE_FOCAL),
-                ],
-                annualFinancialMetrics: [],
-                quarterMetrics: [],
-                operationalMetrics: [],
-            ),
-            focalTickers: $focalTickers,
-        );
-    }
-
     /**
      * @param list<string> $tickers
      */
@@ -394,6 +231,7 @@ final class CollectIndustryHandlerTest extends Unit
         );
 
         return new IndustryConfig(
+            industryId: 1,
             id: 'energy',
             name: 'Energy',
             sector: 'Energy',
@@ -494,7 +332,7 @@ final class CollectIndustryHandlerTest extends Unit
         $db->createCommand(
             'CREATE TABLE collection_run (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                industry_id TEXT NOT NULL,
+                industry_id INTEGER NOT NULL,
                 datapack_id TEXT NOT NULL,
                 status TEXT NOT NULL,
                 started_at TEXT NOT NULL,

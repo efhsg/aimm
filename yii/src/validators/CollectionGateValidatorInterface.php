@@ -16,9 +16,9 @@ interface CollectionGateValidatorInterface
     /**
      * Validate an IndustryDataPack before the analysis phase.
      *
-     * @param list<string> $focalTickers Tickers of companies treated as focals (receive stricter validation)
+     * All companies are validated with the same requirements.
      */
-    public function validate(IndustryDataPack $dataPack, IndustryConfig $config, array $focalTickers = []): GateResult;
+    public function validate(IndustryDataPack $dataPack, IndustryConfig $config): GateResult;
 
     /**
      * Create a passing gate result (used when validation is skipped).
@@ -29,12 +29,10 @@ interface CollectionGateValidatorInterface
      * Validate collection results (dossier-based validation).
      *
      * @param array<string, \app\enums\CollectionStatus> $companyStatuses
-     * @param list<string> $focalTickers
      */
     public function validateResults(
         array $companyStatuses,
         \app\enums\CollectionStatus $macroStatus,
-        \app\dto\IndustryConfig $config,
-        array $focalTickers = []
+        \app\dto\IndustryConfig $config
     ): GateResult;
 }

@@ -10,7 +10,7 @@ use app\factories\IndustryDataPackFactory;
 use app\handlers\analysis\AnalyzeReportInterface;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
-use app\queries\PeerGroupQuery;
+use app\queries\IndustryQuery;
 use Throwable;
 use yii\base\Module;
 use yii\console\Controller;
@@ -26,11 +26,6 @@ final class AnalyzeController extends Controller
     private const LOG_CATEGORY = 'analysis';
 
     /**
-     * Focal company ticker for analysis.
-     */
-    public ?string $focal = null;
-
-    /**
      * Output file path for the report JSON.
      */
     public ?string $output = null;
@@ -40,7 +35,7 @@ final class AnalyzeController extends Controller
         Module $module,
         private AnalyzeReportInterface $analyzer,
         private CollectionRunRepository $collectionRunRepository,
-        private PeerGroupQuery $peerGroupQuery,
+        private IndustryQuery $industryQuery,
         private CollectionPolicyQuery $collectionPolicyQuery,
         private Logger $logger,
         array $config = []
@@ -53,30 +48,22 @@ final class AnalyzeController extends Controller
      */
     public function options($actionID): array
     {
-        return array_merge(parent::options($actionID), ['focal', 'output']);
+        return array_merge(parent::options($actionID), ['output']);
     }
 
     /**
-     * Analyze a peer group and generate a report.
+     * Analyze an industry and generate a ranked report.
      *
-     * @param string $slug The peer group slug
+     * @param string $slug The industry slug
      */
-    public function actionPeerGroup(string $slug): int
+    public function actionIndustry(string $slug): int
     {
         $startedAt = microtime(true);
 
-        // Validate focal ticker is provided
-        if ($this->focal === null || $this->focal === '') {
-            $this->stderr("Error: --focal=TICKER is required\n");
-            return ExitCode::USAGE;
-        }
-
-        $focalTicker = strtoupper(trim($this->focal));
-
-        // Find peer group
-        $group = $this->peerGroupQuery->findBySlug($slug);
+        // Find industry
+        $group = $this->industryQuery->findBySlug($slug);
         if ($group === null) {
-            $this->stderr("Peer group not found: {$slug}\n");
+            $this->stderr("Industry not found: {$slug}\n");
             return ExitCode::DATAERR;
         }
 
@@ -106,8 +93,9 @@ final class AnalyzeController extends Controller
             // Load thresholds from policy if available
             $thresholds = $this->loadThresholds($group);
 
-            // Run analysis
-            $request = new AnalyzeReportRequest($dataPack, $focalTicker, $thresholds);
+            // Run analysis for all companies
+            $industryName = $group['name'] ?? $slug;
+            $request = new AnalyzeReportRequest($dataPack, $slug, $industryName, $thresholds);
             $result = $this->analyzer->handle($request);
 
             if (!$result->success) {
@@ -133,12 +121,15 @@ final class AnalyzeController extends Controller
             }
 
             $duration = microtime(true) - $startedAt;
+            $companyCount = count($result->report->companyAnalyses);
+            $topRated = $companyCount > 0 ? $result->report->companyAnalyses[0] : null;
             $this->logger->log(
                 [
                     'message' => 'Analysis completed',
                     'slug' => $slug,
-                    'focal' => $focalTicker,
-                    'rating' => $result->report->focalAnalysis->rating->value,
+                    'company_count' => $companyCount,
+                    'top_rated' => $topRated?->ticker,
+                    'top_rating' => $topRated?->rating->value,
                     'duration_seconds' => round($duration, 2),
                 ],
                 Logger::LEVEL_INFO,
@@ -151,7 +142,6 @@ final class AnalyzeController extends Controller
                 [
                     'message' => 'Analysis failed',
                     'slug' => $slug,
-                    'focal' => $focalTicker,
                     'error' => $exception->getMessage(),
                 ],
                 Logger::LEVEL_ERROR,

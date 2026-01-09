@@ -86,4 +86,30 @@ class CompanyQuery
             'SELECT * FROM company ORDER BY ticker'
         )->queryAll();
     }
+
+    /**
+     * Find companies by industry ID.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function findByIndustry(int $industryId): array
+    {
+        return $this->db->createCommand(
+            'SELECT * FROM company WHERE industry_id = :industryId ORDER BY ticker'
+        )
+            ->bindValue(':industryId', $industryId)
+            ->queryAll();
+    }
+
+    /**
+     * Count companies by industry ID.
+     */
+    public function countByIndustry(int $industryId): int
+    {
+        return (int) $this->db->createCommand(
+            'SELECT COUNT(*) FROM company WHERE industry_id = :industryId'
+        )
+            ->bindValue(':industryId', $industryId)
+            ->queryScalar();
+    }
 }

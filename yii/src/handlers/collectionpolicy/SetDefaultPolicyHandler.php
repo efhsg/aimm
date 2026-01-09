@@ -7,17 +7,23 @@ namespace app\handlers\collectionpolicy;
 use app\dto\collectionpolicy\CollectionPolicyResult;
 use app\dto\collectionpolicy\SetDefaultPolicyRequest;
 use app\queries\CollectionPolicyQuery;
+use app\queries\SectorQuery;
 use Throwable;
 use Yii;
+use yii\db\Connection;
 use yii\log\Logger;
 
 /**
- * Handler for setting or clearing sector default policies.
+ * Handler for setting or clearing a sector default policy.
+ *
+ * Sets the policy on all industries in the given sector.
  */
 final class SetDefaultPolicyHandler implements SetDefaultPolicyInterface
 {
     public function __construct(
         private readonly CollectionPolicyQuery $policyQuery,
+        private readonly SectorQuery $sectorQuery,
+        private readonly Connection $db,
         private readonly Logger $logger,
     ) {
     }
@@ -27,7 +33,7 @@ final class SetDefaultPolicyHandler implements SetDefaultPolicyInterface
         $this->logger->log(
             [
                 'message' => $request->clear ? 'Clearing sector default policy' : 'Setting sector default policy',
-                'id' => $request->id,
+                'policy_id' => $request->id,
                 'sector' => $request->sector,
                 'actor' => $request->actorUsername,
             ],
@@ -35,38 +41,38 @@ final class SetDefaultPolicyHandler implements SetDefaultPolicyInterface
             'collectionpolicy'
         );
 
-        $existing = $this->policyQuery->findById($request->id);
-        if ($existing === null) {
+        $policy = $this->policyQuery->findById($request->id);
+        if ($policy === null) {
             return CollectionPolicyResult::failure(['Policy not found.']);
         }
 
-        if (trim($request->sector) === '') {
-            return CollectionPolicyResult::failure(['Sector is required.']);
+        $sector = $this->sectorQuery->findBySlug($request->sector);
+        if ($sector === null) {
+            return CollectionPolicyResult::failure(['Sector not found: ' . $request->sector]);
         }
 
         $transaction = Yii::$app->db->beginTransaction();
 
         try {
-            if ($request->clear) {
-                $this->policyQuery->clearDefaultForSector($request->sector);
-            } else {
-                $this->policyQuery->setDefaultForSector($request->id, $request->sector);
-            }
+            $policyId = $request->clear ? null : $request->id;
 
-            // Update audit field
-            $this->policyQuery->update($request->id, [
-                'updated_by' => $request->actorUsername,
-            ]);
+            // Update all industries in this sector
+            $affectedCount = $this->db->createCommand()
+                ->update(
+                    '{{%industry}}',
+                    ['policy_id' => $policyId],
+                    ['sector_id' => $sector['id']]
+                )
+                ->execute();
 
             $transaction->commit();
 
-            $policy = $this->policyQuery->findById($request->id);
-
             $this->logger->log(
                 [
-                    'message' => $request->clear ? 'Sector default cleared' : 'Sector default set',
-                    'id' => $request->id,
+                    'message' => $request->clear ? 'Cleared sector default policy' : 'Set sector default policy',
+                    'policy_id' => $request->id,
                     'sector' => $request->sector,
+                    'affected_industries' => $affectedCount,
                     'actor' => $request->actorUsername,
                 ],
                 Logger::LEVEL_INFO,
@@ -79,8 +85,8 @@ final class SetDefaultPolicyHandler implements SetDefaultPolicyInterface
 
             $this->logger->log(
                 [
-                    'message' => 'Failed to set sector default',
-                    'id' => $request->id,
+                    'message' => 'Failed to set sector default policy',
+                    'policy_id' => $request->id,
                     'sector' => $request->sector,
                     'error' => $e->getMessage(),
                 ],
@@ -88,7 +94,7 @@ final class SetDefaultPolicyHandler implements SetDefaultPolicyInterface
                 'collectionpolicy'
             );
 
-            return CollectionPolicyResult::failure(['Failed to set default: ' . $e->getMessage()]);
+            return CollectionPolicyResult::failure(['Failed to set default policy: ' . $e->getMessage()]);
         }
     }
 }

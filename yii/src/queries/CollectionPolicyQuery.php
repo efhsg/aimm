@@ -38,17 +38,6 @@ class CollectionPolicyQuery
         return $row === false ? null : $row;
     }
 
-    public function findDefaultForSector(string $sector): ?array
-    {
-        $row = $this->db->createCommand(
-            'SELECT * FROM collection_policy WHERE is_default_for_sector = :sector'
-        )
-            ->bindValue(':sector', $sector)
-            ->queryOne();
-
-        return $row === false ? null : $row;
-    }
-
     public function findAll(): array
     {
         return $this->db->createCommand(
@@ -77,38 +66,6 @@ class CollectionPolicyQuery
     {
         $this->db->createCommand()
             ->delete('collection_policy', ['id' => $id])
-            ->execute();
-    }
-
-    public function setDefaultForSector(int $id, string $sector): void
-    {
-        // Clear any existing default for this sector
-        $this->db->createCommand()
-            ->update(
-                'collection_policy',
-                ['is_default_for_sector' => null],
-                ['is_default_for_sector' => $sector]
-            )
-            ->execute();
-
-        // Set new default
-        $this->db->createCommand()
-            ->update(
-                'collection_policy',
-                ['is_default_for_sector' => $sector],
-                ['id' => $id]
-            )
-            ->execute();
-    }
-
-    public function clearDefaultForSector(string $sector): void
-    {
-        $this->db->createCommand()
-            ->update(
-                'collection_policy',
-                ['is_default_for_sector' => null],
-                ['is_default_for_sector' => $sector]
-            )
             ->execute();
     }
 

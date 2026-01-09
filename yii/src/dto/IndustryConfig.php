@@ -7,22 +7,21 @@ namespace app\dto;
 /**
  * Configuration for an industry collection.
  *
- * Built from peer group + collection policy for use by collection handlers.
+ * Built from industry + collection policy for use by collection handlers.
  */
 final readonly class IndustryConfig
 {
     /**
      * @param CompanyConfig[] $companies
-     * @param list<string> $focalTickers Tickers of companies that should receive full requirements during collection
      */
     public function __construct(
+        public int $industryId,
         public string $id,
         public string $name,
         public string $sector,
         public array $companies,
         public MacroRequirements $macroRequirements,
         public DataRequirements $dataRequirements,
-        public array $focalTickers = [],
     ) {
     }
 
@@ -31,7 +30,8 @@ final readonly class IndustryConfig
      */
     public function toArray(): array
     {
-        $result = [
+        return [
+            'industry_id' => $this->industryId,
             'id' => $this->id,
             'name' => $this->name,
             'sector' => $this->sector,
@@ -42,11 +42,5 @@ final readonly class IndustryConfig
             'macro_requirements' => $this->macroRequirements->toArray(),
             'data_requirements' => $this->dataRequirements->toArray(),
         ];
-
-        if (!empty($this->focalTickers)) {
-            $result['focal_tickers'] = $this->focalTickers;
-        }
-
-        return $result;
     }
 }

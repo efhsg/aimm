@@ -54,34 +54,6 @@ final class CollectionPolicyQueryTest extends Unit
         $this->assertEquals($expected, $query->findBySlug('oil-gas-standard'));
     }
 
-    public function testFindDefaultForSectorReturnsArrayWhenFound(): void
-    {
-        $expected = ['id' => 1, 'slug' => 'energy-default', 'is_default_for_sector' => 'Energy'];
-
-        $command = $this->createMock(Command::class);
-        $command->method('bindValue')->willReturnSelf();
-        $command->method('queryOne')->willReturn($expected);
-
-        $db = $this->createMock(Connection::class);
-        $db->method('createCommand')->willReturn($command);
-
-        $query = new CollectionPolicyQuery($db);
-        $this->assertEquals($expected, $query->findDefaultForSector('Energy'));
-    }
-
-    public function testFindDefaultForSectorReturnsNullWhenNoDefault(): void
-    {
-        $command = $this->createMock(Command::class);
-        $command->method('bindValue')->willReturnSelf();
-        $command->method('queryOne')->willReturn(false);
-
-        $db = $this->createMock(Connection::class);
-        $db->method('createCommand')->willReturn($command);
-
-        $query = new CollectionPolicyQuery($db);
-        $this->assertNull($query->findDefaultForSector('Unknown'));
-    }
-
     public function testFindAllReturnsList(): void
     {
         $expected = [

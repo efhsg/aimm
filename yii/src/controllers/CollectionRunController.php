@@ -6,8 +6,8 @@ namespace app\controllers;
 
 use app\filters\AdminAuthFilter;
 use app\queries\CollectionRunRepository;
-use app\queries\PeerGroupMemberQuery;
-use app\queries\PeerGroupQuery;
+use app\queries\IndustryMemberQuery;
+use app\queries\IndustryQuery;
 use Yii;
 use yii\data\Pagination;
 use yii\web\Controller;
@@ -34,8 +34,8 @@ final class CollectionRunController extends Controller
         $id,
         $module,
         private readonly CollectionRunRepository $runRepository,
-        private readonly PeerGroupQuery $peerGroupQuery,
-        private readonly PeerGroupMemberQuery $memberQuery,
+        private readonly IndustryQuery $industryQuery,
+        private readonly IndustryMemberQuery $memberQuery,
         $config = []
     ) {
         parent::__construct($id, $module, $config);
@@ -64,8 +64,9 @@ final class CollectionRunController extends Controller
         $errors = $this->runRepository->getErrors($id);
 
         // Fetch available years/dates and latest data
-        $availableFilters = $this->fetchAvailableFilters($run['industry_id']);
-        $collectedData = $this->fetchCollectedData($run['industry_id']);
+        $industryId = (int) $run['industry_id'];
+        $availableFilters = $this->fetchAvailableFilters($industryId);
+        $collectedData = $this->fetchCollectedData($industryId);
 
         return $this->render('view', [
             'run' => $run,
@@ -97,10 +98,11 @@ final class CollectionRunController extends Controller
         $request = Yii::$app->request;
         $type = $request->get('type');
         $filter = $request->get('filter');
+        $industryId = (int) $run['industry_id'];
 
         $data = match ($type) {
-            'financials' => $this->fetchFinancialsByYear($run['industry_id'], (int) $filter),
-            'valuations' => $this->fetchValuationsByDate($run['industry_id'], $filter),
+            'financials' => $this->fetchFinancialsByYear($industryId, (int) $filter),
+            'valuations' => $this->fetchValuationsByDate($industryId, $filter),
             'macro' => $this->fetchMacroByDate($filter),
             default => [],
         };
@@ -109,14 +111,14 @@ final class CollectionRunController extends Controller
     }
 
     /**
-     * Fetch collected data for a peer group.
+     * Fetch collected data for an industry.
      *
      * @return array{companies: array, annualFinancials: array, valuations: array, macroIndicators: array}
      */
-    private function fetchCollectedData(string $industrySlug): array
+    private function fetchCollectedData(int $industryId): array
     {
-        $peerGroup = $this->peerGroupQuery->findBySlug($industrySlug);
-        if ($peerGroup === null) {
+        $industry = $this->industryQuery->findById($industryId);
+        if ($industry === null) {
             return [
                 'companies' => [],
                 'annualFinancials' => [],
@@ -125,7 +127,7 @@ final class CollectionRunController extends Controller
             ];
         }
 
-        $members = $this->memberQuery->findByGroup((int) $peerGroup['id']);
+        $members = $this->memberQuery->findByIndustry($industryId);
         $companyIds = array_column($members, 'company_id');
 
         if (empty($companyIds)) {
@@ -203,14 +205,9 @@ final class CollectionRunController extends Controller
      *
      * @return array{years: list<int>, valuationDates: list<string>, macroDates: list<string>}
      */
-    private function fetchAvailableFilters(string $industrySlug): array
+    private function fetchAvailableFilters(int $industryId): array
     {
-        $peerGroup = $this->peerGroupQuery->findBySlug($industrySlug);
-        if ($peerGroup === null) {
-            return ['years' => [], 'valuationDates' => [], 'macroDates' => []];
-        }
-
-        $members = $this->memberQuery->findByGroup((int) $peerGroup['id']);
+        $members = $this->memberQuery->findByIndustry($industryId);
         $companyIds = array_column($members, 'company_id');
 
         $db = Yii::$app->db;
@@ -256,14 +253,9 @@ final class CollectionRunController extends Controller
     /**
      * Fetch annual financials for a specific year.
      */
-    private function fetchFinancialsByYear(string $industrySlug, int $year): array
+    private function fetchFinancialsByYear(int $industryId, int $year): array
     {
-        $peerGroup = $this->peerGroupQuery->findBySlug($industrySlug);
-        if ($peerGroup === null) {
-            return [];
-        }
-
-        $members = $this->memberQuery->findByGroup((int) $peerGroup['id']);
+        $members = $this->memberQuery->findByIndustry($industryId);
         $companyIds = array_column($members, 'company_id');
 
         if (empty($companyIds)) {
@@ -293,14 +285,9 @@ final class CollectionRunController extends Controller
     /**
      * Fetch valuations for a specific date.
      */
-    private function fetchValuationsByDate(string $industrySlug, string $date): array
+    private function fetchValuationsByDate(int $industryId, string $date): array
     {
-        $peerGroup = $this->peerGroupQuery->findBySlug($industrySlug);
-        if ($peerGroup === null) {
-            return [];
-        }
-
-        $members = $this->memberQuery->findByGroup((int) $peerGroup['id']);
+        $members = $this->memberQuery->findByIndustry($industryId);
         $companyIds = array_column($members, 'company_id');
 
         if (empty($companyIds)) {

@@ -5,6 +5,7 @@
 START TRANSACTION;
 
 -- Collection run (for web interface navigation)
+-- industry_id is now an int FK, looked up by slug
 INSERT INTO collection_run (
     industry_id,
     datapack_id,
@@ -19,7 +20,7 @@ INSERT INTO collection_run (
     warning_count,
     duration_seconds
 ) VALUES (
-    'global-energy-supermajors',
+    (SELECT id FROM industry WHERE slug = 'global-energy-supermajors'),
     'seed-testdata-001',
     'complete',
     '2026-01-03 10:00:00',

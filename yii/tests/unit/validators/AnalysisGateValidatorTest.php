@@ -37,108 +37,87 @@ final class AnalysisGateValidatorTest extends Unit
     public function testPassesWithValidDatapack(): void
     {
         $dataPack = $this->createDataPack(
-            focalTicker: 'AAPL',
-            focalAnnualYears: 2,
-            focalMarketCap: 3_000_000_000_000,
-            peerCount: 3,
+            companyCount: 3,
+            annualYears: 2,
+            marketCap: 3_000_000_000_000,
             collectedDaysAgo: 5
         );
 
-        $result = $this->validator->validate($dataPack, 'AAPL');
+        $result = $this->validator->validate($dataPack);
 
         $this->assertTrue($result->passed);
         $this->assertEmpty($result->errors);
-        $this->assertEmpty($result->warnings);
     }
 
-    public function testFailsWhenFocalNotFound(): void
+    public function testFailsWithInsufficientCompanies(): void
     {
         $dataPack = $this->createDataPack(
-            focalTicker: 'AAPL',
-            focalAnnualYears: 2,
-            focalMarketCap: 3_000_000_000_000,
-            peerCount: 3
+            companyCount: 1, // Only 1 company, need minimum 2
+            annualYears: 2,
+            marketCap: 3_000_000_000_000
         );
 
-        $result = $this->validator->validate($dataPack, 'NONEXISTENT'); // Ticker not in datapack
+        $result = $this->validator->validate($dataPack);
 
         $this->assertFalse($result->passed);
-        $this->assertTrue($result->hasErrorCode('FOCAL_NOT_FOUND'));
+        $this->assertTrue($result->hasErrorCode('INSUFFICIENT_COMPANIES'));
     }
 
-    public function testFailsWithInsufficientAnnualData(): void
+    public function testFailsWithInsufficientAnalyzableCompanies(): void
     {
+        // 2 companies but both have insufficient data
         $dataPack = $this->createDataPack(
-            focalTicker: 'AAPL',
-            focalAnnualYears: 1, // Only 1 year, need 2
-            focalMarketCap: 3_000_000_000_000,
-            peerCount: 3
+            companyCount: 2,
+            annualYears: 1, // Only 1 year, need 2
+            marketCap: 3_000_000_000_000
         );
 
-        $result = $this->validator->validate($dataPack, 'AAPL');
+        $result = $this->validator->validate($dataPack);
 
         $this->assertFalse($result->passed);
-        $this->assertTrue($result->hasErrorCode('INSUFFICIENT_ANNUAL_DATA'));
+        $this->assertTrue($result->hasErrorCode('NO_ANALYZABLE_COMPANIES'));
     }
 
-    public function testFailsWhenMissingMarketCap(): void
+    public function testFailsWhenNoCompaniesHaveMarketCap(): void
     {
         $dataPack = $this->createDataPack(
-            focalTicker: 'AAPL',
-            focalAnnualYears: 2,
-            focalMarketCap: null, // Missing market cap
-            peerCount: 3
+            companyCount: 3,
+            annualYears: 2,
+            marketCap: null // Missing market cap
         );
 
-        $result = $this->validator->validate($dataPack, 'AAPL');
+        $result = $this->validator->validate($dataPack);
 
         $this->assertFalse($result->passed);
-        $this->assertTrue($result->hasErrorCode('MISSING_MARKET_CAP'));
+        $this->assertTrue($result->hasErrorCode('NO_ANALYZABLE_COMPANIES'));
     }
 
-    public function testFailsWithNoPeers(): void
+    public function testWarnsOnLowCompanyCount(): void
     {
         $dataPack = $this->createDataPack(
-            focalTicker: 'AAPL',
-            focalAnnualYears: 2,
-            focalMarketCap: 3_000_000_000_000,
-            peerCount: 0 // No peers
+            companyCount: 2, // Minimum but below recommended
+            annualYears: 2,
+            marketCap: 3_000_000_000_000
         );
 
-        $result = $this->validator->validate($dataPack, 'AAPL');
-
-        $this->assertFalse($result->passed);
-        $this->assertTrue($result->hasErrorCode('NO_PEERS'));
-    }
-
-    public function testWarnsOnLowPeerCount(): void
-    {
-        $dataPack = $this->createDataPack(
-            focalTicker: 'AAPL',
-            focalAnnualYears: 2,
-            focalMarketCap: 3_000_000_000_000,
-            peerCount: 1 // Only 1 peer, recommend 2+
-        );
-
-        $result = $this->validator->validate($dataPack, 'AAPL');
+        $result = $this->validator->validate($dataPack);
 
         $this->assertTrue($result->passed);
         $this->assertEmpty($result->errors);
         $this->assertCount(1, $result->warnings);
-        $this->assertEquals('LOW_PEER_COUNT', $result->warnings[0]->code);
+        $this->assertEquals('LOW_COMPANY_COUNT', $result->warnings[0]->code);
     }
 
     public function testWarnsOnStaleData(): void
     {
         $dataPack = $this->createDataPack(
-            focalTicker: 'AAPL',
-            focalAnnualYears: 2,
-            focalMarketCap: 3_000_000_000_000,
-            peerCount: 3,
+            companyCount: 5, // Above recommended
+            annualYears: 2,
+            marketCap: 3_000_000_000_000,
             collectedDaysAgo: 45 // Older than 30 days
         );
 
-        $result = $this->validator->validate($dataPack, 'AAPL');
+        $result = $this->validator->validate($dataPack);
 
         $this->assertTrue($result->passed);
         $this->assertEmpty($result->errors);
@@ -146,50 +125,66 @@ final class AnalysisGateValidatorTest extends Unit
         $this->assertEquals('STALE_DATA', $result->warnings[0]->code);
     }
 
-    public function testMultipleErrors(): void
+    public function testWarnsWhenSomeCompaniesHaveInsufficientData(): void
     {
-        $dataPack = $this->createDataPack(
-            focalTicker: 'AAPL',
-            focalAnnualYears: 1,
-            focalMarketCap: null,
-            peerCount: 0
-        );
+        // Create a datapack where some companies have good data and some don't
+        $dataPack = $this->createMixedDataPack();
 
-        $result = $this->validator->validate($dataPack, 'AAPL');
+        $result = $this->validator->validate($dataPack);
 
-        $this->assertFalse($result->passed);
-        $this->assertCount(3, $result->errors);
-        $this->assertTrue($result->hasErrorCode('INSUFFICIENT_ANNUAL_DATA'));
-        $this->assertTrue($result->hasErrorCode('MISSING_MARKET_CAP'));
-        $this->assertTrue($result->hasErrorCode('NO_PEERS'));
+        $this->assertTrue($result->passed); // Still passes because 2+ are analyzable
+        $hasInsufficientDataWarning = false;
+        foreach ($result->warnings as $warning) {
+            if ($warning->code === 'COMPANY_INSUFFICIENT_DATA') {
+                $hasInsufficientDataWarning = true;
+                break;
+            }
+        }
+        $this->assertTrue($hasInsufficientDataWarning, 'Expected COMPANY_INSUFFICIENT_DATA warning');
     }
 
     private function createDataPack(
-        string $focalTicker,
-        int $focalAnnualYears,
-        ?float $focalMarketCap,
-        int $peerCount,
+        int $companyCount,
+        int $annualYears,
+        ?float $marketCap,
         int $collectedDaysAgo = 0
     ): IndustryDataPack {
         $companies = [];
+        $tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'];
 
-        // Create focal company
-        $companies[$focalTicker] = $this->createCompany(
-            $focalTicker,
-            $focalAnnualYears,
-            $focalMarketCap
-        );
-
-        // Create peer companies
-        $peerTickers = ['MSFT', 'GOOGL', 'AMZN', 'META'];
-        for ($i = 0; $i < $peerCount; $i++) {
-            $ticker = $peerTickers[$i] ?? "PEER{$i}";
-            if ($ticker !== $focalTicker) {
-                $companies[$ticker] = $this->createCompany($ticker, 2, 2_000_000_000_000);
-            }
+        for ($i = 0; $i < $companyCount; $i++) {
+            $ticker = $tickers[$i] ?? "CO{$i}";
+            $companies[$ticker] = $this->createCompany($ticker, $annualYears, $marketCap);
         }
 
         $collectedAt = (new DateTimeImmutable())->modify("-{$collectedDaysAgo} days");
+
+        return new IndustryDataPack(
+            industryId: 'us-tech-giants',
+            datapackId: 'test-datapack-123',
+            collectedAt: $collectedAt,
+            macro: new MacroData(),
+            companies: $companies,
+            collectionLog: new CollectionLog(
+                startedAt: $collectedAt,
+                completedAt: $collectedAt,
+                durationSeconds: 60,
+                companyStatuses: array_fill_keys(array_keys($companies), CollectionStatus::Complete),
+                macroStatus: CollectionStatus::Complete,
+                totalAttempts: count($companies),
+            ),
+        );
+    }
+
+    private function createMixedDataPack(): IndustryDataPack
+    {
+        $collectedAt = new DateTimeImmutable();
+
+        $companies = [
+            'AAPL' => $this->createCompany('AAPL', 2, 3_000_000_000_000), // Good
+            'MSFT' => $this->createCompany('MSFT', 2, 2_800_000_000_000), // Good
+            'GOOGL' => $this->createCompany('GOOGL', 1, 1_800_000_000_000), // Insufficient annual data
+        ];
 
         return new IndustryDataPack(
             industryId: 'us-tech-giants',

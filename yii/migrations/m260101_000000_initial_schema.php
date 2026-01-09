@@ -1,0 +1,491 @@
+<?php
+
+declare(strict_types=1);
+
+use yii\db\Expression;
+use yii\db\Migration;
+
+/**
+ * Initial database schema.
+ *
+ * Implements sector → industry → company hierarchy.
+ */
+class m260101_000000_initial_schema extends Migration
+{
+    public function safeUp(): void
+    {
+        // Table: sector
+        $this->createTable('{{%sector}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'slug' => $this->string(50)->notNull(),
+            'name' => $this->string(100)->notNull(),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_sector_slug', '{{%sector}}', ['slug'], true);
+
+        // Table: collection_policy
+        $this->createTable('{{%collection_policy}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'slug' => $this->string(100)->notNull(),
+            'name' => $this->string(100)->notNull(),
+            'description' => $this->string(500)->defaultValue(null),
+            'history_years' => $this->tinyInteger()->notNull()->defaultValue(5)->unsigned(),
+            'quarters_to_fetch' => $this->tinyInteger()->notNull()->defaultValue(8)->unsigned(),
+            'valuation_metrics' => $this->json()->notNull(),
+            'annual_financial_metrics' => $this->json()->defaultValue(null),
+            'quarterly_financial_metrics' => $this->json()->defaultValue(null),
+            'operational_metrics' => $this->json()->defaultValue(null),
+            'commodity_benchmark' => $this->string(50)->defaultValue(null),
+            'margin_proxy' => $this->string(50)->defaultValue(null),
+            'sector_index' => $this->string(50)->defaultValue(null),
+            'required_indicators' => $this->json()->defaultValue(null),
+            'optional_indicators' => $this->json()->defaultValue(null),
+            'analysis_thresholds' => $this->json()->defaultValue(null),
+            'created_by' => $this->string(100)->defaultValue(null),
+            'updated_by' => $this->string(100)->defaultValue(null),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+            'updated_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_policy_slug', '{{%collection_policy}}', ['slug'], true);
+
+        // Table: industry (replaces industry_peer_group)
+        $this->createTable('{{%industry}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'sector_id' => $this->bigInteger()->notNull()->unsigned(),
+            'slug' => $this->string(100)->notNull(),
+            'name' => $this->string(255)->notNull(),
+            'description' => $this->string(500)->defaultValue(null),
+            'policy_id' => $this->bigInteger()->defaultValue(null)->unsigned(),
+            'is_active' => $this->tinyInteger()->notNull()->defaultValue(1),
+            'created_by' => $this->string(100)->defaultValue(null),
+            'updated_by' => $this->string(100)->defaultValue(null),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+            'updated_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_industry_slug', '{{%industry}}', ['slug'], true);
+
+        // Table: company
+        $this->createTable('{{%company}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'industry_id' => $this->bigInteger()->defaultValue(null)->unsigned(),
+            'ticker' => $this->string(20)->notNull(),
+            'exchange' => $this->string(20)->defaultValue(null),
+            'name' => $this->string(255)->defaultValue(null),
+            'currency' => $this->string(255)->defaultValue(null),
+            'fiscal_year_end' => $this->tinyInteger()->defaultValue(null)->unsigned(),
+            'financials_collected_at' => $this->dateTime()->defaultValue(null),
+            'quarters_collected_at' => $this->dateTime()->defaultValue(null),
+            'valuation_collected_at' => $this->dateTime()->defaultValue(null),
+            'profile_collected_at' => $this->dateTime()->defaultValue(null),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+            'updated_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_ticker', '{{%company}}', ['ticker'], true);
+
+        // Table: analysis_report
+        $this->createTable('{{%analysis_report}}', [
+            'id' => $this->primaryKey(),
+            'industry_id' => $this->bigInteger()->notNull()->unsigned(),
+            'report_id' => $this->string(50)->notNull(),
+            'rating' => $this->string(20)->notNull(),
+            'rule_path' => $this->string(50)->notNull(),
+            'report_json' => $this->json()->notNull(),
+            'generated_at' => $this->dateTime()->notNull(),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_report_id', '{{%analysis_report}}', ['report_id'], true);
+
+        // Table: annual_financial
+        $this->createTable('{{%annual_financial}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'company_id' => $this->bigInteger()->notNull()->unsigned(),
+            'fiscal_year' => $this->smallInteger()->notNull()->unsigned(),
+            'period_end_date' => $this->date()->notNull(),
+            'revenue' => $this->decimal(20, 2)->defaultValue(null),
+            'cost_of_revenue' => $this->decimal(20, 2)->defaultValue(null),
+            'gross_profit' => $this->decimal(20, 2)->defaultValue(null),
+            'operating_income' => $this->decimal(20, 2)->defaultValue(null),
+            'ebitda' => $this->decimal(20, 2)->defaultValue(null),
+            'net_income' => $this->decimal(20, 2)->defaultValue(null),
+            'eps' => $this->decimal(10, 4)->defaultValue(null),
+            'operating_cash_flow' => $this->decimal(20, 2)->defaultValue(null),
+            'capex' => $this->decimal(20, 2)->defaultValue(null),
+            'free_cash_flow' => $this->decimal(20, 2)->defaultValue(null),
+            'dividends_paid' => $this->decimal(20, 2)->defaultValue(null),
+            'total_assets' => $this->decimal(20, 2)->defaultValue(null),
+            'total_liabilities' => $this->decimal(20, 2)->defaultValue(null),
+            'total_equity' => $this->decimal(20, 2)->defaultValue(null),
+            'total_debt' => $this->decimal(20, 2)->defaultValue(null),
+            'cash_and_equivalents' => $this->decimal(20, 2)->defaultValue(null),
+            'net_debt' => $this->decimal(20, 2)->defaultValue(null),
+            'shares_outstanding' => $this->bigInteger()->defaultValue(null)->unsigned(),
+            'currency' => $this->string(255)->notNull(),
+            'source_adapter' => $this->string(50)->notNull(),
+            'source_url' => $this->string(500)->defaultValue(null),
+            'collected_at' => $this->dateTime()->notNull(),
+            'version' => $this->tinyInteger()->notNull()->defaultValue(1)->unsigned(),
+            'is_current' => $this->tinyInteger()->notNull()->defaultValue(1),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_company_year_version', '{{%annual_financial}}', ['company_id', 'fiscal_year', 'version'], true);
+
+        // Table: collection_attempt
+        $this->createTable('{{%collection_attempt}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'entity_type' => $this->string(255)->notNull(),
+            'entity_id' => $this->bigInteger()->defaultValue(null)->unsigned(),
+            'data_type' => $this->string(50)->notNull(),
+            'source_adapter' => $this->string(50)->notNull(),
+            'source_url' => $this->string(500)->notNull(),
+            'outcome' => $this->string(255)->notNull(),
+            'http_status' => $this->smallInteger()->defaultValue(null)->unsigned(),
+            'error_message' => $this->string(500)->defaultValue(null),
+            'attempted_at' => $this->dateTime()->notNull(),
+            'duration_ms' => $this->integer()->defaultValue(null)->unsigned(),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        // Table: collection_error
+        $this->createTable('{{%collection_error}}', [
+            'id' => $this->primaryKey(),
+            'collection_run_id' => $this->integer()->notNull(),
+            'severity' => $this->string(20)->notNull()->defaultValue('error'),
+            'error_code' => $this->string(64)->notNull(),
+            'error_message' => $this->text()->notNull(),
+            'error_path' => $this->string(255)->defaultValue(null),
+            'ticker' => $this->string(20)->defaultValue(null),
+            'created_at' => $this->timestamp()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        // Table: collection_run
+        $this->createTable('{{%collection_run}}', [
+            'id' => $this->primaryKey(),
+            'industry_id' => $this->bigInteger()->notNull()->unsigned(),
+            'datapack_id' => $this->string(36)->notNull(),
+            'status' => $this->string(20)->notNull()->defaultValue('pending'),
+            'started_at' => $this->timestamp()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+            'completed_at' => $this->timestamp()->defaultValue(null),
+            'companies_total' => $this->integer()->notNull()->defaultValue(0),
+            'companies_success' => $this->integer()->notNull()->defaultValue(0),
+            'companies_failed' => $this->integer()->notNull()->defaultValue(0),
+            'gate_passed' => $this->tinyInteger()->defaultValue(null),
+            'error_count' => $this->integer()->notNull()->defaultValue(0),
+            'warning_count' => $this->integer()->notNull()->defaultValue(0),
+            'file_path' => $this->string(512)->defaultValue(null),
+            'file_size_bytes' => $this->bigInteger()->defaultValue(null),
+            'duration_seconds' => $this->integer()->defaultValue(null),
+        ]);
+
+        $this->createIndex('uk_datapack_id', '{{%collection_run}}', ['datapack_id'], true);
+
+        // Table: data_gap
+        $this->createTable('{{%data_gap}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'company_id' => $this->bigInteger()->notNull()->unsigned(),
+            'data_type' => $this->string(50)->notNull(),
+            'gap_reason' => $this->string(255)->notNull(),
+            'first_detected' => $this->dateTime()->notNull(),
+            'last_checked' => $this->dateTime()->notNull(),
+            'check_count' => $this->integer()->notNull()->defaultValue(1)->unsigned(),
+            'notes' => $this->string(500)->defaultValue(null),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+            'updated_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_company_gap', '{{%data_gap}}', ['company_id', 'data_type'], true);
+
+        // Table: fx_rate
+        $this->createTable('{{%fx_rate}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'base_currency' => $this->string(255)->notNull(),
+            'quote_currency' => $this->string(255)->notNull(),
+            'rate_date' => $this->date()->notNull(),
+            'rate' => $this->decimal(12, 6)->notNull(),
+            'source_adapter' => $this->string(50)->notNull()->defaultValue('ecb'),
+            'collected_at' => $this->dateTime()->notNull(),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_pair_date', '{{%fx_rate}}', ['base_currency', 'quote_currency', 'rate_date'], true);
+
+        // Table: macro_indicator
+        $this->createTable('{{%macro_indicator}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'indicator_key' => $this->string(100)->notNull(),
+            'indicator_date' => $this->date()->notNull(),
+            'value' => $this->decimal(20, 4)->notNull(),
+            'unit' => $this->string(50)->notNull(),
+            'source_adapter' => $this->string(50)->notNull(),
+            'source_url' => $this->string(500)->defaultValue(null),
+            'collected_at' => $this->dateTime()->notNull(),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_indicator_date', '{{%macro_indicator}}', ['indicator_key', 'indicator_date'], true);
+
+        // Table: price_history
+        $this->createTable('{{%price_history}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'symbol' => $this->string(20)->notNull(),
+            'symbol_type' => $this->string(255)->notNull(),
+            'price_date' => $this->date()->notNull(),
+            'open' => $this->decimal(12, 4)->defaultValue(null),
+            'high' => $this->decimal(12, 4)->defaultValue(null),
+            'low' => $this->decimal(12, 4)->defaultValue(null),
+            'close' => $this->decimal(12, 4)->notNull(),
+            'adjusted_close' => $this->decimal(12, 4)->defaultValue(null),
+            'volume' => $this->bigInteger()->defaultValue(null)->unsigned(),
+            'currency' => $this->string(255)->notNull()->defaultValue('USD'),
+            'source_adapter' => $this->string(50)->notNull(),
+            'collected_at' => $this->dateTime()->notNull(),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_symbol_date', '{{%price_history}}', ['symbol', 'price_date'], true);
+
+        // Table: quarterly_financial
+        $this->createTable('{{%quarterly_financial}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'company_id' => $this->bigInteger()->notNull()->unsigned(),
+            'fiscal_year' => $this->smallInteger()->notNull()->unsigned(),
+            'fiscal_quarter' => $this->tinyInteger()->notNull()->unsigned(),
+            'period_end_date' => $this->date()->notNull(),
+            'revenue' => $this->decimal(20, 2)->defaultValue(null),
+            'gross_profit' => $this->decimal(20, 2)->defaultValue(null),
+            'operating_income' => $this->decimal(20, 2)->defaultValue(null),
+            'ebitda' => $this->decimal(20, 2)->defaultValue(null),
+            'net_income' => $this->decimal(20, 2)->defaultValue(null),
+            'eps' => $this->decimal(10, 4)->defaultValue(null),
+            'operating_cash_flow' => $this->decimal(20, 2)->defaultValue(null),
+            'capex' => $this->decimal(20, 2)->defaultValue(null),
+            'free_cash_flow' => $this->decimal(20, 2)->defaultValue(null),
+            'currency' => $this->string(255)->notNull(),
+            'source_adapter' => $this->string(50)->notNull(),
+            'source_url' => $this->string(500)->defaultValue(null),
+            'collected_at' => $this->dateTime()->notNull(),
+            'version' => $this->tinyInteger()->notNull()->defaultValue(1)->unsigned(),
+            'is_current' => $this->tinyInteger()->notNull()->defaultValue(1),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_company_quarter_version', '{{%quarterly_financial}}', ['company_id', 'fiscal_year', 'fiscal_quarter', 'version'], true);
+
+        // Table: source_block
+        $this->createTable('{{%source_block}}', [
+            'id' => $this->primaryKey(),
+            'domain' => $this->string(255)->notNull(),
+            'blocked_at' => $this->timestamp()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+            'blocked_until' => $this->timestamp()->notNull(),
+            'consecutive_count' => $this->integer()->notNull()->defaultValue(1),
+            'last_status_code' => $this->integer()->defaultValue(null),
+            'last_error' => $this->text()->defaultValue(null),
+        ]);
+
+        $this->createIndex('uk_domain', '{{%source_block}}', ['domain'], true);
+
+        // Table: ttm_financial
+        $this->createTable('{{%ttm_financial}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'company_id' => $this->bigInteger()->notNull()->unsigned(),
+            'as_of_date' => $this->date()->notNull(),
+            'revenue' => $this->decimal(20, 2)->defaultValue(null),
+            'gross_profit' => $this->decimal(20, 2)->defaultValue(null),
+            'operating_income' => $this->decimal(20, 2)->defaultValue(null),
+            'ebitda' => $this->decimal(20, 2)->defaultValue(null),
+            'net_income' => $this->decimal(20, 2)->defaultValue(null),
+            'operating_cash_flow' => $this->decimal(20, 2)->defaultValue(null),
+            'capex' => $this->decimal(20, 2)->defaultValue(null),
+            'free_cash_flow' => $this->decimal(20, 2)->defaultValue(null),
+            'q1_period_end' => $this->date()->defaultValue(null),
+            'q2_period_end' => $this->date()->defaultValue(null),
+            'q3_period_end' => $this->date()->defaultValue(null),
+            'q4_period_end' => $this->date()->defaultValue(null),
+            'currency' => $this->string(255)->notNull(),
+            'calculated_at' => $this->dateTime()->notNull(),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_company_date', '{{%ttm_financial}}', ['company_id', 'as_of_date'], true);
+
+        // Table: valuation_snapshot
+        $this->createTable('{{%valuation_snapshot}}', [
+            'id' => $this->bigPrimaryKey()->unsigned(),
+            'company_id' => $this->bigInteger()->notNull()->unsigned(),
+            'snapshot_date' => $this->date()->notNull(),
+            'price' => $this->decimal(12, 4)->defaultValue(null),
+            'market_cap' => $this->decimal(20, 2)->defaultValue(null),
+            'enterprise_value' => $this->decimal(20, 2)->defaultValue(null),
+            'shares_outstanding' => $this->bigInteger()->defaultValue(null)->unsigned(),
+            'trailing_pe' => $this->decimal(10, 4)->defaultValue(null),
+            'forward_pe' => $this->decimal(10, 4)->defaultValue(null),
+            'peg_ratio' => $this->decimal(10, 4)->defaultValue(null),
+            'price_to_book' => $this->decimal(10, 4)->defaultValue(null),
+            'price_to_sales' => $this->decimal(10, 4)->defaultValue(null),
+            'ev_to_ebitda' => $this->decimal(10, 4)->defaultValue(null),
+            'ev_to_revenue' => $this->decimal(10, 4)->defaultValue(null),
+            'dividend_yield' => $this->decimal(8, 4)->defaultValue(null),
+            'fcf_yield' => $this->decimal(8, 4)->defaultValue(null),
+            'earnings_yield' => $this->decimal(8, 4)->defaultValue(null),
+            'net_debt_to_ebitda' => $this->decimal(10, 4)->defaultValue(null),
+            'retention_tier' => $this->string(255)->notNull()->defaultValue('daily'),
+            'currency' => $this->string(255)->notNull(),
+            'source_adapter' => $this->string(50)->notNull(),
+            'collected_at' => $this->dateTime()->notNull(),
+            'created_at' => $this->dateTime()->notNull()->defaultValue(new Expression('CURRENT_TIMESTAMP')),
+        ]);
+
+        $this->createIndex('uk_valuation_company_date', '{{%valuation_snapshot}}', ['company_id', 'snapshot_date'], true);
+
+        // Foreign keys
+        $this->addForeignKey(
+            'fk-industry-sector_id',
+            '{{%industry}}',
+            ['sector_id'],
+            '{{%sector}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-industry-policy_id',
+            '{{%industry}}',
+            ['policy_id'],
+            '{{%collection_policy}}',
+            ['id'],
+            'SET NULL',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-company-industry_id',
+            '{{%company}}',
+            ['industry_id'],
+            '{{%industry}}',
+            ['id'],
+            'SET NULL',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-analysis_report-industry_id',
+            '{{%analysis_report}}',
+            ['industry_id'],
+            '{{%industry}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-annual_financial-company_id',
+            '{{%annual_financial}}',
+            ['company_id'],
+            '{{%company}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-collection_error-collection_run_id',
+            '{{%collection_error}}',
+            ['collection_run_id'],
+            '{{%collection_run}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-collection_run-industry_id',
+            '{{%collection_run}}',
+            ['industry_id'],
+            '{{%industry}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-data_gap-company_id',
+            '{{%data_gap}}',
+            ['company_id'],
+            '{{%company}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-quarterly_financial-company_id',
+            '{{%quarterly_financial}}',
+            ['company_id'],
+            '{{%company}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-ttm_financial-company_id',
+            '{{%ttm_financial}}',
+            ['company_id'],
+            '{{%company}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE'
+        );
+
+        $this->addForeignKey(
+            'fk-valuation_snapshot-company_id',
+            '{{%valuation_snapshot}}',
+            ['company_id'],
+            '{{%company}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE'
+        );
+    }
+
+    public function safeDown(): void
+    {
+        // Drop foreign keys
+        $this->dropForeignKey('fk-valuation_snapshot-company_id', '{{%valuation_snapshot}}');
+        $this->dropForeignKey('fk-ttm_financial-company_id', '{{%ttm_financial}}');
+        $this->dropForeignKey('fk-quarterly_financial-company_id', '{{%quarterly_financial}}');
+        $this->dropForeignKey('fk-data_gap-company_id', '{{%data_gap}}');
+        $this->dropForeignKey('fk-collection_run-industry_id', '{{%collection_run}}');
+        $this->dropForeignKey('fk-collection_error-collection_run_id', '{{%collection_error}}');
+        $this->dropForeignKey('fk-annual_financial-company_id', '{{%annual_financial}}');
+        $this->dropForeignKey('fk-analysis_report-industry_id', '{{%analysis_report}}');
+        $this->dropForeignKey('fk-company-industry_id', '{{%company}}');
+        $this->dropForeignKey('fk-industry-policy_id', '{{%industry}}');
+        $this->dropForeignKey('fk-industry-sector_id', '{{%industry}}');
+
+        // Drop tables
+        $this->dropTable('{{%valuation_snapshot}}');
+        $this->dropTable('{{%ttm_financial}}');
+        $this->dropTable('{{%source_block}}');
+        $this->dropTable('{{%quarterly_financial}}');
+        $this->dropTable('{{%price_history}}');
+        $this->dropTable('{{%macro_indicator}}');
+        $this->dropTable('{{%fx_rate}}');
+        $this->dropTable('{{%data_gap}}');
+        $this->dropTable('{{%collection_run}}');
+        $this->dropTable('{{%collection_error}}');
+        $this->dropTable('{{%collection_attempt}}');
+        $this->dropTable('{{%annual_financial}}');
+        $this->dropTable('{{%analysis_report}}');
+        $this->dropTable('{{%company}}');
+        $this->dropTable('{{%industry}}');
+        $this->dropTable('{{%collection_policy}}');
+        $this->dropTable('{{%sector}}');
+    }
+}

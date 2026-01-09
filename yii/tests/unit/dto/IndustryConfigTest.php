@@ -23,6 +23,7 @@ final class IndustryConfigTest extends Unit
     {
         $config = $this->createIndustryConfig();
 
+        $this->assertSame(1, $config->industryId);
         $this->assertSame('oil-majors', $config->id);
         $this->assertSame('Oil Majors', $config->name);
         $this->assertSame('Energy', $config->sector);
@@ -102,6 +103,7 @@ final class IndustryConfigTest extends Unit
         $config = $this->createIndustryConfig();
         $array = $config->toArray();
 
+        $this->assertSame(1, $array['industry_id']);
         $this->assertSame('oil-majors', $array['id']);
         $this->assertSame('Oil Majors', $array['name']);
         $this->assertSame('Energy', $array['sector']);
@@ -133,86 +135,10 @@ final class IndustryConfigTest extends Unit
         $this->assertNull($array['alternative_tickers']);
     }
 
-    public function testFocalTickersIncludedInToArrayWhenNotEmpty(): void
-    {
-        $config = $this->createIndustryConfigWithFocalTickers(['SHEL', 'XOM']);
-        $array = $config->toArray();
-
-        $this->assertArrayHasKey('focal_tickers', $array);
-        $this->assertSame(['SHEL', 'XOM'], $array['focal_tickers']);
-    }
-
-    public function testFocalTickersExcludedFromToArrayWhenEmpty(): void
-    {
-        $config = $this->createIndustryConfig();
-        $array = $config->toArray();
-
-        $this->assertArrayNotHasKey('focal_tickers', $array);
-    }
-
-    public function testFocalTickersDefaultsToEmptyArray(): void
-    {
-        $config = $this->createIndustryConfig();
-
-        $this->assertSame([], $config->focalTickers);
-    }
-
-    public function testFocalTickersCanContainMultipleTickers(): void
-    {
-        $config = $this->createIndustryConfigWithFocalTickers(['SHEL', 'XOM']);
-
-        $this->assertCount(2, $config->focalTickers);
-        $this->assertContains('SHEL', $config->focalTickers);
-        $this->assertContains('XOM', $config->focalTickers);
-    }
-
-    /**
-     * @param list<string> $focalTickers
-     */
-    private function createIndustryConfigWithFocalTickers(array $focalTickers): IndustryConfig
-    {
-        return new IndustryConfig(
-            id: 'oil-majors',
-            name: 'Oil Majors',
-            sector: 'Energy',
-            companies: [
-                new CompanyConfig(
-                    ticker: 'SHEL',
-                    name: 'Shell plc',
-                    listingExchange: 'LSE',
-                    listingCurrency: 'GBP',
-                    reportingCurrency: 'USD',
-                    fyEndMonth: 12,
-                ),
-                new CompanyConfig(
-                    ticker: 'XOM',
-                    name: 'Exxon Mobil',
-                    listingExchange: 'NYSE',
-                    listingCurrency: 'USD',
-                    reportingCurrency: 'USD',
-                    fyEndMonth: 12,
-                ),
-            ],
-            macroRequirements: new MacroRequirements(
-                commodityBenchmark: 'brent_crude',
-            ),
-            dataRequirements: new DataRequirements(
-                historyYears: 5,
-                quartersToFetch: 8,
-                valuationMetrics: [
-                    new MetricDefinition('market_cap', MetricDefinition::UNIT_CURRENCY, true),
-                ],
-                annualFinancialMetrics: [],
-                quarterMetrics: [],
-                operationalMetrics: [],
-            ),
-            focalTickers: $focalTickers,
-        );
-    }
-
     private function createIndustryConfig(): IndustryConfig
     {
         return new IndustryConfig(
+            industryId: 1,
             id: 'oil-majors',
             name: 'Oil Majors',
             sector: 'Energy',

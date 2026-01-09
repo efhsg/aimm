@@ -9,14 +9,10 @@ namespace app\dto;
  */
 final readonly class CollectIndustryRequest
 {
-    /**
-     * @param list<string> $focalTickers Additional focal tickers beyond those in config
-     */
     public function __construct(
         public IndustryConfig $config,
         public int $batchSize = 10,
         public bool $enableMemoryManagement = true,
-        public array $focalTickers = [],
     ) {
     }
 }

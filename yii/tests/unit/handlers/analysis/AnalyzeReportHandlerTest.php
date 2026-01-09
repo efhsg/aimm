@@ -20,6 +20,7 @@ use app\dto\GateResult;
 use app\dto\IndustryDataPack;
 use app\dto\MacroData;
 use app\dto\QuartersData;
+use app\dto\report\CompanyAnalysis;
 use app\dto\report\FundamentalsBreakdown;
 use app\dto\report\RiskBreakdown;
 use app\dto\report\ValuationGapSummary;
@@ -37,6 +38,7 @@ use app\handlers\analysis\AssessFundamentalsInterface;
 use app\handlers\analysis\AssessRiskInterface;
 use app\handlers\analysis\CalculateGapsInterface;
 use app\handlers\analysis\DetermineRatingInterface;
+use app\handlers\analysis\RankCompaniesInterface;
 use app\transformers\PeerAverageTransformer;
 use app\validators\AnalysisGateValidatorInterface;
 use Codeception\Test\Unit;
@@ -56,6 +58,7 @@ final class AnalyzeReportHandlerTest extends Unit
     private AssessFundamentalsInterface $assessFundamentals;
     private AssessRiskInterface $assessRisk;
     private DetermineRatingInterface $determineRating;
+    private RankCompaniesInterface $rankCompanies;
 
     protected function setUp(): void
     {
@@ -68,6 +71,7 @@ final class AnalyzeReportHandlerTest extends Unit
         $this->assessFundamentals = $this->createMock(AssessFundamentalsInterface::class);
         $this->assessRisk = $this->createMock(AssessRiskInterface::class);
         $this->determineRating = $this->createMock(DetermineRatingInterface::class);
+        $this->rankCompanies = $this->createMock(RankCompaniesInterface::class);
 
         $this->handler = new AnalyzeReportHandler(
             $this->gateValidator,
@@ -76,13 +80,14 @@ final class AnalyzeReportHandlerTest extends Unit
             $this->assessFundamentals,
             $this->assessRisk,
             $this->determineRating,
+            $this->rankCompanies,
         );
     }
 
     public function testReturnsFailureWhenGateFails(): void
     {
         $dataPack = $this->createDataPack();
-        $request = new AnalyzeReportRequest($dataPack, 'AAPL');
+        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants');
 
         $gateResult = new GateResult(
             passed: false,
@@ -100,25 +105,10 @@ final class AnalyzeReportHandlerTest extends Unit
         $this->assertEquals('Gate validation failed', $result->errorMessage);
     }
 
-    public function testReturnsFailureWhenFocalNotFound(): void
-    {
-        $dataPack = $this->createDataPack();
-        $request = new AnalyzeReportRequest($dataPack, 'NONEXISTENT');
-
-        $gateResult = new GateResult(passed: true, errors: [], warnings: []);
-        $this->gateValidator->method('validate')->willReturn($gateResult);
-
-        $result = $this->handler->handle($request);
-
-        $this->assertFalse($result->success);
-        $this->assertNull($result->report);
-        $this->assertStringContainsString('not found', $result->errorMessage);
-    }
-
     public function testBuildsCompleteReportOnSuccess(): void
     {
         $dataPack = $this->createDataPack();
-        $request = new AnalyzeReportRequest($dataPack, 'AAPL');
+        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants');
 
         $this->setupSuccessMocks();
 
@@ -129,10 +119,10 @@ final class AnalyzeReportHandlerTest extends Unit
         $this->assertNull($result->errorMessage);
     }
 
-    public function testReportContainsAllSections(): void
+    public function testReportContainsAllCompanies(): void
     {
         $dataPack = $this->createDataPack();
-        $request = new AnalyzeReportRequest($dataPack, 'AAPL');
+        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants');
 
         $this->setupSuccessMocks();
 
@@ -143,38 +133,39 @@ final class AnalyzeReportHandlerTest extends Unit
 
         // Check metadata
         $this->assertEquals('us-tech-giants', $report->metadata->industryId);
-        $this->assertEquals('AAPL', $report->metadata->focalTicker);
-        $this->assertEquals('Apple Inc', $report->metadata->focalName);
-        $this->assertEquals(2, $report->metadata->peerCount);
+        $this->assertEquals('us-tech-giants', $report->metadata->industrySlug);
+        $this->assertEquals('US Tech Giants', $report->metadata->industryName);
 
-        // Check focal analysis
-        $this->assertEquals(Rating::Buy, $report->focalAnalysis->rating);
-        $this->assertEquals(RatingRulePath::BuyAllConditions, $report->focalAnalysis->rulePath);
-
-        // Check valuation snapshot
-        $this->assertEqualsWithDelta(3000.0, $report->focalAnalysis->valuation->marketCapBillions, 0.1);
-        $this->assertEquals(25.0, $report->focalAnalysis->valuation->fwdPe);
-
-        // Check financials
-        $this->assertCount(2, $report->financials->annualData);
-        $this->assertEquals(2024, $report->financials->annualData[0]->fiscalYear);
-
-        // Check peer comparison
-        $this->assertEquals(2, $report->peerComparison->peerCount);
-        $this->assertCount(2, $report->peerComparison->peers);
+        // All companies should be analyzed (3 companies)
+        $this->assertCount(3, $report->companyAnalyses);
     }
 
     public function testReportUsesCustomThresholds(): void
     {
         $dataPack = $this->createDataPack();
         $thresholds = new AnalysisThresholds(buyGapThreshold: 25.0);
-        $request = new AnalyzeReportRequest($dataPack, 'AAPL', $thresholds);
+        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants', $thresholds);
 
         $this->setupSuccessMocks();
 
         $result = $this->handler->handle($request);
 
         $this->assertTrue($result->success);
+    }
+
+    public function testReturnsErrorWhenNoCompaniesHaveSufficientData(): void
+    {
+        $dataPack = $this->createDataPackWithInsufficientData();
+        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants');
+
+        $gateResult = new GateResult(passed: true, errors: [], warnings: []);
+        $this->gateValidator->method('validate')->willReturn($gateResult);
+
+        $result = $this->handler->handle($request);
+
+        $this->assertFalse($result->success);
+        $this->assertNull($result->report);
+        $this->assertStringContainsString('No companies', $result->errorMessage);
     }
 
     private function setupSuccessMocks(): void
@@ -209,6 +200,28 @@ final class AnalyzeReportHandlerTest extends Unit
             rulePath: RatingRulePath::BuyAllConditions,
         );
         $this->determineRating->method('handle')->willReturn($ratingResult);
+
+        // Rank companies - return input with ranks assigned
+        $this->rankCompanies->method('handle')
+            ->willReturnCallback(function (array $analyses): array {
+                $ranked = [];
+                $rank = 1;
+                /** @var CompanyAnalysis $analysis */
+                foreach ($analyses as $analysis) {
+                    $ranked[] = new CompanyAnalysis(
+                        ticker: $analysis->ticker,
+                        name: $analysis->name,
+                        rating: $analysis->rating,
+                        rulePath: $analysis->rulePath,
+                        valuation: $analysis->valuation,
+                        valuationGap: $analysis->valuationGap,
+                        fundamentals: $analysis->fundamentals,
+                        risk: $analysis->risk,
+                        rank: $rank++,
+                    );
+                }
+                return $ranked;
+            });
     }
 
     private function createDataPack(): IndustryDataPack
@@ -217,6 +230,31 @@ final class AnalyzeReportHandlerTest extends Unit
             'AAPL' => $this->createCompany('AAPL', 'Apple Inc', 3_000_000_000_000),
             'MSFT' => $this->createCompany('MSFT', 'Microsoft Corp', 2_800_000_000_000),
             'GOOGL' => $this->createCompany('GOOGL', 'Alphabet Inc', 1_800_000_000_000),
+        ];
+
+        $collectedAt = new DateTimeImmutable();
+
+        return new IndustryDataPack(
+            industryId: 'us-tech-giants',
+            datapackId: 'test-datapack-123',
+            collectedAt: $collectedAt,
+            macro: new MacroData(),
+            companies: $companies,
+            collectionLog: new CollectionLog(
+                startedAt: $collectedAt,
+                completedAt: $collectedAt,
+                durationSeconds: 60,
+                companyStatuses: array_fill_keys(array_keys($companies), CollectionStatus::Complete),
+                macroStatus: CollectionStatus::Complete,
+                totalAttempts: count($companies),
+            ),
+        );
+    }
+
+    private function createDataPackWithInsufficientData(): IndustryDataPack
+    {
+        $companies = [
+            'AAPL' => $this->createCompanyWithInsufficientData('AAPL', 'Apple Inc'),
         ];
 
         $collectedAt = new DateTimeImmutable();
@@ -273,6 +311,30 @@ final class AnalyzeReportHandlerTest extends Unit
                 divYield: $this->createPercent(0.5),
             ),
             financials: new FinancialsData(historyYears: 2, annualData: $annualData),
+            quarters: new QuartersData(quarters: []),
+        );
+    }
+
+    private function createCompanyWithInsufficientData(string $ticker, string $name): CompanyData
+    {
+        // Only 1 year of annual data (minimum is 2)
+        $annualData = [
+            new AnnualFinancials(
+                fiscalYear: 2024,
+                revenue: $this->createMoney(100_000_000_000),
+            ),
+        ];
+
+        return new CompanyData(
+            ticker: $ticker,
+            name: $name,
+            listingExchange: 'NASDAQ',
+            listingCurrency: 'USD',
+            reportingCurrency: 'USD',
+            valuation: new ValuationData(
+                marketCap: $this->createMoney(3_000_000_000_000),
+            ),
+            financials: new FinancialsData(historyYears: 1, annualData: $annualData),
             quarters: new QuartersData(quarters: []),
         );
     }

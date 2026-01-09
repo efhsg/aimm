@@ -12,7 +12,7 @@ use yii\db\ActiveRecord;
  * ActiveRecord model for the collection_run table.
  *
  * @property int $id
- * @property string $industry_id
+ * @property int $industry_id
  * @property string $datapack_id
  * @property string $status
  * @property string $started_at
@@ -46,7 +46,7 @@ final class CollectionRun extends ActiveRecord
     {
         return [
             [['industry_id', 'datapack_id'], 'required'],
-            [['industry_id'], 'string', 'max' => 64],
+            [['industry_id'], 'integer'],
             [['datapack_id'], 'string', 'max' => 36],
             [['datapack_id'], 'unique'],
             [['status'], 'string', 'max' => 20],

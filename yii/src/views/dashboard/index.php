@@ -7,7 +7,7 @@ use yii\helpers\Url;
 
 /**
  * @var yii\web\View $this
- * @var array{total: int, active: int, inactive: int} $peerGroupCounts
+ * @var array{total: int, active: int, inactive: int} $industryCounts
  * @var list<array<string, mixed>> $recentRuns
  * @var int $policyCount
  * @var array{total: int, complete: int, failed: int, running: int} $runStats
@@ -29,8 +29,8 @@ $this->title = 'AIMM Dashboard';
     </div>
 
     <div class="dashboard__grid">
-        <!-- Active Peer Groups -->
-        <a href="<?= Url::to(['/peer-group/index']) ?>" class="stat-card">
+        <!-- Active Industries -->
+        <a href="<?= Url::to(['/industry/index']) ?>" class="stat-card">
             <div class="stat-card__icon bg-brand-light">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -40,9 +40,9 @@ $this->title = 'AIMM Dashboard';
                 </svg>
             </div>
             <div class="stat-card__content">
-                <div class="stat-card__label">Active Peer Groups</div>
-                <div class="stat-card__value"><?= $peerGroupCounts['active'] ?></div>
-                <div class="stat-card__meta">of <?= $peerGroupCounts['total'] ?> total groups</div>
+                <div class="stat-card__label">Active Industries</div>
+                <div class="stat-card__value"><?= $industryCounts['active'] ?></div>
+                <div class="stat-card__meta">of <?= $industryCounts['total'] ?> total industries</div>
             </div>
         </a>
 

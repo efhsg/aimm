@@ -25,7 +25,7 @@ final class CollectionRunRepositoryTest extends Unit
             ->with(
                 '{{%collection_run}}',
                 $this->callback(function (array $data): bool {
-                    return $data['industry_id'] === 'oil_majors'
+                    return $data['industry_id'] === 1
                         && $data['datapack_id'] === 'dp-123'
                         && $data['status'] === 'running'
                         && isset($data['started_at']);
@@ -41,7 +41,7 @@ final class CollectionRunRepositoryTest extends Unit
         $db->method('getLastInsertID')->willReturn('42');
 
         $repository = new CollectionRunRepository($db);
-        $id = $repository->create('oil_majors', 'dp-123');
+        $id = $repository->create(1, 'dp-123');
 
         $this->assertSame(42, $id);
     }
@@ -217,7 +217,7 @@ final class CollectionRunRepositoryTest extends Unit
     {
         $expectedRow = [
             'id' => 42,
-            'industry_id' => 'oil_majors',
+            'industry_id' => 1,
             'datapack_id' => 'dp-123',
             'status' => 'complete',
         ];
@@ -261,8 +261,8 @@ final class CollectionRunRepositoryTest extends Unit
     public function testListByIndustryReturnsRows(): void
     {
         $expectedRows = [
-            ['id' => 2, 'industry_id' => 'oil_majors', 'datapack_id' => 'dp-002'],
-            ['id' => 1, 'industry_id' => 'oil_majors', 'datapack_id' => 'dp-001'],
+            ['id' => 2, 'industry_id' => 1, 'datapack_id' => 'dp-002'],
+            ['id' => 1, 'industry_id' => 1, 'datapack_id' => 'dp-001'],
         ];
 
         $command = $this->createMock(Command::class);
@@ -276,7 +276,7 @@ final class CollectionRunRepositoryTest extends Unit
             ->willReturn($command);
 
         $repository = new CollectionRunRepository($db);
-        $result = $repository->listByIndustry('oil_majors');
+        $result = $repository->listByIndustry(1);
 
         $this->assertSame($expectedRows, $result);
     }
@@ -298,7 +298,7 @@ final class CollectionRunRepositoryTest extends Unit
         $db->method('createCommand')->willReturn($command);
 
         $repository = new CollectionRunRepository($db);
-        $repository->listByIndustry('oil_majors', 5);
+        $repository->listByIndustry(1, 5);
 
         $this->assertTrue(true);
     }
@@ -307,7 +307,7 @@ final class CollectionRunRepositoryTest extends Unit
     {
         $expectedRow = [
             'id' => 42,
-            'industry_id' => 'oil_majors',
+            'industry_id' => 1,
             'status' => 'complete',
             'gate_passed' => 1,
         ];
@@ -327,7 +327,7 @@ final class CollectionRunRepositoryTest extends Unit
             ->willReturn($command);
 
         $repository = new CollectionRunRepository($db);
-        $result = $repository->getLatestSuccessful('oil_majors');
+        $result = $repository->getLatestSuccessful(1);
 
         $this->assertSame($expectedRow, $result);
     }
@@ -342,7 +342,7 @@ final class CollectionRunRepositoryTest extends Unit
         $db->method('createCommand')->willReturn($command);
 
         $repository = new CollectionRunRepository($db);
-        $result = $repository->getLatestSuccessful('oil_majors');
+        $result = $repository->getLatestSuccessful(1);
 
         $this->assertNull($result);
     }
@@ -391,7 +391,9 @@ final class CollectionRunRepositoryTest extends Unit
         $db->expects($this->once())
             ->method('createCommand')
             ->with($this->callback(function (string $sql): bool {
-                return str_contains($sql, 'ORDER BY started_at DESC')
+                return str_contains($sql, 'JOIN {{%industry}}')
+                    && str_contains($sql, 'ORDER BY')
+                    && str_contains($sql, 'started_at DESC')
                     && !str_contains($sql, 'WHERE');
             }))
             ->willReturn($command);
@@ -439,7 +441,7 @@ final class CollectionRunRepositoryTest extends Unit
         $db = $this->createMock(Connection::class);
         $db->expects($this->once())
             ->method('createCommand')
-            ->with($this->stringContains('industry_id LIKE :search'))
+            ->with($this->stringContains('i.slug LIKE :search'))
             ->willReturn($command);
 
         $repository = new CollectionRunRepository($db);
@@ -464,7 +466,7 @@ final class CollectionRunRepositoryTest extends Unit
             ->method('createCommand')
             ->with($this->callback(function (string $sql): bool {
                 return str_contains($sql, 'status = :status')
-                    && str_contains($sql, 'industry_id LIKE :search');
+                    && str_contains($sql, 'i.slug LIKE :search');
             }))
             ->willReturn($command);
 

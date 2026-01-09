@@ -38,7 +38,7 @@ $this->title = 'Collection Runs';
             type="text"
             name="search"
             class="search-input"
-            placeholder="Search by peer group or datapack ID..."
+            placeholder="Search by industry or datapack ID..."
             value="<?= Html::encode($currentSearch ?? '') ?>"
         >
         <button type="submit" class="btn btn--secondary btn--sm">Filter</button>
@@ -58,7 +58,7 @@ $this->title = 'Collection Runs';
                     <thead>
                         <tr>
                             <th>Run ID</th>
-                            <th>Peer Group</th>
+                            <th>Industry</th>
                             <th>Datapack ID</th>
                             <th>Status</th>
                             <th>Gate</th>

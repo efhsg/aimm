@@ -38,7 +38,6 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     private const ERROR_MACRO_STALE = 'MACRO_STALE';
 
     private const WARNING_EXTRA_COMPANY = 'EXTRA_COMPANY';
-    private const WARNING_MISSING_PEER = 'MISSING_PEER';
     private const WARNING_MACRO_AGING = 'MACRO_AGING';
     private const WARNING_TEMPORAL_SPREAD = 'TEMPORAL_SPREAD';
     private const WARNING_LOW_COVERAGE = 'LOW_COVERAGE';
@@ -61,55 +60,27 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
 
     /**
      * @param array<string, CollectionStatus> $companyStatuses
-     * @param list<string> $focalTickers
      */
     public function validateResults(
         array $companyStatuses,
         CollectionStatus $macroStatus,
-        IndustryConfig $config,
-        array $focalTickers = []
+        IndustryConfig $config
     ): GateResult {
         $errors = [];
         $warnings = [];
 
-        // Validate focal companies - must be Complete
-        foreach ($focalTickers as $ticker) {
-            $status = $companyStatuses[$ticker] ?? null;
-
-            if ($status === null) {
-                $errors[] = new GateError(
-                    code: self::ERROR_MISSING_COMPANY,
-                    message: "Focal company {$ticker} was not collected",
-                    path: "companies.{$ticker}",
-                );
-                continue;
-            }
-
+        // Validate all companies equally
+        foreach ($companyStatuses as $ticker => $status) {
             if ($status === CollectionStatus::Failed) {
                 $errors[] = new GateError(
-                    code: 'FOCAL_FAILED',
-                    message: "Focal company {$ticker} collection failed",
+                    code: 'COMPANY_FAILED',
+                    message: "Company {$ticker} collection failed",
                     path: "companies.{$ticker}",
                 );
             } elseif ($status === CollectionStatus::Partial) {
                 $warnings[] = new GateWarning(
-                    code: 'FOCAL_PARTIAL',
-                    message: "Focal company {$ticker} has partial data",
-                    path: "companies.{$ticker}",
-                );
-            }
-        }
-
-        // Validate peer companies - warn if failed
-        foreach ($companyStatuses as $ticker => $status) {
-            if (in_array($ticker, $focalTickers, true)) {
-                continue; // Already handled above
-            }
-
-            if ($status === CollectionStatus::Failed) {
-                $warnings[] = new GateWarning(
-                    code: 'PEER_FAILED',
-                    message: "Peer company {$ticker} collection failed",
+                    code: 'COMPANY_PARTIAL',
+                    message: "Company {$ticker} has partial data",
                     path: "companies.{$ticker}",
                 );
             }
@@ -136,12 +107,9 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         $missingTickers = array_diff($configuredTickers, $collectedTickers);
 
         foreach ($missingTickers as $ticker) {
-            if (in_array($ticker, $focalTickers, true)) {
-                continue; // Already reported above
-            }
             $warnings[] = new GateWarning(
-                code: self::WARNING_MISSING_PEER,
-                message: "Configured peer company {$ticker} was not collected",
+                code: 'MISSING_COMPANY',
+                message: "Configured company {$ticker} was not collected",
                 path: "companies.{$ticker}",
             );
         }
@@ -153,10 +121,7 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         );
     }
 
-    /**
-     * @param list<string> $focalTickers
-     */
-    public function validate(IndustryDataPack $dataPack, IndustryConfig $config, array $focalTickers = []): GateResult
+    public function validate(IndustryDataPack $dataPack, IndustryConfig $config): GateResult
     {
         $errors = [];
         $warnings = [];
@@ -183,20 +148,20 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         $companyErrors = $this->validateCompanyCompleteness($dataPack, $config);
         $errors = array_merge($errors, $companyErrors);
 
-        // 4. Required datapoints (valuation)
-        $requiredErrors = $this->validateRequiredDatapoints($dataPack, $config, $focalTickers);
+        // 4. Required datapoints (valuation) - all companies validated equally
+        $requiredErrors = $this->validateRequiredDatapoints($dataPack, $config);
         $errors = array_merge($errors, $requiredErrors);
 
-        // 5. Required financial metrics
-        $financialErrors = $this->validateRequiredFinancials($dataPack, $config, $focalTickers);
+        // 5. Required financial metrics - all companies validated equally
+        $financialErrors = $this->validateRequiredFinancials($dataPack, $config);
         $errors = array_merge($errors, $financialErrors);
 
-        // 6. Required quarter metrics
-        $quarterErrors = $this->validateRequiredQuarters($dataPack, $config, $focalTickers);
+        // 6. Required quarter metrics - all companies validated equally
+        $quarterErrors = $this->validateRequiredQuarters($dataPack, $config);
         $errors = array_merge($errors, $quarterErrors);
 
-        // 7. Required operational metrics
-        $operationalErrors = $this->validateRequiredOperational($dataPack, $config, $focalTickers);
+        // 7. Required operational metrics - all companies validated equally
+        $operationalErrors = $this->validateRequiredOperational($dataPack, $config);
         $errors = array_merge($errors, $operationalErrors);
 
         // 8. Provenance validation
@@ -215,16 +180,6 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
             errors: $errors,
             warnings: $warnings,
         );
-    }
-
-    /**
-     * Check if a ticker is one of the focal tickers.
-     *
-     * @param list<string> $focalTickers
-     */
-    private function isFocalTicker(string $ticker, array $focalTickers): bool
-    {
-        return in_array($ticker, $focalTickers, true);
     }
 
     /**
@@ -272,23 +227,15 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     }
 
     /**
-     * @param list<string> $focalTickers
      * @return list<GateError>
      */
-    private function validateRequiredDatapoints(IndustryDataPack $dataPack, IndustryConfig $config, array $focalTickers): array
+    private function validateRequiredDatapoints(IndustryDataPack $dataPack, IndustryConfig $config): array
     {
         $errors = [];
         $requiredMetricDefs = $this->filterRequiredMetricDefinitions($config->dataRequirements->valuationMetrics);
 
         foreach ($dataPack->companies as $ticker => $company) {
             foreach ($requiredMetricDefs as $metricDef) {
-                // Skip if scope=focal and this ticker is not a focal
-                if ($metricDef->requiredScope === MetricDefinition::SCOPE_FOCAL
-                    && !$this->isFocalTicker($ticker, $focalTickers)
-                ) {
-                    continue;
-                }
-
                 $metric = $metricDef->key;
                 $datapoint = $this->getValuationMetric($company, $metric);
 
@@ -326,10 +273,9 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     }
 
     /**
-     * @param list<string> $focalTickers
      * @return list<GateError>
      */
-    private function validateRequiredFinancials(IndustryDataPack $dataPack, IndustryConfig $config, array $focalTickers): array
+    private function validateRequiredFinancials(IndustryDataPack $dataPack, IndustryConfig $config): array
     {
         $errors = [];
         $requiredMetricDefs = $this->filterRequiredMetricDefinitions($config->dataRequirements->annualFinancialMetrics);
@@ -344,13 +290,6 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
 
         foreach ($dataPack->companies as $ticker => $company) {
             foreach ($requiredMetricDefs as $metricDef) {
-                // Skip if scope=focal and this ticker is not a focal
-                if ($metricDef->requiredScope === MetricDefinition::SCOPE_FOCAL
-                    && !$this->isFocalTicker($ticker, $focalTickers)
-                ) {
-                    continue;
-                }
-
                 $metric = $metricDef->key;
 
                 // Check at least one year of data exists
@@ -382,10 +321,9 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     }
 
     /**
-     * @param list<string> $focalTickers
      * @return list<GateError>
      */
-    private function validateRequiredQuarters(IndustryDataPack $dataPack, IndustryConfig $config, array $focalTickers): array
+    private function validateRequiredQuarters(IndustryDataPack $dataPack, IndustryConfig $config): array
     {
         $errors = [];
         $requiredMetricDefs = $this->filterRequiredMetricDefinitions($config->dataRequirements->quarterMetrics);
@@ -398,13 +336,6 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
 
         foreach ($dataPack->companies as $ticker => $company) {
             foreach ($requiredMetricDefs as $metricDef) {
-                // Skip if scope=focal and this ticker is not a focal
-                if ($metricDef->requiredScope === MetricDefinition::SCOPE_FOCAL
-                    && !$this->isFocalTicker($ticker, $focalTickers)
-                ) {
-                    continue;
-                }
-
                 $metric = $metricDef->key;
                 $foundCount = 0;
                 foreach ($company->quarters->quarters as $quarter) {
@@ -434,10 +365,9 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     }
 
     /**
-     * @param list<string> $focalTickers
      * @return list<GateError>
      */
-    private function validateRequiredOperational(IndustryDataPack $dataPack, IndustryConfig $config, array $focalTickers): array
+    private function validateRequiredOperational(IndustryDataPack $dataPack, IndustryConfig $config): array
     {
         $errors = [];
         $requiredMetricDefs = $this->filterRequiredMetricDefinitions($config->dataRequirements->operationalMetrics);
@@ -447,21 +377,10 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
         }
 
         foreach ($dataPack->companies as $ticker => $company) {
-            // Filter metrics applicable to this ticker based on scope
-            $applicableMetrics = [];
-            foreach ($requiredMetricDefs as $metricDef) {
-                // Skip if scope=focal and this ticker is not a focal
-                if ($metricDef->requiredScope === MetricDefinition::SCOPE_FOCAL
-                    && !$this->isFocalTicker($ticker, $focalTickers)
-                ) {
-                    continue;
-                }
-                $applicableMetrics[] = $metricDef->key;
-            }
-
-            if (empty($applicableMetrics)) {
-                continue;
-            }
+            $applicableMetrics = array_map(
+                static fn ($metricDef) => $metricDef->key,
+                $requiredMetricDefs
+            );
 
             if ($company->operational === null) {
                 foreach ($applicableMetrics as $metric) {
@@ -1010,23 +929,7 @@ final class CollectionGateValidator implements CollectionGateValidatorInterface
     }
 
     /**
-     * @param list<MetricDefinition> $metrics
-     * @return list<string>
-     */
-    private function filterRequiredMetrics(array $metrics): array
-    {
-        $required = [];
-        foreach ($metrics as $metric) {
-            if ($metric->required) {
-                $required[] = $metric->key;
-            }
-        }
-
-        return $required;
-    }
-
-    /**
-     * Returns required metric definitions with their full metadata (including requiredScope).
+     * Returns required metric definitions.
      *
      * @param list<MetricDefinition> $metrics
      * @return list<MetricDefinition>

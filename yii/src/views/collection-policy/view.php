@@ -76,28 +76,6 @@ $formatJson = function (mixed $value): string {
             <div class="detail-label">Quarters to Fetch</div>
             <div class="detail-value"><?= $policy['quarters_to_fetch'] ?></div>
 
-            <div class="detail-label">Sector Default</div>
-            <div class="detail-value detail-value--inline">
-                <?php if (!empty($policy['is_default_for_sector'])): ?>
-                    <span class="badge badge--info"><?= Html::encode($policy['is_default_for_sector']) ?></span>
-                    <form method="post"
-                          action="<?= Url::to(['set-default', 'slug' => $policy['slug']]) ?>"
-                          >
-                        <?= Html::hiddenInput(
-                            Yii::$app->request->csrfParam,
-                            Yii::$app->request->csrfToken
-                        ) ?>
-                        <input type="hidden" name="sector" value="<?= Html::encode($policy['is_default_for_sector']) ?>">
-                        <input type="hidden" name="clear" value="1">
-                        <button type="submit" class="btn btn--sm btn--secondary">
-                            Clear
-                        </button>
-                    </form>
-                <?php else: ?>
-                    <span class="text-muted">Not set</span>
-                <?php endif; ?>
-            </div>
-
             <div class="detail-label">Created</div>
             <div class="detail-value">
                 <?= Html::encode($policy['created_at']) ?>

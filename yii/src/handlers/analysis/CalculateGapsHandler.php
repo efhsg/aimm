@@ -12,7 +12,7 @@ use app\dto\report\ValuationGapSummary;
 use app\enums\GapDirection;
 
 /**
- * Calculates valuation gaps between focal company and peer averages.
+ * Calculates valuation gaps between a company and group averages.
  *
  * Gap interpretation:
  * - Lower-is-better metrics (P/E, EV/EBITDA): positive gap = undervalued
@@ -21,7 +21,7 @@ use app\enums\GapDirection;
 final class CalculateGapsHandler implements CalculateGapsInterface
 {
     public function handle(
-        CompanyData $focal,
+        CompanyData $company,
         PeerAverages $peerAverages,
         AnalysisThresholds $thresholds
     ): ValuationGapSummary {
@@ -31,7 +31,7 @@ final class CalculateGapsHandler implements CalculateGapsInterface
         $gaps[] = $this->calculateGap(
             'fwd_pe',
             'Forward P/E',
-            $focal->valuation->fwdPe?->value,
+            $company->valuation->fwdPe?->value,
             $peerAverages->fwdPe,
             true,
             $thresholds->fairValueThreshold
@@ -41,7 +41,7 @@ final class CalculateGapsHandler implements CalculateGapsInterface
         $gaps[] = $this->calculateGap(
             'ev_ebitda',
             'EV/EBITDA',
-            $focal->valuation->evEbitda?->value,
+            $company->valuation->evEbitda?->value,
             $peerAverages->evEbitda,
             true,
             $thresholds->fairValueThreshold
@@ -51,7 +51,7 @@ final class CalculateGapsHandler implements CalculateGapsInterface
         $gaps[] = $this->calculateGap(
             'fcf_yield',
             'FCF Yield',
-            $focal->valuation->fcfYield?->value,
+            $company->valuation->fcfYield?->value,
             $peerAverages->fcfYieldPercent,
             false,
             $thresholds->fairValueThreshold
@@ -61,7 +61,7 @@ final class CalculateGapsHandler implements CalculateGapsInterface
         $gaps[] = $this->calculateGap(
             'div_yield',
             'Dividend Yield',
-            $focal->valuation->divYield?->value,
+            $company->valuation->divYield?->value,
             $peerAverages->divYieldPercent,
             false,
             $thresholds->fairValueThreshold
@@ -91,16 +91,16 @@ final class CalculateGapsHandler implements CalculateGapsInterface
     private function calculateGap(
         string $key,
         string $label,
-        ?float $focalValue,
+        ?float $companyValue,
         ?float $peerAverage,
         bool $lowerIsBetter,
         float $fairValueThreshold
     ): MetricGap {
-        if ($focalValue === null || $peerAverage === null || $peerAverage == 0) {
+        if ($companyValue === null || $peerAverage === null || $peerAverage == 0) {
             return new MetricGap(
                 key: $key,
                 label: $label,
-                focalValue: $focalValue,
+                companyValue: $companyValue,
                 peerAverage: $peerAverage,
                 gapPercent: null,
                 direction: null,
@@ -109,20 +109,20 @@ final class CalculateGapsHandler implements CalculateGapsInterface
         }
 
         // Calculate gap percentage
-        // For lower_better: gap = (peer - focal) / peer * 100
-        //   Positive gap = undervalued (focal is cheaper)
-        // For higher_better: gap = (focal - peer) / peer * 100
-        //   Positive gap = undervalued (focal has better yield)
+        // For lower_better: gap = (peer - company) / peer * 100
+        //   Positive gap = undervalued (company is cheaper)
+        // For higher_better: gap = (company - peer) / peer * 100
+        //   Positive gap = undervalued (company has better yield)
         $gap = $lowerIsBetter
-            ? (($peerAverage - $focalValue) / $peerAverage) * 100
-            : (($focalValue - $peerAverage) / $peerAverage) * 100;
+            ? (($peerAverage - $companyValue) / $peerAverage) * 100
+            : (($companyValue - $peerAverage) / $peerAverage) * 100;
 
         $direction = $this->determineDirection($gap, $fairValueThreshold);
 
         return new MetricGap(
             key: $key,
             label: $label,
-            focalValue: $focalValue,
+            companyValue: $companyValue,
             peerAverage: $peerAverage,
             gapPercent: $gap,
             direction: $direction,

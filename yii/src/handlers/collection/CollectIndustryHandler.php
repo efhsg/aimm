@@ -9,8 +9,6 @@ use app\dto\CollectCompanyRequest;
 use app\dto\CollectIndustryRequest;
 use app\dto\CollectIndustryResult;
 use app\dto\CollectMacroRequest;
-use app\dto\DataRequirements;
-use app\dto\MetricDefinition;
 use app\enums\CollectionStatus;
 use app\exceptions\CollectionException;
 use app\queries\CollectionRunRepository;
@@ -44,8 +42,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
         $datapackId = Uuid::uuid4()->toString();
         $startTime = new DateTimeImmutable();
         $companyCount = count($request->config->companies);
-        $focalTickers = $this->buildFocalTickers($request);
-        $runId = $this->runRepository->create($request->config->id, $datapackId);
+        $runId = $this->runRepository->create($request->config->industryId, $datapackId);
 
         $this->logger->log(
             [
@@ -55,8 +52,6 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                 'company_count' => $companyCount,
                 'batch_size' => $request->batchSize,
                 'memory_management' => $request->enableMemoryManagement,
-                'focal_count' => count($focalTickers),
-                'focal_tickers' => $focalTickers,
             ],
             Logger::LEVEL_INFO,
             'collection'
@@ -73,7 +68,6 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             $companyStatuses = [];
             $batches = array_chunk($request->config->companies, $request->batchSize);
             $batchNumber = 0;
-            $peerRequirements = $this->buildPeerRequirements($request->config->dataRequirements);
 
             foreach ($batches as $batch) {
                 $batchNumber++;
@@ -91,16 +85,11 @@ final class CollectIndustryHandler implements CollectIndustryInterface
 
                 foreach ($batch as $companyConfig) {
                     try {
-                        $isFocal = in_array($companyConfig->ticker, $focalTickers, true);
-                        $requirements = $isFocal
-                            ? $request->config->dataRequirements
-                            : $peerRequirements;
-
                         $companyResult = $this->companyCollector->collect(
                             new CollectCompanyRequest(
                                 ticker: $companyConfig->ticker,
                                 config: $companyConfig,
-                                requirements: $requirements,
+                                requirements: $request->config->dataRequirements,
                             )
                         );
 
@@ -148,8 +137,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             $gateResult = $this->gateValidator->validateResults(
                 $companyStatuses,
                 $macroResult->status,
-                $request->config,
-                $focalTickers
+                $request->config
             );
             $this->runRepository->recordErrors($runId, $gateResult);
 
@@ -209,84 +197,6 @@ final class CollectIndustryHandler implements CollectIndustryInterface
 
             throw $exception;
         }
-    }
-
-    /**
-     * Build the list of focal tickers from config and request.
-     *
-     * @return list<string>
-     */
-    private function buildFocalTickers(CollectIndustryRequest $request): array
-    {
-        // Merge config focals with request focals
-        $merged = array_unique(array_merge(
-            $request->config->focalTickers,
-            $request->focalTickers
-        ));
-
-        if (empty($merged) && !empty($request->config->companies)) {
-            $fallbackTicker = $request->config->companies[0]->ticker;
-            $this->logger->log(
-                [
-                    'message' => 'Focal tickers not provided; falling back to first company',
-                    'ticker' => $fallbackTicker,
-                ],
-                Logger::LEVEL_INFO,
-                'collection'
-            );
-
-            return [$fallbackTicker];
-        }
-
-        // Validate all focals are valid companies
-        $validTickers = array_map(
-            static fn ($c): string => $c->ticker,
-            $request->config->companies
-        );
-
-        $invalidFocals = array_diff($merged, $validTickers);
-        if (!empty($invalidFocals)) {
-            throw new CollectionException(sprintf(
-                'Invalid focal ticker(s): %s. Must be in configured companies.',
-                implode(', ', $invalidFocals)
-            ));
-        }
-
-        return array_values($merged);
-    }
-
-    private function buildPeerRequirements(DataRequirements $requirements): DataRequirements
-    {
-        return new DataRequirements(
-            historyYears: $requirements->historyYears,
-            quartersToFetch: $requirements->quartersToFetch,
-            valuationMetrics: $this->buildPeerMetrics($requirements->valuationMetrics),
-            annualFinancialMetrics: $this->buildPeerMetrics($requirements->annualFinancialMetrics),
-            quarterMetrics: $this->buildPeerMetrics($requirements->quarterMetrics),
-            operationalMetrics: $this->buildPeerMetrics($requirements->operationalMetrics),
-        );
-    }
-
-    /**
-     * Build metric definitions for peer companies.
-     *
-     * - Metrics with required_scope=all remain required for peers
-     * - Metrics with required_scope=focal become optional for peers
-     *
-     * @param list<MetricDefinition> $metrics
-     * @return list<MetricDefinition>
-     */
-    private function buildPeerMetrics(array $metrics): array
-    {
-        return array_map(
-            static fn (MetricDefinition $metric): MetricDefinition => new MetricDefinition(
-                key: $metric->key,
-                unit: $metric->unit,
-                required: $metric->required && $metric->requiredScope === MetricDefinition::SCOPE_ALL,
-                requiredScope: $metric->requiredScope,
-            ),
-            $metrics,
-        );
     }
 
     private function manageMemory(): void

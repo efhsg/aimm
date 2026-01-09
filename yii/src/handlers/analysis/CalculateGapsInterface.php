@@ -12,7 +12,7 @@ use app\dto\report\ValuationGapSummary;
 interface CalculateGapsInterface
 {
     public function handle(
-        CompanyData $focal,
+        CompanyData $company,
         PeerAverages $peerAverages,
         AnalysisThresholds $thresholds
     ): ValuationGapSummary;

@@ -7,14 +7,14 @@ namespace app\dto\report;
 use app\enums\GapDirection;
 
 /**
- * Single valuation metric gap between focal and peer average.
+ * Single valuation metric gap between company and group average.
  */
 final readonly class MetricGap
 {
     public function __construct(
         public string $key,
         public string $label,
-        public ?float $focalValue,
+        public ?float $companyValue,
         public ?float $peerAverage,
         public ?float $gapPercent,
         public ?GapDirection $direction,
@@ -30,8 +30,8 @@ final readonly class MetricGap
         return [
             'key' => $this->key,
             'label' => $this->label,
-            'focal_value' => $this->focalValue !== null
-                ? round($this->focalValue, 2)
+            'company_value' => $this->companyValue !== null
+                ? round($this->companyValue, 2)
                 : null,
             'peer_average' => $this->peerAverage !== null
                 ? round($this->peerAverage, 2)

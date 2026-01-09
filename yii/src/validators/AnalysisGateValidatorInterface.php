@@ -9,5 +9,5 @@ use app\dto\IndustryDataPack;
 
 interface AnalysisGateValidatorInterface
 {
-    public function validate(IndustryDataPack $dataPack, string $focalTicker): GateResult;
+    public function validate(IndustryDataPack $dataPack): GateResult;
 }

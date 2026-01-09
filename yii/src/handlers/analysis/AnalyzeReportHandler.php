@@ -6,40 +6,31 @@ namespace app\handlers\analysis;
 
 use app\dto\analysis\AnalyzeReportRequest;
 use app\dto\analysis\AnalyzeReportResult;
-use app\dto\AnnualFinancials;
 use app\dto\CompanyData;
 use app\dto\IndustryDataPack;
-use app\dto\QuarterFinancials;
-use app\dto\report\AnnualFinancialRow;
-use app\dto\report\FinancialsSummary;
-use app\dto\report\FocalAnalysis;
+use app\dto\report\CompanyAnalysis;
 use app\dto\report\MacroContext;
-use app\dto\report\PeerAverages;
-use app\dto\report\PeerComparison;
-use app\dto\report\PeerSummary;
-use app\dto\report\QuarterlyFinancialRow;
-use app\dto\report\ReportDTO;
-use app\dto\report\ReportMetadata;
+use app\dto\report\RankedReportDTO;
+use app\dto\report\RankedReportMetadata;
 use app\dto\report\ValuationSnapshot;
 use app\transformers\PeerAverageTransformer;
 use app\validators\AnalysisGateValidatorInterface;
 use DateTimeImmutable;
 
 /**
- * Orchestrates the complete analysis pipeline.
+ * Orchestrates the complete analysis pipeline for all companies.
  *
  * Pipeline:
  * 1. Validate datapack (gate)
- * 2. Calculate peer averages
- * 3. Calculate valuation gaps
- * 4. Assess fundamentals
- * 5. Assess risk
- * 6. Determine rating
- * 7. Assemble report
+ * 2. Calculate group averages
+ * 3. Analyze each company (gaps, fundamentals, risk, rating)
+ * 4. Rank companies
+ * 5. Assemble report
  */
 final class AnalyzeReportHandler implements AnalyzeReportInterface
 {
     private const BILLIONS = 1_000_000_000;
+    private const MIN_ANNUAL_YEARS = 2;
 
     public function __construct(
         private readonly AnalysisGateValidatorInterface $gateValidator,
@@ -48,208 +39,116 @@ final class AnalyzeReportHandler implements AnalyzeReportInterface
         private readonly AssessFundamentalsInterface $assessFundamentals,
         private readonly AssessRiskInterface $assessRisk,
         private readonly DetermineRatingInterface $determineRating,
+        private readonly RankCompaniesInterface $rankCompanies,
     ) {
     }
 
     public function handle(AnalyzeReportRequest $request): AnalyzeReportResult
     {
         $dataPack = $request->dataPack;
-        $focalTicker = $request->focalTicker;
         $thresholds = $request->thresholds;
 
         // 1. Validate datapack
-        $gateResult = $this->gateValidator->validate($dataPack, $focalTicker);
+        $gateResult = $this->gateValidator->validate($dataPack);
         if (!$gateResult->passed) {
             return AnalyzeReportResult::gateFailed($gateResult);
         }
 
-        // Get focal company
-        $focal = $dataPack->getCompany($focalTicker);
-        if ($focal === null) {
-            return AnalyzeReportResult::error("Focal company {$focalTicker} not found");
-        }
+        // 2. Calculate group averages (all companies)
+        $groupAverages = $this->peerAverageTransformer->transform($dataPack->companies);
 
-        // 2. Calculate peer averages
-        $peerAverages = $this->peerAverageTransformer->transform(
-            $dataPack->companies,
-            $focalTicker
-        );
+        // 3. Analyze each company
+        $companyAnalyses = [];
+        foreach ($dataPack->companies as $company) {
+            // Skip companies with insufficient data
+            if (!$this->hasMinimumData($company)) {
+                continue;
+            }
 
-        // 3. Calculate valuation gaps
-        $valuationGap = $this->calculateGaps->handle($focal, $peerAverages, $thresholds);
+            // 3a. Calculate valuation gaps (company vs group average)
+            $valuationGap = $this->calculateGaps->handle($company, $groupAverages, $thresholds);
 
-        // 4. Assess fundamentals
-        $fundamentals = $this->assessFundamentals->handle($focal, $thresholds->fundamentalsWeights);
+            // 3b. Assess fundamentals
+            $fundamentals = $this->assessFundamentals->handle($company, $thresholds->fundamentalsWeights);
 
-        // 5. Assess risk
-        $risk = $this->assessRisk->handle($focal, $thresholds->riskThresholds);
+            // 3c. Assess risk
+            $risk = $this->assessRisk->handle($company, $thresholds->riskThresholds);
 
-        // 6. Determine rating
-        $ratingResult = $this->determineRating->handle(
-            $fundamentals,
-            $risk,
-            $valuationGap,
-            $thresholds
-        );
+            // 3d. Determine rating
+            $ratingResult = $this->determineRating->handle(
+                $fundamentals,
+                $risk,
+                $valuationGap,
+                $thresholds
+            );
 
-        // 7. Assemble report
-        $report = new ReportDTO(
-            metadata: $this->buildMetadata($dataPack, $focal),
-            focalAnalysis: new FocalAnalysis(
+            $companyAnalyses[] = new CompanyAnalysis(
+                ticker: $company->ticker,
+                name: $company->name,
                 rating: $ratingResult->rating,
                 rulePath: $ratingResult->rulePath,
-                valuation: $this->buildValuationSnapshot($focal),
+                valuation: $this->buildValuationSnapshot($company),
                 valuationGap: $valuationGap,
                 fundamentals: $fundamentals,
                 risk: $risk,
-            ),
-            financials: $this->buildFinancialsSummary($focal),
-            peerComparison: $this->buildPeerComparison($dataPack->companies, $focalTicker, $peerAverages),
+                rank: 0, // Placeholder - will be assigned by ranking handler
+            );
+        }
+
+        if ($companyAnalyses === []) {
+            return AnalyzeReportResult::error('No companies with sufficient data to analyze');
+        }
+
+        // 4. Rank companies
+        $rankedAnalyses = $this->rankCompanies->handle($companyAnalyses);
+
+        // 5. Assemble report
+        $report = new RankedReportDTO(
+            metadata: $this->buildMetadata($request, $dataPack, count($rankedAnalyses)),
+            companyAnalyses: $rankedAnalyses,
+            groupAverages: $groupAverages,
             macro: $this->buildMacroContext($dataPack),
         );
 
         return AnalyzeReportResult::success($report);
     }
 
+    private function hasMinimumData(CompanyData $company): bool
+    {
+        $annualCount = count($company->financials->annualData);
+        $hasMarketCap = $company->valuation->marketCap->getBaseValue() !== null;
+
+        return $annualCount >= self::MIN_ANNUAL_YEARS && $hasMarketCap;
+    }
+
     private function buildMetadata(
+        AnalyzeReportRequest $request,
         IndustryDataPack $dataPack,
-        CompanyData $focal
-    ): ReportMetadata {
-        return new ReportMetadata(
+        int $companyCount
+    ): RankedReportMetadata {
+        return new RankedReportMetadata(
             reportId: uniqid('rpt_', true),
             industryId: $dataPack->industryId,
-            focalTicker: $focal->ticker,
-            focalName: $focal->name,
+            industrySlug: $request->industrySlug,
+            industryName: $request->industryName,
             generatedAt: new DateTimeImmutable(),
             dataAsOf: $dataPack->collectedAt,
-            peerCount: count($dataPack->companies) - 1,
+            companyCount: $companyCount,
         );
     }
 
-    private function buildValuationSnapshot(CompanyData $focal): ValuationSnapshot
-    {
-        $marketCap = $focal->valuation->marketCap->getBaseValue();
-
-        return new ValuationSnapshot(
-            marketCapBillions: $marketCap !== null ? $marketCap / self::BILLIONS : null,
-            fwdPe: $focal->valuation->fwdPe?->value,
-            trailingPe: $focal->valuation->trailingPe?->value,
-            evEbitda: $focal->valuation->evEbitda?->value,
-            fcfYieldPercent: $focal->valuation->fcfYield?->value,
-            divYieldPercent: $focal->valuation->divYield?->value,
-            priceToBook: $focal->valuation->priceToBook?->value,
-        );
-    }
-
-    private function buildFinancialsSummary(CompanyData $focal): FinancialsSummary
-    {
-        $annualRows = [];
-        foreach ($focal->financials->annualData as $annual) {
-            $annualRows[] = $this->buildAnnualRow($annual);
-        }
-
-        // Sort by fiscal year descending
-        usort($annualRows, static fn (AnnualFinancialRow $a, AnnualFinancialRow $b): int =>
-            $b->fiscalYear <=> $a->fiscalYear);
-
-        $quarterlyRows = [];
-        foreach ($focal->quarters->quarters as $quarter) {
-            $quarterlyRows[] = $this->buildQuarterlyRow($quarter);
-        }
-
-        // Sort by quarter key descending
-        usort($quarterlyRows, static fn (QuarterlyFinancialRow $a, QuarterlyFinancialRow $b): int =>
-            $b->quarterKey <=> $a->quarterKey);
-
-        return new FinancialsSummary(
-            annualData: $annualRows,
-            quarterlyData: $quarterlyRows,
-        );
-    }
-
-    private function buildAnnualRow(AnnualFinancials $annual): AnnualFinancialRow
-    {
-        $revenue = $annual->revenue?->getBaseValue();
-        $ebitda = $annual->ebitda?->getBaseValue();
-
-        $ebitdaMargin = null;
-        if ($revenue !== null && $ebitda !== null && $revenue > 0) {
-            $ebitdaMargin = ($ebitda / $revenue) * 100;
-        }
-
-        return new AnnualFinancialRow(
-            fiscalYear: $annual->fiscalYear,
-            revenueBillions: $revenue !== null ? $revenue / self::BILLIONS : null,
-            ebitdaBillions: $ebitda !== null ? $ebitda / self::BILLIONS : null,
-            netIncomeBillions: $annual->netIncome?->getBaseValue() !== null
-                ? $annual->netIncome->getBaseValue() / self::BILLIONS
-                : null,
-            fcfBillions: $annual->freeCashFlow?->getBaseValue() !== null
-                ? $annual->freeCashFlow->getBaseValue() / self::BILLIONS
-                : null,
-            ebitdaMarginPercent: $ebitdaMargin,
-            netDebtBillions: $annual->netDebt?->getBaseValue() !== null
-                ? $annual->netDebt->getBaseValue() / self::BILLIONS
-                : null,
-        );
-    }
-
-    private function buildQuarterlyRow(QuarterFinancials $quarter): QuarterlyFinancialRow
-    {
-        return new QuarterlyFinancialRow(
-            quarterKey: $quarter->getQuarterKey(),
-            fiscalYear: $quarter->fiscalYear,
-            fiscalQuarter: $quarter->fiscalQuarter,
-            revenueBillions: $quarter->revenue?->getBaseValue() !== null
-                ? $quarter->revenue->getBaseValue() / self::BILLIONS
-                : null,
-            ebitdaBillions: $quarter->ebitda?->getBaseValue() !== null
-                ? $quarter->ebitda->getBaseValue() / self::BILLIONS
-                : null,
-            netIncomeBillions: $quarter->netIncome?->getBaseValue() !== null
-                ? $quarter->netIncome->getBaseValue() / self::BILLIONS
-                : null,
-            fcfBillions: $quarter->freeCashFlow?->getBaseValue() !== null
-                ? $quarter->freeCashFlow->getBaseValue() / self::BILLIONS
-                : null,
-        );
-    }
-
-    /**
-     * @param array<string, CompanyData> $companies
-     */
-    private function buildPeerComparison(
-        array $companies,
-        string $focalTicker,
-        PeerAverages $averages
-    ): PeerComparison {
-        $peers = [];
-        foreach ($companies as $ticker => $company) {
-            if ($ticker === $focalTicker) {
-                continue;
-            }
-            $peers[] = $this->buildPeerSummary($company);
-        }
-
-        return new PeerComparison(
-            peerCount: count($peers),
-            averages: $averages,
-            peers: $peers,
-        );
-    }
-
-    private function buildPeerSummary(CompanyData $company): PeerSummary
+    private function buildValuationSnapshot(CompanyData $company): ValuationSnapshot
     {
         $marketCap = $company->valuation->marketCap->getBaseValue();
 
-        return new PeerSummary(
-            ticker: $company->ticker,
-            name: $company->name,
+        return new ValuationSnapshot(
             marketCapBillions: $marketCap !== null ? $marketCap / self::BILLIONS : null,
             fwdPe: $company->valuation->fwdPe?->value,
+            trailingPe: $company->valuation->trailingPe?->value,
             evEbitda: $company->valuation->evEbitda?->value,
             fcfYieldPercent: $company->valuation->fcfYield?->value,
             divYieldPercent: $company->valuation->divYield?->value,
+            priceToBook: $company->valuation->priceToBook?->value,
         );
     }
 

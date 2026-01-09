@@ -7,13 +7,14 @@ namespace app\dto\analysis;
 use app\dto\IndustryDataPack;
 
 /**
- * Request to analyze an industry datapack.
+ * Request to analyze an industry datapack and rank all companies.
  */
 final readonly class AnalyzeReportRequest
 {
     public function __construct(
         public IndustryDataPack $dataPack,
-        public string $focalTicker,
+        public string $industrySlug,
+        public string $industryName,
         public AnalysisThresholds $thresholds = new AnalysisThresholds(),
     ) {
     }

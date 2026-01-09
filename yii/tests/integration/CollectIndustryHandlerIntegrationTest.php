@@ -79,13 +79,21 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
 
     private function seedTestData(): void
     {
-        // Seed industry_peer_group for FK constraint
+        // Seed sector and industry for FK constraint
         $db = Yii::$app->db;
-        $db->createCommand()->insert('industry_peer_group', [
+
+        $db->createCommand()->insert('sector', [
+            'slug' => 'software',
+            'name' => 'Software',
+        ])->execute();
+        $sectorId = (int) $db->getLastInsertID();
+
+        $db->createCommand()->insert('industry', [
             'slug' => 'tech',
             'name' => 'Technology Test',
-            'sector' => 'Software',
+            'sector_id' => $sectorId,
             'is_active' => 1,
+            'created_by' => 'test',
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s'),
         ])->execute();
@@ -94,7 +102,8 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
     private function cleanTestData(): void
     {
         $db = Yii::$app->db;
-        $db->createCommand()->delete('industry_peer_group', ['slug' => 'tech'])->execute();
+        $db->createCommand()->delete('industry', ['slug' => 'tech'])->execute();
+        $db->createCommand()->delete('sector', ['slug' => 'software'])->execute();
     }
 
     public function testCollectsIndustryAndRecordsRun(): void
@@ -120,12 +129,12 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         // Verify collection run was recorded
         $run = CollectionRun::findOne(['datapack_id' => $result->datapackId]);
         $this->assertNotNull($run, 'Collection run should be recorded in database');
-        $this->assertSame('tech', $run->industry_id);
+        $this->assertSame(1, (int) $run->industry_id); // industry_id is now an integer FK
         $this->assertNotNull($run->completed_at);
         $this->assertSame(1, (int) $run->companies_total);
     }
 
-    public function testGateFailsWhenFocalCompanyFails(): void
+    public function testGateFailsWhenCompanyCollectionFails(): void
     {
         // Use non-existent fixture to simulate collection failure
         $fixtures = [
@@ -140,7 +149,7 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
 
         $result = $handler->collect($request);
 
-        // Gate should fail because focal company (AAPL) failed
+        // Gate should fail because company collection failed
         $this->assertFalse($result->gateResult->passed);
         $this->assertSame(CollectionStatus::Failed, $result->overallStatus);
 
@@ -176,14 +185,14 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
 
         $result = $handler->collect($request);
 
-        // AAPL is focal and should succeed, MSFT is peer and will fail
+        // AAPL should succeed, MSFT will fail (no fixture)
         $this->assertArrayHasKey('AAPL', $result->companyStatuses);
         $this->assertArrayHasKey('MSFT', $result->companyStatuses);
 
-        // Gate should pass (focal succeeded, peer failure is only a warning)
+        // Gate should pass with at least one successful company
         $this->assertTrue($result->gateResult->passed);
 
-        // But there should be warnings about the peer failure
+        // But there should be warnings about the failed company
         $this->assertNotEmpty($result->gateResult->warnings);
     }
 
@@ -284,13 +293,13 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         );
 
         return new IndustryConfig(
+            industryId: 1,
             id: 'tech',
             name: 'Technology',
             sector: 'Software',
             companies: [$company],
             macroRequirements: new MacroRequirements(),
             dataRequirements: $requirements,
-            focalTickers: ['AAPL'],
         );
     }
 
@@ -327,13 +336,13 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         );
 
         return new IndustryConfig(
+            industryId: 1,
             id: 'tech',
             name: 'Technology',
             sector: 'Software',
             companies: $companies,
             macroRequirements: new MacroRequirements(),
             dataRequirements: $requirements,
-            focalTickers: ['AAPL'], // Only AAPL is focal
         );
     }
 

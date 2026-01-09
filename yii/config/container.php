@@ -44,6 +44,8 @@ use app\handlers\analysis\CalculateGapsHandler;
 use app\handlers\analysis\CalculateGapsInterface;
 use app\handlers\analysis\DetermineRatingHandler;
 use app\handlers\analysis\DetermineRatingInterface;
+use app\handlers\analysis\RankCompaniesHandler;
+use app\handlers\analysis\RankCompaniesInterface;
 use app\handlers\collection\CollectCompanyHandler;
 use app\handlers\collection\CollectCompanyInterface;
 use app\handlers\collection\CollectDatapointHandler;
@@ -60,32 +62,24 @@ use app\handlers\collectionpolicy\SetDefaultPolicyHandler;
 use app\handlers\collectionpolicy\SetDefaultPolicyInterface;
 use app\handlers\collectionpolicy\UpdateCollectionPolicyHandler;
 use app\handlers\collectionpolicy\UpdateCollectionPolicyInterface;
-use app\handlers\peergroup\AddFocalHandler;
-use app\handlers\peergroup\AddFocalInterface;
-use app\handlers\peergroup\AddMembersHandler;
-use app\handlers\peergroup\AddMembersInterface;
-use app\handlers\peergroup\ClearFocalsHandler;
-use app\handlers\peergroup\ClearFocalsInterface;
-use app\handlers\peergroup\CollectPeerGroupHandler;
-use app\handlers\peergroup\CollectPeerGroupInterface;
-use app\handlers\peergroup\CreatePeerGroupHandler;
-use app\handlers\peergroup\CreatePeerGroupInterface;
-use app\handlers\peergroup\RemoveFocalHandler;
-use app\handlers\peergroup\RemoveFocalInterface;
-use app\handlers\peergroup\RemoveMemberHandler;
-use app\handlers\peergroup\RemoveMemberInterface;
-use app\handlers\peergroup\SetFocalHandler;
-use app\handlers\peergroup\SetFocalInterface;
-use app\handlers\peergroup\TogglePeerGroupHandler;
-use app\handlers\peergroup\TogglePeerGroupInterface;
-use app\handlers\peergroup\UpdatePeerGroupHandler;
-use app\handlers\peergroup\UpdatePeerGroupInterface;
+use app\handlers\industry\AddMembersHandler;
+use app\handlers\industry\AddMembersInterface;
+use app\handlers\industry\CollectIndustryHandler as IndustryCollectHandler;
+use app\handlers\industry\CollectIndustryInterface as IndustryCollectInterface;
+use app\handlers\industry\CreateIndustryHandler;
+use app\handlers\industry\CreateIndustryInterface;
+use app\handlers\industry\RemoveMemberHandler;
+use app\handlers\industry\RemoveMemberInterface;
+use app\handlers\industry\ToggleIndustryHandler;
+use app\handlers\industry\ToggleIndustryInterface;
+use app\handlers\industry\UpdateIndustryHandler;
+use app\handlers\industry\UpdateIndustryInterface;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
-use app\queries\CompanyQuery;
-use app\queries\PeerGroupListQuery;
-use app\queries\PeerGroupMemberQuery;
-use app\queries\PeerGroupQuery;
+use app\queries\IndustryListQuery;
+use app\queries\IndustryMemberQuery;
+use app\queries\IndustryQuery;
+use app\queries\SectorQuery;
 use app\queries\SourceBlockRepository;
 use app\queries\SourceBlockRepositoryInterface;
 use app\transformers\PeerAverageTransformer;
@@ -238,6 +232,10 @@ return [
             return new CollectionRunRepository(Yii::$app->db);
         },
 
+        app\queries\AnalysisReportRepository::class => static function () {
+            return new app\queries\AnalysisReportRepository(Yii::$app->db);
+        },
+
         CollectDatapointInterface::class => static function (Container $container): CollectDatapointInterface {
             return new CollectDatapointHandler(
                 webFetchClient: $container->get(WebFetchClientInterface::class),
@@ -307,89 +305,42 @@ return [
         SetDefaultPolicyInterface::class => static function (Container $container): SetDefaultPolicyInterface {
             return new SetDefaultPolicyHandler(
                 $container->get(CollectionPolicyQuery::class),
+                $container->get(SectorQuery::class),
+                Yii::$app->db,
                 Yii::getLogger(),
             );
         },
 
-        CreatePeerGroupInterface::class => static function (Container $container): CreatePeerGroupInterface {
-            return new CreatePeerGroupHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
+        CreateIndustryInterface::class => static function (Container $container): CreateIndustryInterface {
+            return new CreateIndustryHandler(
+                $container->get(IndustryQuery::class),
+                $container->get(SectorQuery::class),
+                $container->get(app\queries\CompanyQuery::class),
                 Yii::getLogger(),
             );
         },
 
-        UpdatePeerGroupInterface::class => static function (Container $container): UpdatePeerGroupInterface {
-            return new UpdatePeerGroupHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
+        UpdateIndustryInterface::class => static function (Container $container): UpdateIndustryInterface {
+            return new UpdateIndustryHandler(
+                $container->get(IndustryQuery::class),
+                $container->get(app\queries\CompanyQuery::class),
                 Yii::getLogger(),
             );
         },
 
-        TogglePeerGroupInterface::class => static function (Container $container): TogglePeerGroupInterface {
-            return new TogglePeerGroupHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
+        ToggleIndustryInterface::class => static function (Container $container): ToggleIndustryInterface {
+            return new ToggleIndustryHandler(
+                $container->get(IndustryQuery::class),
+                $container->get(app\queries\CompanyQuery::class),
                 Yii::getLogger(),
             );
         },
 
-        AddMembersInterface::class => static function (Container $container): AddMembersInterface {
-            return new AddMembersHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
-                $container->get(CompanyQuery::class),
-                Yii::getLogger(),
-            );
-        },
-
-        RemoveMemberInterface::class => static function (Container $container): RemoveMemberInterface {
-            return new RemoveMemberHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
-                Yii::getLogger(),
-            );
-        },
-
-        SetFocalInterface::class => static function (Container $container): SetFocalInterface {
-            return new SetFocalHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
-                Yii::getLogger(),
-            );
-        },
-
-        AddFocalInterface::class => static function (Container $container): AddFocalInterface {
-            return new AddFocalHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
-                Yii::getLogger(),
-            );
-        },
-
-        RemoveFocalInterface::class => static function (Container $container): RemoveFocalInterface {
-            return new RemoveFocalHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
-                Yii::getLogger(),
-            );
-        },
-
-        ClearFocalsInterface::class => static function (Container $container): ClearFocalsInterface {
-            return new ClearFocalsHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
-                Yii::getLogger(),
-            );
-        },
-
-        CollectPeerGroupInterface::class => static function (Container $container): CollectPeerGroupInterface {
-            return new CollectPeerGroupHandler(
-                $container->get(PeerGroupQuery::class),
-                $container->get(PeerGroupMemberQuery::class),
+        IndustryCollectInterface::class => static function (Container $container): IndustryCollectInterface {
+            return new IndustryCollectHandler(
+                $container->get(IndustryQuery::class),
                 $container->get(CollectionPolicyQuery::class),
-                $container->get(CompanyQuery::class),
+                $container->get(app\queries\CompanyQuery::class),
                 $container->get(CollectIndustryInterface::class),
                 $container->get(CollectionRunRepository::class),
                 Yii::getLogger(),
@@ -428,18 +379,39 @@ return [
             return new app\queries\DataGapQuery(Yii::$app->db);
         },
 
-        // Peer Group Queries
+        // Industry and Sector Queries
         app\queries\CollectionPolicyQuery::class => static function () {
             return new app\queries\CollectionPolicyQuery(Yii::$app->db);
         },
-        app\queries\PeerGroupQuery::class => static function () {
-            return new app\queries\PeerGroupQuery(Yii::$app->db);
+        SectorQuery::class => static function (): SectorQuery {
+            return new SectorQuery(Yii::$app->db);
         },
-        app\queries\PeerGroupMemberQuery::class => static function () {
-            return new app\queries\PeerGroupMemberQuery(Yii::$app->db);
+        IndustryQuery::class => static function (): IndustryQuery {
+            return new IndustryQuery(Yii::$app->db);
         },
-        PeerGroupListQuery::class => static function (): PeerGroupListQuery {
-            return new PeerGroupListQuery(Yii::$app->db);
+        IndustryListQuery::class => static function (): IndustryListQuery {
+            return new IndustryListQuery(Yii::$app->db);
+        },
+        IndustryMemberQuery::class => static function (): IndustryMemberQuery {
+            return new IndustryMemberQuery(Yii::$app->db);
+        },
+
+        // Industry Member Handlers
+        AddMembersInterface::class => static function (Container $container): AddMembersInterface {
+            return new AddMembersHandler(
+                $container->get(IndustryQuery::class),
+                $container->get(app\queries\CompanyQuery::class),
+                $container->get(IndustryMemberQuery::class),
+                Yii::getLogger(),
+            );
+        },
+
+        RemoveMemberInterface::class => static function (Container $container): RemoveMemberInterface {
+            return new RemoveMemberHandler(
+                $container->get(IndustryQuery::class),
+                $container->get(IndustryMemberQuery::class),
+                Yii::getLogger(),
+            );
         },
 
         // Dossier Transformers
@@ -462,6 +434,18 @@ return [
             );
         },
 
+        // Dossier to DataPack Transformer
+        app\transformers\DossierToDataPackTransformer::class => static function (Container $container) {
+            return new app\transformers\DossierToDataPackTransformer(
+                companyQuery: $container->get(app\queries\CompanyQuery::class),
+                valuationQuery: $container->get(app\queries\ValuationSnapshotQuery::class),
+                annualQuery: $container->get(app\queries\AnnualFinancialQuery::class),
+                quarterlyQuery: $container->get(app\queries\QuarterlyFinancialQuery::class),
+                ttmQuery: $container->get(app\queries\TtmFinancialQuery::class),
+                dataPointFactory: $container->get(DataPointFactory::class),
+            );
+        },
+
         // Analysis Handlers
         PeerAverageTransformer::class => PeerAverageTransformer::class,
 
@@ -475,6 +459,8 @@ return [
 
         DetermineRatingInterface::class => DetermineRatingHandler::class,
 
+        RankCompaniesInterface::class => RankCompaniesHandler::class,
+
         AnalyzeReportInterface::class => static function (Container $container): AnalyzeReportInterface {
             return new AnalyzeReportHandler(
                 gateValidator: $container->get(AnalysisGateValidatorInterface::class),
@@ -483,6 +469,7 @@ return [
                 assessFundamentals: $container->get(AssessFundamentalsInterface::class),
                 assessRisk: $container->get(AssessRiskInterface::class),
                 determineRating: $container->get(DetermineRatingInterface::class),
+                rankCompanies: $container->get(RankCompaniesInterface::class),
             );
         },
     ],

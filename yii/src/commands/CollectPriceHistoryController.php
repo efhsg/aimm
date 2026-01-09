@@ -7,8 +7,8 @@ namespace app\commands;
 use app\dto\CollectPriceHistoryRequest;
 use app\handlers\collection\CollectPriceHistoryHandler;
 use app\queries\CompanyQuery;
-use app\queries\PeerGroupMemberQuery;
-use app\queries\PeerGroupQuery;
+use app\queries\IndustryMemberQuery;
+use app\queries\IndustryQuery;
 use app\queries\PriceHistoryQuery;
 use DateTimeImmutable;
 use Yii;
@@ -59,28 +59,28 @@ final class CollectPriceHistoryController extends Controller
     }
 
     /**
-     * Collect price history for all companies in a peer group.
+     * Collect price history for all companies in an industry.
      *
-     * Usage: yii collect-price-history/group global-energy-supermajors --months=24
+     * Usage: yii collect-price-history/industry global-energy-supermajors --months=24
      */
-    public function actionGroup(string $slug): int
+    public function actionIndustry(string $slug): int
     {
-        $peerGroupQuery = Yii::$container->get(PeerGroupQuery::class);
-        $memberQuery = Yii::$container->get(PeerGroupMemberQuery::class);
+        $industryQuery = Yii::$container->get(IndustryQuery::class);
+        $memberQuery = Yii::$container->get(IndustryMemberQuery::class);
 
-        $group = $peerGroupQuery->findBySlug($slug);
-        if ($group === null) {
-            $this->stderr("Peer group not found: {$slug}\n", Console::FG_RED);
+        $industry = $industryQuery->findBySlug($slug);
+        if ($industry === null) {
+            $this->stderr("Industry not found: {$slug}\n", Console::FG_RED);
             return ExitCode::DATAERR;
         }
 
-        $members = $memberQuery->findByGroup((int) $group['id']);
+        $members = $memberQuery->findByIndustry((int) $industry['id']);
         if (empty($members)) {
-            $this->stderr("No members in peer group\n", Console::FG_YELLOW);
+            $this->stderr("No companies in industry\n", Console::FG_YELLOW);
             return ExitCode::OK;
         }
 
-        $this->stdout("Collecting price history for peer group: {$group['name']}\n");
+        $this->stdout("Collecting price history for industry: {$industry['name']}\n");
         $this->stdout("Period: {$this->months} months\n\n");
 
         $handler = $this->createHandler();

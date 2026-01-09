@@ -48,19 +48,18 @@ return [
                 // Health check
                 'health' => 'health/index',
 
-                // Admin: Peer Group
-                'admin/peer-group' => 'peer-group/index',
-                'admin/peer-group/create' => 'peer-group/create',
-                'admin/peer-group/<slug:[a-z0-9-]+>' => 'peer-group/view',
-                'admin/peer-group/<slug:[a-z0-9-]+>/edit' => 'peer-group/update',
-                'admin/peer-group/<slug:[a-z0-9-]+>/toggle' => 'peer-group/toggle',
-                'admin/peer-group/<slug:[a-z0-9-]+>/add-members' => 'peer-group/add-members',
-                'admin/peer-group/<slug:[a-z0-9-]+>/remove-member' => 'peer-group/remove-member',
-                'admin/peer-group/<slug:[a-z0-9-]+>/set-focal' => 'peer-group/set-focal',
-                'admin/peer-group/<slug:[a-z0-9-]+>/add-focal' => 'peer-group/add-focal',
-                'admin/peer-group/<slug:[a-z0-9-]+>/remove-focal' => 'peer-group/remove-focal',
-                'admin/peer-group/<slug:[a-z0-9-]+>/clear-focals' => 'peer-group/clear-focals',
-                'admin/peer-group/<slug:[a-z0-9-]+>/collect' => 'peer-group/collect',
+                // Admin: Industry
+                'admin/industry' => 'industry/index',
+                'admin/industry/create' => 'industry/create',
+                'admin/industry/<slug:[a-z0-9-]+>' => 'industry/view',
+                'admin/industry/<slug:[a-z0-9-]+>/edit' => 'industry/update',
+                'admin/industry/<slug:[a-z0-9-]+>/toggle' => 'industry/toggle',
+                'admin/industry/<slug:[a-z0-9-]+>/add-members' => 'industry/add-members',
+                'admin/industry/<slug:[a-z0-9-]+>/remove-member' => 'industry/remove-member',
+                'admin/industry/<slug:[a-z0-9-]+>/collect' => 'industry/collect',
+                'admin/industry/<slug:[a-z0-9-]+>/analyze' => 'industry/analyze',
+                'admin/industry/<slug:[a-z0-9-]+>/ranking' => 'industry/ranking',
+                'admin/industry/<slug:[a-z0-9-]+>/report/<id:\d+>' => 'industry/report',
 
                 // Admin: Collection Run
                 'admin/collection-run' => 'collection-run/index',

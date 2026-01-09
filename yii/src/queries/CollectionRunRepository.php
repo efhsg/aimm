@@ -18,7 +18,7 @@ final class CollectionRunRepository
     ) {
     }
 
-    public function create(string $industryId, string $datapackId): int
+    public function create(int $industryId, string $datapackId): int
     {
         $this->db->createCommand()->insert('{{%collection_run}}', [
             'industry_id' => $industryId,
@@ -119,9 +119,11 @@ final class CollectionRunRepository
     }
 
     /**
+     * List collection runs for an industry.
+     *
      * @return list<array<string, mixed>>
      */
-    public function listByIndustry(string $industryId, int $limit = 20): array
+    public function listByIndustry(int $industryId, int $limit = 20): array
     {
         return $this->db->createCommand(
             'SELECT * FROM {{%collection_run}}
@@ -137,7 +139,7 @@ final class CollectionRunRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function getLatestSuccessful(string $industryId): ?array
+    public function getLatestSuccessful(int $industryId): ?array
     {
         return $this->db->createCommand(
             'SELECT * FROM {{%collection_run}}
@@ -190,25 +192,6 @@ final class CollectionRunRepository
     }
 
     /**
-     * List collection runs for a peer group.
-     *
-     * @return list<array<string, mixed>>
-     */
-    public function listByPeerGroup(int $peerGroupId, int $limit = 20): array
-    {
-        return $this->db->createCommand(
-            'SELECT cr.* FROM {{%collection_run}} cr
-             JOIN {{%industry_peer_group}} pg ON cr.industry_id = pg.slug
-             WHERE pg.id = :group_id
-             ORDER BY cr.started_at DESC
-             LIMIT :limit',
-        )
-            ->bindValue(':group_id', $peerGroupId)
-            ->bindValue(':limit', $limit)
-            ->queryAll();
-    }
-
-    /**
      * List recent collection runs with optional filters.
      *
      * @return list<array<string, mixed>>
@@ -219,17 +202,19 @@ final class CollectionRunRepository
         int $limit = 50,
         int $offset = 0
     ): array {
-        $query = 'SELECT * FROM {{%collection_run}}';
+        $query = 'SELECT cr.*, i.slug as industry_slug, i.name as industry_name
+                  FROM {{%collection_run}} cr
+                  JOIN {{%industry}} i ON i.id = cr.industry_id';
         $conditions = [];
         $params = [];
 
         if ($status !== null) {
-            $conditions[] = 'status = :status';
+            $conditions[] = 'cr.status = :status';
             $params[':status'] = $status;
         }
 
         if ($search !== null) {
-            $conditions[] = '(industry_id LIKE :search OR datapack_id LIKE :search)';
+            $conditions[] = '(i.slug LIKE :search OR i.name LIKE :search OR cr.datapack_id LIKE :search)';
             $params[':search'] = '%' . $this->escapeLikePattern($search) . '%';
         }
 
@@ -237,7 +222,7 @@ final class CollectionRunRepository
             $query .= ' WHERE ' . implode(' AND ', $conditions);
         }
 
-        $query .= ' ORDER BY started_at DESC LIMIT :limit OFFSET :offset';
+        $query .= ' ORDER BY cr.started_at DESC LIMIT :limit OFFSET :offset';
 
         $command = $this->db->createCommand($query)
             ->bindValue(':limit', $limit)
@@ -252,17 +237,18 @@ final class CollectionRunRepository
 
     public function countRecent(?string $status = null, ?string $search = null): int
     {
-        $query = 'SELECT COUNT(*) FROM {{%collection_run}}';
+        $query = 'SELECT COUNT(*) FROM {{%collection_run}} cr
+                  JOIN {{%industry}} i ON i.id = cr.industry_id';
         $conditions = [];
         $params = [];
 
         if ($status !== null) {
-            $conditions[] = 'status = :status';
+            $conditions[] = 'cr.status = :status';
             $params[':status'] = $status;
         }
 
         if ($search !== null) {
-            $conditions[] = '(industry_id LIKE :search OR datapack_id LIKE :search)';
+            $conditions[] = '(i.slug LIKE :search OR i.name LIKE :search OR cr.datapack_id LIKE :search)';
             $params[':search'] = '%' . $this->escapeLikePattern($search) . '%';
         }
 
@@ -280,16 +266,15 @@ final class CollectionRunRepository
     }
 
     /**
-     * Check if a peer group has a running collection.
+     * Check if an industry has a running collection.
      */
-    public function hasRunningCollection(int $peerGroupId): bool
+    public function hasRunningCollection(int $industryId): bool
     {
         $count = $this->db->createCommand(
-            'SELECT COUNT(*) FROM {{%collection_run}} cr
-             JOIN {{%industry_peer_group}} pg ON cr.industry_id = pg.slug
-             WHERE pg.id = :group_id AND cr.status = :status',
+            'SELECT COUNT(*) FROM {{%collection_run}}
+             WHERE industry_id = :industry_id AND status = :status',
         )
-            ->bindValue(':group_id', $peerGroupId)
+            ->bindValue(':industry_id', $industryId)
             ->bindValue(':status', 'running')
             ->queryScalar();
 

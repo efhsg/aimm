@@ -36,22 +36,23 @@ final class TestController extends Controller
 
     public function actionCompanies(): int
     {
-        $companies = Yii::$app->db->createCommand('SELECT id, ticker, name FROM company ORDER BY id')->queryAll();
+        $companies = Yii::$app->db->createCommand('SELECT id, ticker, name, industry_id FROM company ORDER BY id')->queryAll();
         $this->stdout("Companies (" . count($companies) . "):\n");
         foreach ($companies as $row) {
-            $this->stdout("  ID {$row['id']}: {$row['ticker']} - {$row['name']}\n");
+            $industryId = $row['industry_id'] ?? 'NULL';
+            $this->stdout("  ID {$row['id']}: {$row['ticker']} - {$row['name']} (industry_id: {$industryId})\n");
         }
 
-        $this->stdout("\nPeer Group Members:\n");
-        $members = Yii::$app->db->createCommand(
-            'SELECT m.company_id, c.ticker, c.id as company_exists
-             FROM industry_peer_group_member m
-             LEFT JOIN company c ON m.company_id = c.id
+        $this->stdout("\nCompanies by Industry:\n");
+        $byIndustry = Yii::$app->db->createCommand(
+            'SELECT g.slug AS industry_slug, g.name AS industry_name, c.id, c.ticker, c.name
+             FROM company c
+             INNER JOIN industry g ON c.industry_id = g.id
+             ORDER BY g.slug, c.ticker
              LIMIT 20'
         )->queryAll();
-        foreach ($members as $row) {
-            $exists = $row['company_exists'] !== null ? 'EXISTS' : 'MISSING';
-            $this->stdout("  company_id={$row['company_id']} ticker={$row['ticker']} ({$exists})\n");
+        foreach ($byIndustry as $row) {
+            $this->stdout("  [{$row['industry_slug']}] {$row['ticker']} - {$row['name']}\n");
         }
 
         return ExitCode::OK;

@@ -15,7 +15,6 @@ final readonly class MetricDefinition
     public const UNIT_NUMBER = 'number';
 
     public const SCOPE_ALL = 'all';
-    public const SCOPE_FOCAL = 'focal';
 
     public function __construct(
         public string $key,

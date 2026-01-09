@@ -25,11 +25,11 @@ use app\enums\Fundamentals;
 final class AssessFundamentalsHandler implements AssessFundamentalsInterface
 {
     public function handle(
-        CompanyData $focal,
+        CompanyData $company,
         FundamentalsWeights $weights
     ): FundamentalsBreakdown {
         // Get latest 2 years of annual data
-        $annualData = $focal->financials->annualData;
+        $annualData = $company->financials->annualData;
         usort($annualData, static fn (AnnualFinancials $a, AnnualFinancials $b): int => $b->fiscalYear <=> $a->fiscalYear);
 
         if (count($annualData) < 2) {

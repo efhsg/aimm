@@ -7,7 +7,6 @@ namespace tests\unit\models;
 use app\models\CollectionError;
 use app\models\CollectionRun;
 use app\models\query\CollectionRunQuery;
-use app\queries\PeerGroupQuery;
 use Codeception\Test\Unit;
 use Ramsey\Uuid\Uuid;
 use Yii;
@@ -17,28 +16,34 @@ use Yii;
  */
 final class CollectionRunTest extends Unit
 {
-    private PeerGroupQuery $peerGroupQuery;
-    private int $peerGroupId;
+    private int $industryId;
+    private int $sectorId;
 
     protected function _before(): void
     {
-        $this->peerGroupQuery = new PeerGroupQuery(Yii::$app->db);
-
         // Clean up before each test
         CollectionError::deleteAll();
         CollectionRun::deleteAll();
-        Yii::$app->db->createCommand()->delete('industry_peer_group')->execute();
+        Yii::$app->db->createCommand()->delete('industry')->execute();
+        Yii::$app->db->createCommand()->delete('sector')->execute();
 
-        // Create required peer group
-        $this->peerGroupId = $this->peerGroupQuery->insert([
+        // Create required sector and industry
+        Yii::$app->db->createCommand()->insert('sector', [
+            'slug' => 'energy',
+            'name' => 'Energy',
+        ])->execute();
+        $this->sectorId = (int) Yii::$app->db->getLastInsertID();
+
+        Yii::$app->db->createCommand()->insert('industry', [
             'slug' => 'test-industry',
             'name' => 'Test Industry',
-            'sector' => 'Energy',
+            'sector_id' => $this->sectorId,
             'is_active' => 1,
             'created_by' => 'test',
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s'),
-        ]);
+        ])->execute();
+        $this->industryId = (int) Yii::$app->db->getLastInsertID();
     }
 
     public function testValidationRequiresRequiredFields(): void
@@ -53,7 +58,7 @@ final class CollectionRunTest extends Unit
     public function testValidationPassesWithRequiredFields(): void
     {
         $model = new CollectionRun();
-        $model->industry_id = 'test-industry';
+        $model->industry_id = $this->industryId;
         $model->datapack_id = Uuid::uuid4()->toString();
 
         $this->assertTrue($model->validate());
@@ -64,12 +69,12 @@ final class CollectionRunTest extends Unit
         $datapackId = Uuid::uuid4()->toString();
 
         $run1 = new CollectionRun();
-        $run1->industry_id = 'test-industry';
+        $run1->industry_id = $this->industryId;
         $run1->datapack_id = $datapackId;
         $run1->save();
 
         $run2 = new CollectionRun();
-        $run2->industry_id = 'test-industry';
+        $run2->industry_id = $this->industryId;
         $run2->datapack_id = $datapackId;
 
         $this->assertFalse($run2->validate());
@@ -79,7 +84,7 @@ final class CollectionRunTest extends Unit
     public function testStatusDefaultsToPending(): void
     {
         $model = new CollectionRun();
-        $model->industry_id = 'test-industry';
+        $model->industry_id = $this->industryId;
         $model->datapack_id = Uuid::uuid4()->toString();
         $model->save();
 
@@ -89,7 +94,7 @@ final class CollectionRunTest extends Unit
     public function testStatusValidation(): void
     {
         $model = new CollectionRun();
-        $model->industry_id = 'test-industry';
+        $model->industry_id = $this->industryId;
         $model->datapack_id = Uuid::uuid4()->toString();
         $model->status = 'invalid-status';
 
@@ -107,11 +112,11 @@ final class CollectionRunTest extends Unit
     public function testForIndustryScopeFiltersCorrectly(): void
     {
         $run = new CollectionRun();
-        $run->industry_id = 'test-industry';
+        $run->industry_id = $this->industryId;
         $run->datapack_id = Uuid::uuid4()->toString();
         $run->save();
 
-        $results = CollectionRun::find()->forIndustry('test-industry')->all();
+        $results = CollectionRun::find()->forIndustry($this->industryId)->all();
 
         $this->assertCount(1, $results);
     }
@@ -119,13 +124,13 @@ final class CollectionRunTest extends Unit
     public function testStatusScopesFilterCorrectly(): void
     {
         $pending = new CollectionRun();
-        $pending->industry_id = 'test-industry';
+        $pending->industry_id = $this->industryId;
         $pending->datapack_id = Uuid::uuid4()->toString();
         $pending->status = CollectionRun::STATUS_PENDING;
         $pending->save();
 
         $complete = new CollectionRun();
-        $complete->industry_id = 'test-industry';
+        $complete->industry_id = $this->industryId;
         $complete->datapack_id = Uuid::uuid4()->toString();
         $complete->status = CollectionRun::STATUS_COMPLETE;
         $complete->save();
@@ -137,40 +142,41 @@ final class CollectionRunTest extends Unit
 
     public function testQueryChainingFiltersCorrectly(): void
     {
-        // Create second peer group for filter testing
-        $this->peerGroupQuery->insert([
+        // Create second industry for filter testing
+        Yii::$app->db->createCommand()->insert('industry', [
             'slug' => 'other-industry',
             'name' => 'Other Industry',
-            'sector' => 'Energy',
+            'sector_id' => $this->sectorId,
             'is_active' => 1,
             'created_by' => 'test',
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s'),
-        ]);
+        ])->execute();
+        $otherIndustryId = (int) Yii::$app->db->getLastInsertID();
 
         $completePassed = new CollectionRun();
-        $completePassed->industry_id = 'test-industry';
+        $completePassed->industry_id = $this->industryId;
         $completePassed->datapack_id = Uuid::uuid4()->toString();
         $completePassed->status = CollectionRun::STATUS_COMPLETE;
         $completePassed->gate_passed = true;
         $completePassed->save();
 
         $completeFailed = new CollectionRun();
-        $completeFailed->industry_id = 'test-industry';
+        $completeFailed->industry_id = $this->industryId;
         $completeFailed->datapack_id = Uuid::uuid4()->toString();
         $completeFailed->status = CollectionRun::STATUS_COMPLETE;
         $completeFailed->gate_passed = false;
         $completeFailed->save();
 
-        $otherIndustry = new CollectionRun();
-        $otherIndustry->industry_id = 'other-industry';
-        $otherIndustry->datapack_id = Uuid::uuid4()->toString();
-        $otherIndustry->status = CollectionRun::STATUS_COMPLETE;
-        $otherIndustry->gate_passed = true;
-        $otherIndustry->save();
+        $otherIndustryRun = new CollectionRun();
+        $otherIndustryRun->industry_id = $otherIndustryId;
+        $otherIndustryRun->datapack_id = Uuid::uuid4()->toString();
+        $otherIndustryRun->status = CollectionRun::STATUS_COMPLETE;
+        $otherIndustryRun->gate_passed = true;
+        $otherIndustryRun->save();
 
         $results = CollectionRun::find()
-            ->forIndustry('test-industry')
+            ->forIndustry($this->industryId)
             ->complete()
             ->gatePassed()
             ->all();
@@ -182,7 +188,7 @@ final class CollectionRunTest extends Unit
     public function testMarkRunningUpdatesStatus(): void
     {
         $run = new CollectionRun();
-        $run->industry_id = 'test-industry';
+        $run->industry_id = $this->industryId;
         $run->datapack_id = Uuid::uuid4()->toString();
         $run->save();
 
@@ -194,7 +200,7 @@ final class CollectionRunTest extends Unit
     public function testMarkCompleteUpdatesStatusAndGatePassed(): void
     {
         $run = new CollectionRun();
-        $run->industry_id = 'test-industry';
+        $run->industry_id = $this->industryId;
         $run->datapack_id = Uuid::uuid4()->toString();
         $run->save();
 
@@ -208,7 +214,7 @@ final class CollectionRunTest extends Unit
     public function testMarkFailedUpdatesStatus(): void
     {
         $run = new CollectionRun();
-        $run->industry_id = 'test-industry';
+        $run->industry_id = $this->industryId;
         $run->datapack_id = Uuid::uuid4()->toString();
         $run->save();
 
@@ -221,7 +227,7 @@ final class CollectionRunTest extends Unit
     public function testHasManyCollectionErrors(): void
     {
         $run = new CollectionRun();
-        $run->industry_id = 'test-industry';
+        $run->industry_id = $this->industryId;
         $run->datapack_id = Uuid::uuid4()->toString();
         $run->save();
 
@@ -239,40 +245,16 @@ final class CollectionRunTest extends Unit
         $this->assertInstanceOf(CollectionError::class, $errors[0]);
     }
 
-    public function testDeletingPeerGroupCascadesToRunsAndErrors(): void
-    {
-        $run = new CollectionRun();
-        $run->industry_id = 'test-industry';
-        $run->datapack_id = Uuid::uuid4()->toString();
-        $run->save();
-
-        $error = CollectionError::createError(
-            $run->id,
-            'TEST_ERROR',
-            'Test error message'
-        );
-        $error->save();
-
-        $this->assertSame(1, CollectionRun::find()->count());
-        $this->assertSame(1, CollectionError::find()->count());
-
-        // Delete peer group - should cascade to runs and errors
-        Yii::$app->db->createCommand()->delete('industry_peer_group', ['id' => $this->peerGroupId])->execute();
-
-        $this->assertSame(0, CollectionRun::find()->count());
-        $this->assertSame(0, CollectionError::find()->count());
-    }
-
     public function testGatePassedScopeFiltersCorrectly(): void
     {
         $passed = new CollectionRun();
-        $passed->industry_id = 'test-industry';
+        $passed->industry_id = $this->industryId;
         $passed->datapack_id = Uuid::uuid4()->toString();
         $passed->gate_passed = true;
         $passed->save();
 
         $failed = new CollectionRun();
-        $failed->industry_id = 'test-industry';
+        $failed->industry_id = $this->industryId;
         $failed->datapack_id = Uuid::uuid4()->toString();
         $failed->gate_passed = false;
         $failed->save();
@@ -285,7 +267,7 @@ final class CollectionRunTest extends Unit
     {
         for ($i = 0; $i < 5; $i++) {
             $run = new CollectionRun();
-            $run->industry_id = 'test-industry';
+            $run->industry_id = $this->industryId;
             $run->datapack_id = Uuid::uuid4()->toString();
             $run->save();
         }

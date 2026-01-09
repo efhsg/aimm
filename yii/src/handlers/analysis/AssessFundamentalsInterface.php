@@ -11,7 +11,7 @@ use app\dto\report\FundamentalsBreakdown;
 interface AssessFundamentalsInterface
 {
     public function handle(
-        CompanyData $focal,
+        CompanyData $company,
         FundamentalsWeights $weights
     ): FundamentalsBreakdown;
 }

@@ -41,16 +41,16 @@ final class DeleteCollectionPolicyHandler implements DeleteCollectionPolicyInter
             return CollectionPolicyResult::failure(['Policy not found.']);
         }
 
-        // Check if policy is in use by any peer groups
+        // Check if policy is in use by any industries
         $usageCount = $this->db->createCommand(
-            'SELECT COUNT(*) FROM industry_peer_group WHERE policy_id = :id'
+            'SELECT COUNT(*) FROM industry WHERE policy_id = :id'
         )
             ->bindValue(':id', $request->id)
             ->queryScalar();
 
         if ((int) $usageCount > 0) {
             return CollectionPolicyResult::failure([
-                'Cannot delete policy: it is assigned to ' . $usageCount . ' peer group(s).',
+                'Cannot delete policy: it is assigned to ' . $usageCount . ' industry(ies).',
             ]);
         }
 

@@ -31,7 +31,7 @@ final class PeerAverageTransformerTest extends Unit
         $this->transformer = new PeerAverageTransformer();
     }
 
-    public function testCalculatesAverageForAllPeers(): void
+    public function testCalculatesAverageForAllCompanies(): void
     {
         $companies = [
             'AAPL' => $this->createCompany('AAPL', 3.0, 25.0, 18.0, 3.5, 0.5),
@@ -39,44 +39,43 @@ final class PeerAverageTransformerTest extends Unit
             'GOOGL' => $this->createCompany('GOOGL', 1.8, 22.0, 16.0, 2.5, 0.0),
         ];
 
-        $result = $this->transformer->transform($companies, 'AAPL');
+        $result = $this->transformer->transform($companies);
 
-        // Peer averages should be MSFT + GOOGL only
-        $this->assertEquals(2, $result->companiesIncluded);
-        $this->assertEquals(26.0, $result->fwdPe); // (30 + 22) / 2
-        $this->assertEquals(18.0, $result->evEbitda); // (20 + 16) / 2
-        $this->assertEquals(3.25, $result->fcfYieldPercent); // (4.0 + 2.5) / 2
-        $this->assertEquals(0.4, $result->divYieldPercent); // (0.8 + 0.0) / 2
-        $this->assertEquals(2.3, $result->marketCapBillions); // (2.8 + 1.8) / 2
+        // Averages should include ALL companies
+        $this->assertEquals(3, $result->companiesIncluded);
+        $this->assertEqualsWithDelta((25.0 + 30.0 + 22.0) / 3, $result->fwdPe, 0.01);
+        $this->assertEqualsWithDelta((18.0 + 20.0 + 16.0) / 3, $result->evEbitda, 0.01);
+        $this->assertEqualsWithDelta((3.5 + 4.0 + 2.5) / 3, $result->fcfYieldPercent, 0.01);
+        $this->assertEqualsWithDelta((0.5 + 0.8 + 0.0) / 3, $result->divYieldPercent, 0.01);
+        $this->assertEqualsWithDelta((3.0 + 2.8 + 1.8) / 3, $result->marketCapBillions, 0.01);
     }
 
-    public function testExcludesFocalFromAverage(): void
+    public function testIncludesAllCompaniesInAverage(): void
     {
         $companies = [
             'AAPL' => $this->createCompany('AAPL', 3.0, 100.0, 100.0, 100.0, 100.0),
             'MSFT' => $this->createCompany('MSFT', 2.0, 20.0, 15.0, 3.0, 0.5),
         ];
 
-        $result = $this->transformer->transform($companies, 'AAPL');
+        $result = $this->transformer->transform($companies);
 
-        // AAPL's extreme values should not affect averages
-        $this->assertEquals(1, $result->companiesIncluded);
-        $this->assertEquals(20.0, $result->fwdPe);
-        $this->assertEquals(15.0, $result->evEbitda);
-        $this->assertEquals(3.0, $result->fcfYieldPercent);
-        $this->assertEquals(0.5, $result->divYieldPercent);
-        $this->assertEquals(2.0, $result->marketCapBillions);
+        // All companies included in average
+        $this->assertEquals(2, $result->companiesIncluded);
+        $this->assertEquals(60.0, $result->fwdPe); // (100 + 20) / 2
+        $this->assertEquals(57.5, $result->evEbitda); // (100 + 15) / 2
+        $this->assertEquals(51.5, $result->fcfYieldPercent); // (100 + 3.0) / 2
+        $this->assertEquals(50.25, $result->divYieldPercent); // (100 + 0.5) / 2
+        $this->assertEquals(2.5, $result->marketCapBillions); // (3.0 + 2.0) / 2
     }
 
     public function testReturnsNullWhenAllValuesNull(): void
     {
         $companies = [
-            'AAPL' => $this->createCompany('AAPL', 3.0, 25.0, 18.0, 3.5, 0.5),
             'MSFT' => $this->createCompanyWithNullValuation('MSFT', 2.0),
             'GOOGL' => $this->createCompanyWithNullValuation('GOOGL', 1.8),
         ];
 
-        $result = $this->transformer->transform($companies, 'AAPL');
+        $result = $this->transformer->transform($companies);
 
         $this->assertEquals(2, $result->companiesIncluded);
         $this->assertNull($result->fwdPe);
@@ -87,14 +86,13 @@ final class PeerAverageTransformerTest extends Unit
         $this->assertEquals(1.9, $result->marketCapBillions); // (2.0 + 1.8) / 2
     }
 
-    public function testHandlesSinglePeer(): void
+    public function testHandlesSingleCompany(): void
     {
         $companies = [
-            'AAPL' => $this->createCompany('AAPL', 3.0, 25.0, 18.0, 3.5, 0.5),
             'MSFT' => $this->createCompany('MSFT', 2.5, 28.0, 17.0, 4.2, 0.9),
         ];
 
-        $result = $this->transformer->transform($companies, 'AAPL');
+        $result = $this->transformer->transform($companies);
 
         $this->assertEquals(1, $result->companiesIncluded);
         $this->assertEquals(28.0, $result->fwdPe);
@@ -104,13 +102,11 @@ final class PeerAverageTransformerTest extends Unit
         $this->assertEquals(2.5, $result->marketCapBillions);
     }
 
-    public function testHandlesNoPeers(): void
+    public function testHandlesNoCompanies(): void
     {
-        $companies = [
-            'AAPL' => $this->createCompany('AAPL', 3.0, 25.0, 18.0, 3.5, 0.5),
-        ];
+        $companies = [];
 
-        $result = $this->transformer->transform($companies, 'AAPL');
+        $result = $this->transformer->transform($companies);
 
         $this->assertEquals(0, $result->companiesIncluded);
         $this->assertNull($result->fwdPe);
@@ -123,12 +119,11 @@ final class PeerAverageTransformerTest extends Unit
     public function testHandlesPartialNullValues(): void
     {
         $companies = [
-            'AAPL' => $this->createCompany('AAPL', 3.0, 25.0, 18.0, 3.5, 0.5),
             'MSFT' => $this->createCompany('MSFT', 2.8, 30.0, null, 4.0, null),
             'GOOGL' => $this->createCompany('GOOGL', 1.8, null, 16.0, null, 0.0),
         ];
 
-        $result = $this->transformer->transform($companies, 'AAPL');
+        $result = $this->transformer->transform($companies);
 
         $this->assertEquals(2, $result->companiesIncluded);
         // Only MSFT has fwd_pe

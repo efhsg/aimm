@@ -11,7 +11,7 @@ use app\dto\report\RiskBreakdown;
 interface AssessRiskInterface
 {
     public function handle(
-        CompanyData $focal,
+        CompanyData $company,
         RiskThresholds $thresholds
     ): RiskBreakdown;
 }

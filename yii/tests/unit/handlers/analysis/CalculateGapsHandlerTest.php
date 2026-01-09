@@ -40,7 +40,7 @@ final class CalculateGapsHandlerTest extends Unit
     {
         // Focal P/E = 20, Peer avg P/E = 25
         // Gap = (25 - 20) / 25 * 100 = 20%
-        $focal = $this->createCompany(fwdPe: 20.0, evEbitda: null, fcfYield: null, divYield: null);
+        $company = $this->createCompany(fwdPe: 20.0, evEbitda: null, fcfYield: null, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: 25.0,
             evEbitda: null,
@@ -50,11 +50,11 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 2,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $this->thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $this->thresholds);
 
         $fwdPeGap = $result->individualGaps[0];
         $this->assertEquals('fwd_pe', $fwdPeGap->key);
-        $this->assertEquals(20.0, $fwdPeGap->focalValue);
+        $this->assertEquals(20.0, $fwdPeGap->companyValue);
         $this->assertEquals(25.0, $fwdPeGap->peerAverage);
         $this->assertEquals(20.0, $fwdPeGap->gapPercent);
         $this->assertEquals('lower_better', $fwdPeGap->interpretation);
@@ -64,7 +64,7 @@ final class CalculateGapsHandlerTest extends Unit
     {
         // Focal FCF yield = 5%, Peer avg = 4%
         // Gap = (5 - 4) / 4 * 100 = 25%
-        $focal = $this->createCompany(fwdPe: null, evEbitda: null, fcfYield: 5.0, divYield: null);
+        $company = $this->createCompany(fwdPe: null, evEbitda: null, fcfYield: 5.0, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: null,
             evEbitda: null,
@@ -74,19 +74,19 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 2,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $this->thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $this->thresholds);
 
         $fcfGap = $result->individualGaps[2];
         $this->assertEquals('fcf_yield', $fcfGap->key);
-        $this->assertEquals(5.0, $fcfGap->focalValue);
+        $this->assertEquals(5.0, $fcfGap->companyValue);
         $this->assertEquals(4.0, $fcfGap->peerAverage);
         $this->assertEquals(25.0, $fcfGap->gapPercent);
         $this->assertEquals('higher_better', $fcfGap->interpretation);
     }
 
-    public function testReturnsNullWhenFocalMissing(): void
+    public function testReturnsNullWhenCompanyValueMissing(): void
     {
-        $focal = $this->createCompany(fwdPe: null, evEbitda: null, fcfYield: null, divYield: null);
+        $company = $this->createCompany(fwdPe: null, evEbitda: null, fcfYield: null, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: 25.0,
             evEbitda: 15.0,
@@ -96,7 +96,7 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 2,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $this->thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $this->thresholds);
 
         foreach ($result->individualGaps as $gap) {
             $this->assertNull($gap->gapPercent);
@@ -108,7 +108,7 @@ final class CalculateGapsHandlerTest extends Unit
 
     public function testReturnsNullWhenPeerAverageZero(): void
     {
-        $focal = $this->createCompany(fwdPe: 20.0, evEbitda: null, fcfYield: null, divYield: null);
+        $company = $this->createCompany(fwdPe: 20.0, evEbitda: null, fcfYield: null, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: 0.0,
             evEbitda: null,
@@ -118,7 +118,7 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 0,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $this->thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $this->thresholds);
 
         $this->assertNull($result->individualGaps[0]->gapPercent);
         $this->assertNull($result->compositeGap);
@@ -128,7 +128,7 @@ final class CalculateGapsHandlerTest extends Unit
     {
         // Gap > 5% (fairValueThreshold) = Undervalued
         // Focal P/E = 18, Peer avg = 25 => gap = 28%
-        $focal = $this->createCompany(fwdPe: 18.0, evEbitda: 12.0, fcfYield: null, divYield: null);
+        $company = $this->createCompany(fwdPe: 18.0, evEbitda: 12.0, fcfYield: null, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: 25.0,
             evEbitda: 18.0,
@@ -138,7 +138,7 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 2,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $this->thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $this->thresholds);
 
         $this->assertEquals(GapDirection::Undervalued, $result->individualGaps[0]->direction);
         $this->assertEquals(GapDirection::Undervalued, $result->individualGaps[1]->direction);
@@ -149,7 +149,7 @@ final class CalculateGapsHandlerTest extends Unit
     {
         // Gap < -5% (fairValueThreshold) = Overvalued
         // Focal P/E = 30, Peer avg = 25 => gap = -20%
-        $focal = $this->createCompany(fwdPe: 30.0, evEbitda: 22.0, fcfYield: null, divYield: null);
+        $company = $this->createCompany(fwdPe: 30.0, evEbitda: 22.0, fcfYield: null, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: 25.0,
             evEbitda: 18.0,
@@ -159,7 +159,7 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 2,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $this->thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $this->thresholds);
 
         $this->assertEquals(GapDirection::Overvalued, $result->individualGaps[0]->direction);
         $this->assertEquals(GapDirection::Overvalued, $result->individualGaps[1]->direction);
@@ -170,7 +170,7 @@ final class CalculateGapsHandlerTest extends Unit
     {
         // Gap between -5% and 5% = Fair
         // Focal P/E = 24, Peer avg = 25 => gap = 4%
-        $focal = $this->createCompany(fwdPe: 24.0, evEbitda: 17.5, fcfYield: null, divYield: null);
+        $company = $this->createCompany(fwdPe: 24.0, evEbitda: 17.5, fcfYield: null, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: 25.0,
             evEbitda: 18.0,
@@ -180,7 +180,7 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 2,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $this->thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $this->thresholds);
 
         $this->assertEquals(GapDirection::Fair, $result->individualGaps[0]->direction);
         $this->assertEquals(GapDirection::Fair, $result->direction);
@@ -189,7 +189,7 @@ final class CalculateGapsHandlerTest extends Unit
     public function testCompositeNullWhenBelowMinMetrics(): void
     {
         // Default minMetricsForGap = 2, only 1 metric available
-        $focal = $this->createCompany(fwdPe: 20.0, evEbitda: null, fcfYield: null, divYield: null);
+        $company = $this->createCompany(fwdPe: 20.0, evEbitda: null, fcfYield: null, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: 25.0,
             evEbitda: null,
@@ -199,7 +199,7 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 2,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $this->thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $this->thresholds);
 
         $this->assertEquals(1, $result->metricsUsed);
         $this->assertNull($result->compositeGap);
@@ -211,7 +211,7 @@ final class CalculateGapsHandlerTest extends Unit
         // 2 metrics available (minimum)
         // fwd_pe gap = 20%, ev_ebitda gap = 33.33%
         // composite = (20 + 33.33) / 2 = 26.67%
-        $focal = $this->createCompany(fwdPe: 20.0, evEbitda: 12.0, fcfYield: null, divYield: null);
+        $company = $this->createCompany(fwdPe: 20.0, evEbitda: 12.0, fcfYield: null, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: 25.0,
             evEbitda: 18.0,
@@ -221,7 +221,7 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 2,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $this->thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $this->thresholds);
 
         $this->assertEquals(2, $result->metricsUsed);
         $this->assertNotNull($result->compositeGap);
@@ -237,7 +237,7 @@ final class CalculateGapsHandlerTest extends Unit
         );
 
         // Gap of 8% with threshold 10% should be Fair
-        $focal = $this->createCompany(fwdPe: 23.0, evEbitda: null, fcfYield: null, divYield: null);
+        $company = $this->createCompany(fwdPe: 23.0, evEbitda: null, fcfYield: null, divYield: null);
         $peerAverages = new PeerAverages(
             fwdPe: 25.0,
             evEbitda: null,
@@ -247,7 +247,7 @@ final class CalculateGapsHandlerTest extends Unit
             companiesIncluded: 2,
         );
 
-        $result = $this->handler->handle($focal, $peerAverages, $thresholds);
+        $result = $this->handler->handle($company, $peerAverages, $thresholds);
 
         $this->assertEquals(GapDirection::Fair, $result->direction);
         $this->assertEquals(1, $result->metricsUsed);

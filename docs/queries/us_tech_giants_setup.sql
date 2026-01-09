@@ -1,5 +1,10 @@
 START TRANSACTION;
 
+-- Sector: Technology
+INSERT INTO sector (slug, name) VALUES ('technology', 'Technology')
+ON DUPLICATE KEY UPDATE name = VALUES(name);
+SET @sector_id := (SELECT id FROM sector WHERE slug = 'technology');
+
 -- Collection policy for US Tech Giants
 -- Tech sector: no commodity benchmarks (sector_index unavailable on FMP free tier)
 INSERT INTO collection_policy (
@@ -17,7 +22,6 @@ INSERT INTO collection_policy (
     sector_index,
     required_indicators,
     optional_indicators,
-    is_default_for_sector,
     created_by,
     created_at,
     updated_at
@@ -28,30 +32,30 @@ INSERT INTO collection_policy (
     5,
     5,
     JSON_ARRAY(
-        JSON_OBJECT('key','market_cap','unit','currency','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','fwd_pe','unit','ratio','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','ev_ebitda','unit','ratio','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','market_cap','unit','currency','required',TRUE),
+        JSON_OBJECT('key','fwd_pe','unit','ratio','required',TRUE),
+        JSON_OBJECT('key','ev_ebitda','unit','ratio','required',TRUE),
         JSON_OBJECT('key','trailing_pe','unit','ratio','required',FALSE),
-        JSON_OBJECT('key','fcf_yield','unit','percent','required',TRUE,'required_scope','focal'),
+        JSON_OBJECT('key','fcf_yield','unit','percent','required',TRUE),
         JSON_OBJECT('key','div_yield','unit','percent','required',FALSE)
     ),
     JSON_ARRAY(
-        JSON_OBJECT('key','revenue','unit','currency','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','gross_profit','unit','currency','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','operating_income','unit','currency','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','ebitda','unit','currency','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','net_income','unit','currency','required',TRUE,'required_scope','focal'),
-        JSON_OBJECT('key','free_cash_flow','unit','currency','required',TRUE,'required_scope','focal'),
-        JSON_OBJECT('key','total_assets','unit','currency','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','total_liabilities','unit','currency','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','total_equity','unit','currency','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','total_debt','unit','currency','required',TRUE,'required_scope','all'),
-        JSON_OBJECT('key','cash_and_equivalents','unit','currency','required',TRUE,'required_scope','all'),
+        JSON_OBJECT('key','revenue','unit','currency','required',TRUE),
+        JSON_OBJECT('key','gross_profit','unit','currency','required',TRUE),
+        JSON_OBJECT('key','operating_income','unit','currency','required',TRUE),
+        JSON_OBJECT('key','ebitda','unit','currency','required',TRUE),
+        JSON_OBJECT('key','net_income','unit','currency','required',TRUE),
+        JSON_OBJECT('key','free_cash_flow','unit','currency','required',TRUE),
+        JSON_OBJECT('key','total_assets','unit','currency','required',TRUE),
+        JSON_OBJECT('key','total_liabilities','unit','currency','required',TRUE),
+        JSON_OBJECT('key','total_equity','unit','currency','required',TRUE),
+        JSON_OBJECT('key','total_debt','unit','currency','required',TRUE),
+        JSON_OBJECT('key','cash_and_equivalents','unit','currency','required',TRUE),
         JSON_OBJECT('key','net_debt','unit','currency','required',FALSE),
-        JSON_OBJECT('key','shares_outstanding','unit','number','required',TRUE,'required_scope','all')
+        JSON_OBJECT('key','shares_outstanding','unit','number','required',TRUE)
     ),
     JSON_ARRAY(
-        JSON_OBJECT('key','revenue','unit','currency','required',TRUE,'required_scope','focal'),
+        JSON_OBJECT('key','revenue','unit','currency','required',TRUE),
         JSON_OBJECT('key','ebitda','unit','currency','required',FALSE),
         JSON_OBJECT('key','net_income','unit','currency','required',FALSE),
         JSON_OBJECT('key','free_cash_flow','unit','currency','required',FALSE)
@@ -62,19 +66,18 @@ INSERT INTO collection_policy (
     NULL,
     JSON_ARRAY(),
     JSON_ARRAY('SP500'),
-    NULL,
     'admin',
     NOW(),
     NOW()
 );
 SET @policy_id := LAST_INSERT_ID();
 
--- Peer group
-INSERT INTO industry_peer_group (
+-- Industry (replaces peer group)
+INSERT INTO industry (
+    sector_id,
     slug,
     name,
     description,
-    sector,
     policy_id,
     is_active,
     created_by,
@@ -82,10 +85,10 @@ INSERT INTO industry_peer_group (
     created_at,
     updated_at
 ) VALUES (
+    @sector_id,
     'us-tech-giants',
     'US Tech Giants',
     'Large-cap US technology companies (FMP free tier compatible)',
-    'Technology',
     @policy_id,
     1,
     'admin',
@@ -93,37 +96,15 @@ INSERT INTO industry_peer_group (
     NOW(),
     NOW()
 );
-SET @peer_group_id := LAST_INSERT_ID();
+SET @industry_id := LAST_INSERT_ID();
 
 -- Companies (all FMP free tier compatible)
-INSERT INTO company (ticker, exchange, name, sector, currency, fiscal_year_end) VALUES
-('AAPL', 'NASDAQ', 'Apple Inc.', 'Technology', 'USD', 9),
-('MSFT', 'NASDAQ', 'Microsoft Corporation', 'Technology', 'USD', 6),
-('NVDA', 'NASDAQ', 'NVIDIA Corporation', 'Technology', 'USD', 1),
-('AMZN', 'NASDAQ', 'Amazon.com Inc.', 'Technology', 'USD', 12),
-('GOOGL', 'NASDAQ', 'Alphabet Inc.', 'Technology', 'USD', 12)
-ON DUPLICATE KEY UPDATE name = VALUES(name);
-
--- Company IDs
-SET @company_aapl := (SELECT id FROM company WHERE ticker = 'AAPL');
-SET @company_msft := (SELECT id FROM company WHERE ticker = 'MSFT');
-SET @company_nvda := (SELECT id FROM company WHERE ticker = 'NVDA');
-SET @company_amzn := (SELECT id FROM company WHERE ticker = 'AMZN');
-SET @company_googl := (SELECT id FROM company WHERE ticker = 'GOOGL');
-
--- Peer group members (AAPL as focal)
-INSERT INTO industry_peer_group_member (
-    peer_group_id,
-    company_id,
-    is_focal,
-    display_order,
-    added_at,
-    added_by
-) VALUES
-(@peer_group_id, @company_aapl, 1, 0, NOW(), 'admin'),
-(@peer_group_id, @company_msft, 0, 1, NOW(), 'admin'),
-(@peer_group_id, @company_nvda, 0, 2, NOW(), 'admin'),
-(@peer_group_id, @company_amzn, 0, 3, NOW(), 'admin'),
-(@peer_group_id, @company_googl, 0, 4, NOW(), 'admin');
+INSERT INTO company (ticker, exchange, name, industry_id, currency, fiscal_year_end) VALUES
+('AAPL', 'NASDAQ', 'Apple Inc.', @industry_id, 'USD', 9),
+('MSFT', 'NASDAQ', 'Microsoft Corporation', @industry_id, 'USD', 6),
+('NVDA', 'NASDAQ', 'NVIDIA Corporation', @industry_id, 'USD', 1),
+('AMZN', 'NASDAQ', 'Amazon.com Inc.', @industry_id, 'USD', 12),
+('GOOGL', 'NASDAQ', 'Alphabet Inc.', @industry_id, 'USD', 12)
+ON DUPLICATE KEY UPDATE name = VALUES(name), industry_id = VALUES(industry_id);
 
 COMMIT;

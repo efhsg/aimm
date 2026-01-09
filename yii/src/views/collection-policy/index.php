@@ -27,7 +27,7 @@ $this->title = 'Collection Policies';
         <?php if (empty($policies)): ?>
             <div class="empty-state">
                 <h3 class="empty-state__title">No collection policies</h3>
-                <p class="empty-state__text">Create a policy to define data collection requirements for peer groups.</p>
+                <p class="empty-state__text">Create a policy to define data collection requirements for industries.</p>
             </div>
         <?php else: ?>
             <div class="table-container">
@@ -38,7 +38,6 @@ $this->title = 'Collection Policies';
                             <th>Slug</th>
                             <th>History</th>
                             <th>Quarters</th>
-                            <th>Sector Default</th>
                             <th>Created</th>
                             <th>Actions</th>
                         </tr>
@@ -58,13 +57,6 @@ $this->title = 'Collection Policies';
                                 <td class="table__cell--mono"><code><?= Html::encode($policy['slug']) ?></code></td>
                                 <td class="table__cell--number"><?= $policy['history_years'] ?> years</td>
                                 <td class="table__cell--number"><?= $policy['quarters_to_fetch'] ?></td>
-                                <td>
-                                    <?php if (!empty($policy['is_default_for_sector'])): ?>
-                                        <span class="badge badge--info"><?= Html::encode($policy['is_default_for_sector']) ?></span>
-                                    <?php else: ?>
-                                        <span class="text-muted">-</span>
-                                    <?php endif; ?>
-                                </td>
                                 <td>
                                     <?= Html::encode($policy['created_at']) ?>
                                     <?php if (!empty($policy['created_by'])): ?>

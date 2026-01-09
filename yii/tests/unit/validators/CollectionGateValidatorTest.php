@@ -115,9 +115,9 @@ final class CollectionGateValidatorTest extends Unit
         $this->assertContains('MISSING_PROVENANCE', $this->getErrorCodes($result));
     }
 
-    public function testIgnoresRequiredMetricsForPeersWhenRequiredScopeIsFocal(): void
+    public function testFailsGateWhenAnyCompanyMissesRequiredMetric(): void
     {
-        $focalMarketCap = new DataPointMoney(
+        $validMarketCap = new DataPointMoney(
             value: 100.0,
             currency: 'USD',
             scale: DataScale::Units,
@@ -128,7 +128,7 @@ final class CollectionGateValidatorTest extends Unit
             sourceLocator: SourceLocator::html('td[data-test="MARKET_CAP-value"]', '100'),
         );
 
-        $peerMarketCap = new DataPointMoney(
+        $missingMarketCap = new DataPointMoney(
             value: null,
             currency: 'USD',
             scale: DataScale::Units,
@@ -140,55 +140,13 @@ final class CollectionGateValidatorTest extends Unit
         );
 
         $validator = $this->createValidator();
-        // Use required_scope=focal so peers are not validated for this metric
+        // All companies are validated equally for required metrics
         $result = $validator->validate(
             $this->createDataPackForCompanies([
-                'AAPL' => $focalMarketCap,
-                'MSFT' => $peerMarketCap,
+                'AAPL' => $validMarketCap,
+                'MSFT' => $missingMarketCap,
             ]),
-            $this->createConfigForCompanies(['AAPL', 'MSFT'], MetricDefinition::SCOPE_FOCAL),
-            ['AAPL']
-        );
-
-        $this->assertTrue(
-            $result->passed,
-            'Unexpected errors: ' . implode(', ', $this->getErrorCodes($result))
-        );
-    }
-
-    public function testFailsGateWhenPeerMissesRequiredScopeAllMetric(): void
-    {
-        $focalMarketCap = new DataPointMoney(
-            value: 100.0,
-            currency: 'USD',
-            scale: DataScale::Units,
-            asOf: new DateTimeImmutable('2024-01-01'),
-            sourceUrl: 'https://finance.yahoo.com/quote/AAPL',
-            retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
-            method: CollectionMethod::WebFetch,
-            sourceLocator: SourceLocator::html('td[data-test="MARKET_CAP-value"]', '100'),
-        );
-
-        $peerMarketCap = new DataPointMoney(
-            value: null,
-            currency: 'USD',
-            scale: DataScale::Units,
-            asOf: new DateTimeImmutable('2024-01-01'),
-            sourceUrl: null,
-            retrievedAt: new DateTimeImmutable('2024-01-01T00:00:00Z'),
-            method: CollectionMethod::NotFound,
-            attemptedSources: ['https://example.com (not found)'],
-        );
-
-        $validator = $this->createValidator();
-        // Use required_scope=all (default) so peers ARE validated
-        $result = $validator->validate(
-            $this->createDataPackForCompanies([
-                'AAPL' => $focalMarketCap,
-                'MSFT' => $peerMarketCap,
-            ]),
-            $this->createConfigForCompanies(['AAPL', 'MSFT'], MetricDefinition::SCOPE_ALL),
-            ['AAPL']
+            $this->createConfigForCompanies(['AAPL', 'MSFT'], MetricDefinition::SCOPE_ALL)
         );
 
         $this->assertFalse($result->passed);
@@ -204,8 +162,7 @@ final class CollectionGateValidatorTest extends Unit
                 'MSFT' => CollectionStatus::Complete,
             ],
             macroStatus: CollectionStatus::Complete,
-            config: $this->createConfigForCompanies(['AAPL', 'MSFT']),
-            focalTickers: ['AAPL']
+            config: $this->createConfigForCompanies(['AAPL', 'MSFT'])
         );
 
         $this->assertTrue($result->passed);
@@ -213,7 +170,7 @@ final class CollectionGateValidatorTest extends Unit
         $this->assertEmpty($result->warnings);
     }
 
-    public function testValidateResultsFailsWhenFocalFailed(): void
+    public function testValidateResultsFailsWhenAnyCompanyFailed(): void
     {
         $validator = $this->createValidator();
         $result = $validator->validateResults(
@@ -222,15 +179,14 @@ final class CollectionGateValidatorTest extends Unit
                 'MSFT' => CollectionStatus::Complete,
             ],
             macroStatus: CollectionStatus::Complete,
-            config: $this->createConfigForCompanies(['AAPL', 'MSFT']),
-            focalTickers: ['AAPL']
+            config: $this->createConfigForCompanies(['AAPL', 'MSFT'])
         );
 
         $this->assertFalse($result->passed);
-        $this->assertContains('FOCAL_FAILED', $this->getErrorCodes($result));
+        $this->assertContains('COMPANY_FAILED', $this->getErrorCodes($result));
     }
 
-    public function testValidateResultsWarnsWhenFocalPartial(): void
+    public function testValidateResultsWarnsWhenAnyCompanyPartial(): void
     {
         $validator = $this->createValidator();
         $result = $validator->validateResults(
@@ -239,31 +195,12 @@ final class CollectionGateValidatorTest extends Unit
                 'MSFT' => CollectionStatus::Complete,
             ],
             macroStatus: CollectionStatus::Complete,
-            config: $this->createConfigForCompanies(['AAPL', 'MSFT']),
-            focalTickers: ['AAPL']
+            config: $this->createConfigForCompanies(['AAPL', 'MSFT'])
         );
 
         $this->assertTrue($result->passed);
         $this->assertEmpty($result->errors);
-        $this->assertContains('FOCAL_PARTIAL', $this->getWarningCodes($result));
-    }
-
-    public function testValidateResultsWarnsWhenPeerFailed(): void
-    {
-        $validator = $this->createValidator();
-        $result = $validator->validateResults(
-            companyStatuses: [
-                'AAPL' => CollectionStatus::Complete,
-                'MSFT' => CollectionStatus::Failed,
-            ],
-            macroStatus: CollectionStatus::Complete,
-            config: $this->createConfigForCompanies(['AAPL', 'MSFT']),
-            focalTickers: ['AAPL']
-        );
-
-        $this->assertTrue($result->passed);
-        $this->assertEmpty($result->errors);
-        $this->assertContains('PEER_FAILED', $this->getWarningCodes($result));
+        $this->assertContains('COMPANY_PARTIAL', $this->getWarningCodes($result));
     }
 
     public function testValidateResultsFailsWhenMacroFailed(): void
@@ -272,8 +209,7 @@ final class CollectionGateValidatorTest extends Unit
         $result = $validator->validateResults(
             companyStatuses: ['AAPL' => CollectionStatus::Complete],
             macroStatus: CollectionStatus::Failed,
-            config: $this->createConfigForCompanies(['AAPL']),
-            focalTickers: ['AAPL']
+            config: $this->createConfigForCompanies(['AAPL'])
         );
 
         $this->assertFalse($result->passed);
@@ -286,8 +222,7 @@ final class CollectionGateValidatorTest extends Unit
         $result = $validator->validateResults(
             companyStatuses: ['AAPL' => CollectionStatus::Complete],
             macroStatus: CollectionStatus::Partial,
-            config: $this->createConfigForCompanies(['AAPL']),
-            focalTickers: ['AAPL']
+            config: $this->createConfigForCompanies(['AAPL'])
         );
 
         $this->assertTrue($result->passed);
@@ -404,6 +339,7 @@ final class CollectionGateValidatorTest extends Unit
         );
 
         return new IndustryConfig(
+            industryId: 1,
             id: 'energy',
             name: 'Energy',
             sector: 'Energy',
@@ -450,6 +386,7 @@ final class CollectionGateValidatorTest extends Unit
         );
 
         return new IndustryConfig(
+            industryId: 1,
             id: 'energy',
             name: 'Energy',
             sector: 'Energy',
