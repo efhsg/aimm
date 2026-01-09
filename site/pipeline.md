@@ -100,27 +100,30 @@ The AIMM pipeline consists of three sequential phases, each with validation gate
 |--------|-------------|
 | Input | ReportDTO (JSON) |
 | Output | report.pdf |
-| Renderer | Python (ReportLab + matplotlib) |
+| Renderer | Gotenberg (Chromium HTML-to-PDF) |
 | Rule | NO business logic |
 
 ### Rendering Rules
 
-- Python renderer is "dumb" (no business logic)
-- Receives JSON, outputs PDF
+- Gotenberg renderer is "dumb" (no business logic)
+- Receives HTML/CSS + assets, outputs PDF
 - Charts generated from DTO data only
 
 ```
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│  ReportLab  │  │ matplotlib  │  │   Layout    │
-│    Core     │  │   Charts    │  │   Engine    │
-└──────┬──────┘  └──────┬──────┘  └──────┬──────┘
-       │                │                │
-       └────────────────┴────────────────┘
-                        │
-                        ▼
-             ┌─────────────────────┐
-             │     report.pdf      │
-             └─────────────────────┘
+┌─────────────────────┐
+│ HTML/CSS + assets   │
+└──────────┬──────────┘
+           │
+           ▼
+   ┌─────────────────┐
+   │ Gotenberg       │
+   │ (Chromium)      │
+   └───────┬─────────┘
+           │
+           ▼
+   ┌─────────────────┐
+   │    report.pdf   │
+   └─────────────────┘
 ```
 
 ## Full Pipeline Diagram
@@ -142,5 +145,5 @@ DataPack + Focal + Peers ──► Analysis ──► ReportDTO ──► Analys
                                                          ▼
 PHASE 3: RENDER
 ───────────────
-ReportDTO ──► Python Renderer ──► report.pdf
+ReportDTO ──► Gotenberg Renderer ──► report.pdf
 ```

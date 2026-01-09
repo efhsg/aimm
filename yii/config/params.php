@@ -8,6 +8,7 @@ return [
     'datapacksPath' => '@runtime/datapacks',
     'macroStalenessThresholdDays' => 10,
     'renderTimeoutSeconds' => 120,
+    'gotenbergBaseUrl' => getenv('GOTENBERG_BASE_URL') ?: 'http://aimm_gotenberg:3000',
     'allowedSourceDomains' => [
         'financialmodelingprep.com',
         'finance.yahoo.com',
@@ -39,4 +40,5 @@ return [
         'email' => null,          // e.g., 'alerts@example.com'
         'from_email' => 'noreply@aimm.dev',
     ],
+
 ];

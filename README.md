@@ -1,12 +1,12 @@
 # AIMM
 
-AIMM is a Docker-based development environment for generating financial reports. It combines a Yii2 (PHP) application, a Python renderer for PDFs, and a MySQL database.
+AIMM is a Docker-based development environment for generating financial reports. It combines a Yii2 (PHP) application, a Gotenberg PDF renderer, and a MySQL database.
 
 ## What’s in this repo
 
 - `yii/` — Yii2 application (web + console)
-- `python-renderer/` — Python PDF renderer (invoked by the app)
-- `docker-compose.yml` — local dev stack (Nginx, PHP-FPM, MySQL, Python)
+- `docker/gotenberg/` — Gotenberg image for PDF rendering
+- `docker-compose.yml` — local dev stack (Nginx, PHP-FPM, MySQL, Gotenberg)
 - `docs/` — rules, skills, and prompt templates
 
 ## Quick start (local dev)
@@ -39,4 +39,3 @@ Connection settings:
 - `docs/README.md` — documentation entry points
 - `.claude/rules/` — global guardrails (conventions, folder taxonomy, testing baseline)
 - `.claude/skills/index.md` — skill catalog used for feature work
-

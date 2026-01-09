@@ -1,6 +1,6 @@
 ---
 name: setup-project
-description: "Bootstrap the AIMM Yii2 + Python development environment using Docker Compose v2 (PHP-FPM, Nginx, MySQL, Python). Scaffolds Docker/Yii/Python files and provides verification commands. Non-goal: feature work."
+description: "Bootstrap the AIMM Yii2 + Gotenberg development environment using Docker Compose v2 (PHP-FPM, Nginx, MySQL, Gotenberg). Scaffolds Docker/Yii files and provides verification commands. Non-goal: feature work."
 area: meta
 depends_on:
   - docs/RULES.md
@@ -10,8 +10,8 @@ depends_on:
 
 Bootstrap the AIMM development environment in the repository root using Docker Compose.
 
-This skill creates a minimal Yii2 (console + web) scaffold, a Python renderer container, and a MySQL database, wired
-together through Nginx + PHP-FPM.
+This skill creates a minimal Yii2 (console + web) scaffold, a Gotenberg PDF renderer service, and a MySQL database,
+wired together through Nginx + PHP-FPM.
 
 For global conventions (coding style, folder taxonomy), follow `docs/RULES.md` rather than re-defining them here.
 
@@ -24,7 +24,7 @@ docker compose exec -T aimm_yii composer install
 
 docker compose exec -T aimm_yii php yii test/index
 docker compose exec -T aimm_yii php yii test/db
-docker compose exec -T aimm_python python -c "import reportlab, matplotlib, PIL; print('Dependencies OK')"
+docker compose exec -T aimm_gotenberg curl -f http://localhost:3000/health
 ```
 
 ## Prerequisites
@@ -53,7 +53,7 @@ After completion, the repo root contains (at least) these new files/directories:
 - Docker:
     - `docker-compose.yml`
     - `docker/yii/Dockerfile`
-    - `docker/python/Dockerfile`
+    - `docker/gotenberg/Dockerfile`
     - `docker/init-scripts/init-databases.sh`
     - `nginx.conf.template`
 - Local env:
@@ -65,16 +65,13 @@ After completion, the repo root contains (at least) these new files/directories:
     - `yii/config/{console.php,web.php,db.php,params.php,container.php}`
     - `yii/web/index.php`
     - `yii/src/...` (taxonomy per `docs/RULES.md`)
-- Python renderer scaffold:
-    - `python-renderer/requirements.txt`
-    - `python-renderer/render_pdf.py`
 
 Running `docker compose up -d --build` starts these services:
 
 - `aimm_yii` (PHP-FPM + Composer + Yii CLI)
 - `aimm_nginx` (routes web traffic to PHP-FPM)
 - `aimm_mysql` (MySQL 8)
-- `aimm_python` (Python 3.11, renderer deps installed)
+- `aimm_gotenberg` (Gotenberg PDF renderer)
 
 ### Non-goals
 
@@ -105,16 +102,15 @@ This skill writes new files in the repo root (and will overwrite if you paste ov
 - `nginx.conf.template`
 - `.env.example`
 - `.gitignore`
-- files under `docker/`, `yii/`, `python-renderer/`, `data/`
+- files under `docker/`, `yii/`, `data/`
 
 ### 2) Create directories
 
 The command below uses Bash brace expansion. If you are using PowerShell, create the same directories manually.
 
 ```bash
-mkdir -p docker/{init-scripts,python,yii}
+mkdir -p docker/{gotenberg,init-scripts,yii}
 mkdir -p data/db/mysql
-mkdir -p python-renderer
 mkdir -p yii/{config/{industries,schemas},migrations,runtime/{datapacks,reports,logs},tests/{unit,integration,fixtures},web}
 mkdir -p yii/src/{Adapters,Clients,Commands,Controllers,Dto/Datapoints,enums,exceptions,Factories,Handlers/{Collection,Analysis,Rendering},Queries,Transformers,Validators}
 ```
@@ -148,6 +144,7 @@ services:
       - .:/var/www/html
     depends_on:
       - aimm_mysql
+      - gotenberg
 
   aimm_nginx:
     image: nginx:1.27
@@ -186,20 +183,22 @@ services:
       timeout: 5s
       retries: 20
 
-  aimm_python:
+  gotenberg:
+    container_name: aimm_gotenberg
     build:
-      context: .
-      dockerfile: ./docker/python/Dockerfile
-      args:
-        USER_ID: ${USER_ID:-1000}
-        USER_NAME: ${USER_NAME:-appuser}
-    working_dir: /app
+      context: ./docker/gotenberg
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command:
+      - "gotenberg"
+      - "--api-timeout=30s"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     environment:
-      TZ: ${TIMEZONE:-Europe/Amsterdam}
-    volumes:
-      - ./python-renderer:/app
-      - ./yii/runtime:/runtime
-    command: [ "tail", "-f", "/dev/null" ]
+      LOG_LEVEL: info
 ```
 
 ### 4) Create the PHP (Yii) Dockerfile
@@ -267,36 +266,17 @@ Xdebug usage:
 - CLI (one-off):
   `docker compose exec -e XDEBUG_MODE=debug -e XDEBUG_CONFIG="client_host=host.docker.internal client_port=9878" aimm_yii php yii <command>`
 
-### 5) Create the Python Dockerfile
+### 5) Create the Gotenberg Dockerfile
 
-Create `docker/python/Dockerfile`:
+Create `docker/gotenberg/Dockerfile`:
 
 ```dockerfile
-FROM python:3.11-slim
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libfreetype6-dev \
-    libpng-dev \
-    libjpeg-dev \
-    zlib1g-dev \
+FROM gotenberg/gotenberg:8
+USER root
+RUN apt-get update \
+    && apt-get install -y curl \
     && rm -rf /var/lib/apt/lists/*
-
-ARG USER_ID=1000
-ARG USER_NAME=appuser
-
-RUN adduser --uid ${USER_ID} --disabled-password --gecos "" ${USER_NAME}
-
-WORKDIR /app
-
-COPY python-renderer/requirements.txt /app/requirements.txt
-RUN python -m pip install --no-cache-dir -r requirements.txt
-
-RUN chown -R ${USER_NAME}:${USER_NAME} /app
-
-USER ${USER_NAME}
-
-CMD ["tail", "-f", "/dev/null"]
+USER gotenberg
 ```
 
 ### 6) Create the database init script (test DB + grants)
@@ -417,74 +397,7 @@ Create your local `.env` (do not commit it):
 cp .env.example .env
 ```
 
-### 9) Create Python renderer files
-
-Create `python-renderer/requirements.txt`:
-
-```
-reportlab>=4.0
-matplotlib>=3.8
-Pillow>=10.0
-```
-
-Create `python-renderer/render_pdf.py`:
-
-```python
-#!/usr/bin/env python3
-"""
-AIMM PDF renderer (stub).
-
-Usage:
-  python render_pdf.py <report-dto.json> <output.pdf>
-"""
-
-from __future__ import annotations
-
-import json
-import sys
-from pathlib import Path
-
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-
-
-def main() -> int:
-    if len(sys.argv) != 3:
-        print("Usage: python render_pdf.py <report-dto.json> <output.pdf>", file=sys.stderr)
-        return 1
-
-    dto_path = Path(sys.argv[1])
-    output_path = Path(sys.argv[2])
-
-    if not dto_path.exists():
-        print(f"Error: DTO file not found: {dto_path}", file=sys.stderr)
-        return 1
-
-    dto = json.loads(dto_path.read_text(encoding="utf-8"))
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    c = canvas.Canvas(str(output_path), pagesize=letter)
-    text = c.beginText(72, 720)
-    text.textLine("AIMM renderer stub")
-    text.textLine(f"DTO: {dto_path.name}")
-    text.textLine("")
-
-    for line in json.dumps(dto, indent=2).splitlines():
-        text.textLine(line)
-
-    c.drawText(text)
-    c.showPage()
-    c.save()
-
-    print(f"Wrote stub PDF to {output_path}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-```
-
-### 10) Create the Yii2 application skeleton
+### 9) Create the Yii2 application skeleton
 
 Create `yii/composer.json`:
 
@@ -703,7 +616,7 @@ final class HealthController extends Controller
 }
 ```
 
-### 11) Create base enums
+### 10) Create base enums
 
 Follow `docs/RULES.md` conventions.
 
@@ -754,7 +667,7 @@ enum Rating: string
 }
 ```
 
-### 12) Create smoke-test console command
+### 11) Create smoke-test console command
 
 Create `yii/src/Commands/TestController.php`:
 
@@ -792,7 +705,7 @@ final class TestController extends Controller
 }
 ```
 
-### 13) Create/Update `.gitignore`
+### 12) Create/Update `.gitignore`
 
 Create `.gitignore` (or merge if you already have one):
 
@@ -808,17 +721,16 @@ Create `.gitignore` (or merge if you already have one):
 .DS_Store
 ```
 
-### 14) Set executable bits (Linux/macOS only)
+### 13) Set executable bits (Linux/macOS only)
 
 This avoids "permission denied" when running scripts directly. Windows users can skip this step.
 
 ```bash
 chmod +x docker/init-scripts/init-databases.sh
 chmod +x yii/yii
-chmod +x python-renderer/render_pdf.py
 ```
 
-### 15) Build, start, and install dependencies
+### 14) Build, start, and install dependencies
 
 ```bash
 cp .env.example .env
@@ -849,8 +761,8 @@ docker compose exec -T aimm_yii php yii test/index
 # DB connection from Yii container
 docker compose exec -T aimm_yii php yii test/db
 
-# Python deps present
-docker compose exec -T aimm_python python -c "import reportlab, matplotlib, PIL; print('Dependencies OK')"
+# Gotenberg health check
+docker compose exec -T aimm_gotenberg curl -f http://localhost:3000/health
 ```
 
 Optional web check:
@@ -864,8 +776,7 @@ Optional web check:
 - [ ] `docker compose ps` shows all services running and `aimm_mysql` is healthy
 - [ ] `docker compose exec -T aimm_yii php yii test/index` prints `AIMM is ready.`
 - [ ] `docker compose exec -T aimm_yii php yii test/db` prints `DB OK: 1`
-- [ ] `docker compose exec -T aimm_python python -c "import reportlab, matplotlib, PIL; print('Dependencies OK')"`
-  prints `Dependencies OK`
+- [ ] `docker compose exec -T aimm_gotenberg curl -f http://localhost:3000/health` returns `{"status":"up",...}`
 - [ ] `.env` exists locally and is ignored by `.gitignore`
 
 ## Common commands
@@ -881,7 +792,6 @@ docker compose logs -f aimm_mysql
 
 # Shell access
 docker compose exec aimm_yii bash
-docker compose exec aimm_python bash
 
 # Destructive reset (wipes DB data; re-runs init scripts on next up)
 docker compose down -v

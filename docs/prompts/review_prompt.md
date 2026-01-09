@@ -25,7 +25,7 @@ Analyze the design document for:
 2.  **Skill Reusability:** Does it reuse existing skills from the index? Does it propose new skills where appropriate?
 3.  **Security:** Does it address data provenance? Are there potential gaps in secret management or rate limiting?
 4.  **Clarity & Completeness:** Are the requirements testable? Are there ambiguous "to do" items? Is the flow logical?
-5.  **Feasibility:** Are the proposed technical solutions realistic given the project stack (PHP 8/Yii2, Python)?
+5.  **Feasibility:** Are the proposed technical solutions realistic given the project stack (PHP 8/Yii2, Gotenberg)?
 
 ### 3. Reporting Phase
 Generate a structured Markdown report.

@@ -1,13 +1,13 @@
 # Tech Stack
 
-AIMM uses PHP for orchestration and Python for PDF rendering.
+AIMM uses PHP for orchestration and Gotenberg for PDF rendering.
 
 ## Core Technologies
 
 | Component | Technology | Version |
 |-----------|------------|---------|
 | Orchestration | Yii 2 Framework | PHP 8.2+ |
-| PDF Rendering | ReportLab + matplotlib | Python 3.11+ |
+| PDF Rendering | Gotenberg (Chromium) | 8.x |
 | Schema Validation | opis/json-schema | JSON Schema draft-07 |
 | Process Management | Symfony Process | ^6.4 |
 | Queue (optional) | yii2-queue | ^2.3 |
@@ -37,26 +37,14 @@ AIMM uses PHP for orchestration and Python for PDF rendering.
 |---------|---------|
 | `yiisoft/yii2` | Framework for CLI and DI |
 | `opis/json-schema` | JSON Schema validation |
-| `symfony/process` | Subprocess execution for Python renderer |
+| `symfony/process` | Subprocess execution for external tools |
 | `yiisoft/yii2-queue` | Background job processing |
 | `ramsey/uuid` | UUID generation for artifact folders |
 | `codeception/codeception` | Unit and integration testing |
 
-## Python Dependencies
+## Gotenberg
 
-```
-reportlab>=4.0
-matplotlib>=3.8
-pillow>=10.0
-```
-
-### Key Libraries
-
-| Package | Purpose |
-|---------|---------|
-| `reportlab` | PDF generation |
-| `matplotlib` | Chart rendering |
-| `pillow` | Image handling |
+- Image: `gotenberg/gotenberg:8`
 
 ## Architecture Decisions
 
@@ -67,12 +55,11 @@ pillow>=10.0
 - Established conventions for commands and components
 - Queue support via yii2-queue
 
-### Why Python for Rendering?
+### Why Gotenberg for Rendering?
 
-- ReportLab is the industry standard for PDF generation
-- matplotlib excels at financial charts
-- Keeps PHP focused on business logic
-- Clear boundary: Python receives JSON, outputs PDF
+- Chromium-grade HTML/CSS layout fidelity
+- Template-driven layouts are easier to maintain
+- Keeps PHP focused on orchestration and data integrity
 
 ### Why JSON Schema?
 
@@ -98,5 +85,5 @@ docker exec aimm_yii vendor/bin/php-cs-fixer fix
 ### Requirements
 
 - Docker with PHP 8.2+ image
-- Python 3.11+ (for renderer)
+- Gotenberg 8.x container
 - MySQL 8.0+ (for dossier storage)

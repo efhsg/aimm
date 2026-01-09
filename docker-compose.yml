@@ -24,6 +24,8 @@ services:
     depends_on:
       aimm_mysql:
         condition: service_healthy
+      gotenberg:
+        condition: service_healthy
 
   aimm_nginx:
     container_name: aimm_nginx
@@ -67,18 +69,19 @@ services:
       timeout: 5s
       retries: 20
 
-  aimm_python:
-    container_name: aimm_python
+  gotenberg:
+    container_name: aimm_gotenberg
     build:
-      context: .
-      dockerfile: ./docker/python/Dockerfile
-      args:
-        USER_ID: ${USER_ID:-1000}
-        USER_NAME: ${USER_NAME:-appuser}
-    working_dir: /app
+      context: ./docker/gotenberg
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command:
+      - "gotenberg"
+      - "--api-timeout=30s"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     environment:
-      TZ: ${TIMEZONE:-Europe/Amsterdam}
-    volumes:
-      - ./python-renderer:/app
-      - ./yii/runtime:/runtime
-    command: ["tail", "-f", "/dev/null"]
+      LOG_LEVEL: info

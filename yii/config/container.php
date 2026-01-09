@@ -25,6 +25,7 @@ use app\clients\BlockDetector;
 use app\clients\BlockDetectorInterface;
 use app\clients\DatabaseRateLimiter;
 use app\clients\FileRateLimiter;
+use app\clients\GotenbergClient;
 use app\clients\GuzzleWebFetchClient;
 use app\clients\RandomUserAgentProvider;
 use app\clients\RateLimiterInterface;
@@ -134,6 +135,12 @@ return [
                 allowedDomainPolicy: $container->get(AllowedDomainPolicyInterface::class),
                 alertDispatcher: $container->get(AlertDispatcher::class),
                 logger: Yii::getLogger(),
+            );
+        },
+        GotenbergClient::class => static function (): GotenbergClient {
+            return new GotenbergClient(
+                new Client(),
+                Yii::$app->params['gotenbergBaseUrl'] ?? 'http://aimm_gotenberg:3000',
             );
         },
 

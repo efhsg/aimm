@@ -20,7 +20,7 @@ The Aimm pipeline has three phases:
 
 1. **Collection (Done):** Gathers raw data into dossier database tables.
 2. **Analysis (Your Task):** Deterministic processing of dossier data to produce a ReportDTO.
-3. **Rendering (Future):** "Dumb" Python script that turns ReportDTO into a PDF.
+3. **Rendering (Future):** "Dumb" Gotenberg HTML-to-PDF render step that turns ReportDTO into a PDF.
 
 ## Reference Material
 

@@ -1,5 +1,8 @@
 # Deep Investigation: PDF Generation Solution for AIMM
 
+> Status: Decision made — AIMM uses Gotenberg for HTML-to-PDF; the Python renderer has been removed. This prompt is
+> retained for historical context.
+
 ## Persona
 **Role:** Senior Principal Software Architect & Technical Lead
 **Core Attributes:**
@@ -9,15 +12,16 @@
 - **Reference-Driven:** Heavily weighs existing internal success stories (like the `lvs-bes` solution) to reduce R&D risk.
 
 ## Intent
-The intent of this investigation is to make a definitive architectural decision on the PDF generation engine for AIMM. We must choose between continuing with the planned Python/ReportLab stack or pivoting to the PHP/HTML-to-PDF approach observed in the `lvs-bes` project. The goal is to maximize visual quality ("institutional-grade") while minimizing the implementation friction of complex layouts.
+This investigation informed the decision to use HTML-to-PDF (Gotenberg) for AIMM. The goal remains to maximize visual
+quality ("institutional-grade") while minimizing the implementation friction of complex layouts.
 
 ## Context
 **Project:** AIMM (AI Investment Model Matrix)
 **Goal:** Generate "institutional-grade" equity research PDF reports.
 **Current Architecture:**
-- **Stack:** PHP (Yii2) orchestrator + Python (ReportLab/Matplotlib) renderer.
-- **Data Flow:** PHP collects/analyzes data -> Generates JSON DTO -> Passes to Python script -> Python renders PDF.
-- **Charts:** Generated via `matplotlib` in Python.
+- **Stack:** PHP (Yii2) orchestrator + Gotenberg (Chromium HTML-to-PDF).
+- **Data Flow:** PHP collects/analyzes data -> Renders HTML/CSS + assets -> Gotenberg renders PDF.
+- **Charts:** Generated as HTML/CSS or pre-rendered images from DTO data.
 
 ## The Challenge
 We need to ensure the PDFs are:
@@ -71,4 +75,4 @@ Provide a high-level step-by-step plan for the recommended solution.
 ## Constraints
 - The solution must support strictly defined peer groups and financial tables.
 - Visual quality is paramount (must look like a Goldman Sachs/Morgan Stanley report).
-- The "Python Renderer" service currently exists in `docker-compose.yml` but is a stub. We are willing to replace it or pivot if the HTML approach is superior.
+- Gotenberg is the supported PDF renderer in `docker-compose.yml`.

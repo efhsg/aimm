@@ -22,7 +22,7 @@ A three-phase pipeline that generates institutional-grade equity research PDF re
 ### Technology Stack
 
 - **Orchestration**: Yii 2 Framework (PHP 8.2+)
-- **PDF Rendering**: Python 3.11+ with ReportLab + matplotlib
+- **PDF Rendering**: Gotenberg (Chromium HTML-to-PDF)
 - **Schema Validation**: JSON Schema draft-07 via opis/json-schema
 - **Process Management**: Symfony Process component
 - **Queue**: yii2-queue (optional, for background processing)
@@ -133,15 +133,15 @@ Naming rule: prefer specific, action‑oriented names like `IndustryCollectionHa
 │  Output: PDF file                                                           │
 │                                                                             │
 │  RULES:                                                                     │
-│  - Python renderer is "dumb" (no business logic)                            │
-│  - Receives JSON, outputs PDF                                               │
+│  - Gotenberg renderer is "dumb" (no business logic)                         │
+│  - Receives HTML/CSS + assets, outputs PDF                                  │
 │  - Charts generated from DTO data only                                      │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                    Python PDF Renderer                              │    │
+│  │                    Gotenberg (Chromium)                             │    │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │    │
-│  │  │  ReportLab  │  │ matplotlib  │  │   Layout    │                 │    │
-│  │  │    Core     │  │   Charts    │  │   Engine    │                 │    │
+│  │  │ HTML/CSS    │  │   Charts    │  │   Layout    │                 │    │
+│  │  │ Templates   │  │   Images    │  │   Engine    │                 │    │
 │  │  └─────────────┘  └─────────────┘  └─────────────┘                 │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                      │                                      │
@@ -212,7 +212,7 @@ equity-research/
 │   │   └── DetermineRatingHandler.php  # BUY/HOLD/SELL logic
 │   │
 │   └── rendering/                      # Phase 3: PDF generation
-│       └── RenderPdfHandler.php        # Calls Python subprocess
+│       └── RenderPdfHandler.php        # Calls Gotenberg
 │
 ├── queries/                            # Data retrieval (no business rules)
 │   ├── IndustryConfigQuery.php         # Load/validate industry configs
@@ -254,7 +254,7 @@ equity-research/
 ├── clients/                            # External integrations
 │   ├── WebSearchClient.php             # Web search abstraction
 │   ├── WebFetchClient.php              # Web page fetching
-│   └── PythonRendererClient.php        # Python subprocess wrapper
+│   └── GotenbergClient.php             # PDF rendering client
 │
 ├── adapters/                           # Map external responses → internal DTOs
 │   ├── YahooFinanceAdapter.php         # Parse Yahoo Finance pages
@@ -291,13 +291,6 @@ equity-research/
 │               ├── validation.json
 │               ├── report-dto.json
 │               └── report.pdf
-│
-├── python-renderer/                    # Python PDF generation
-│   ├── requirements.txt
-│   ├── render_pdf.py                   # Main entry point
-│   ├── charts.py                       # Chart generation
-│   ├── layout.py                       # Page layout
-│   └── styles.py                       # Visual styles
 │
 └── tests/
     ├── unit/
@@ -420,21 +413,17 @@ peer_tickers[]                   │
 ```
 INPUT                           PROCESS                         OUTPUT
 ─────                           ───────                         ──────
-ReportDTO            ──►   PdfRenderHandler             ──►   report.pdf
+ReportDTO            ──►   RenderPdfHandler             ──►   report.pdf
 (JSON file)                      │
                                  │
-                    ┌────────────┴────────────┐
-                    ▼                         ▼
-            Symfony Process           Python subprocess
-                                             │
-                              ┌──────────────┼──────────────┐
-                              ▼              ▼              ▼
-                          ReportLab     matplotlib      layout
-                              │              │              │
-                              └──────────────┴──────────────┘
-                                             │
-                                             ▼
-                                        report.pdf
+                           GotenbergClient
+                                  │
+                         Gotenberg (Chromium)
+                                  │
+                      HTML/CSS + assets bundle
+                                  │
+                                  ▼
+                             report.pdf
 ```
 
 ---
@@ -663,8 +652,7 @@ return [
     'schemaPath' => '@app/config/schemas',
     'industriesPath' => '@app/config/industries',
     'datapacksPath' => '@runtime/datapacks',
-    'pythonRendererPath' => '@app/python-renderer',
-    'pythonBinary' => '/usr/bin/python3',
+    'gotenbergBaseUrl' => getenv('GOTENBERG_BASE_URL') ?: 'http://aimm_gotenberg:3000',
     'macroStalenessThresholdDays' => 10,
     'renderTimeoutSeconds' => 120,
 ];
@@ -693,13 +681,9 @@ return [
 }
 ```
 
-### Python (python-renderer/requirements.txt)
+### Gotenberg (Docker)
 
-```
-reportlab>=4.0
-matplotlib>=3.8
-pillow>=10.0
-```
+- Image: `gotenberg/gotenberg:8`
 
 ---
 
@@ -721,11 +705,9 @@ pillow>=10.0
 - Explicit `required` arrays
 - Typed datapoints (not generic `value: any`)
 
-### Python
+### PDF Rendering (Gotenberg)
 
-- PEP 8 formatting
-- Type hints
-- No business logic; pure rendering from JSON input
+- No business logic in templates; render from DTO data
 
 ---
 
@@ -800,8 +782,8 @@ class GateResult
 ### Adding a New Chart Type
 
 1. Add data structure to `report-dto.schema.json`
-2. Implement in `python-renderer/charts.py`
-3. Integrate into `python-renderer/layout.py`
+2. Render the chart in report views/assets (HTML/CSS or pre-rendered images)
+3. Include the chart assets in the RenderBundle
 
 ---
 
@@ -864,8 +846,7 @@ class GateResult
 
 ### Phase 3: Rendering
 
-28. [ ] Implement Python renderer (render_pdf.py, charts.py, layout.py)
-29. [ ] Implement PythonRendererClient
+28. [ ] Implement Gotenberg render bundle + client
 30. [ ] Implement RenderPdfHandler
 31. [ ] Implement RenderController
 32. [ ] Test Phase 3 end-to-end

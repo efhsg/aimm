@@ -72,7 +72,9 @@ Default to synchronous generation if p95 end-to-end render time is ≤10s. Switc
 ```dockerfile
 FROM gotenberg/gotenberg:8
 USER root
-RUN apk add --no-cache curl
+RUN apt-get update \
+    && apt-get install -y curl \
+    && rm -rf /var/lib/apt/lists/*
 USER gotenberg
 ```
 
@@ -88,7 +90,6 @@ services:
     command:
       - "gotenberg"
       - "--api-timeout=30s"
-      - "--api-retry-count=3"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s
@@ -96,8 +97,6 @@ services:
       retries: 5
     environment:
       LOG_LEVEL: info
-    networks:
-      - default
 ```
 
 **Verify:**
@@ -214,10 +213,10 @@ namespace app\clients;
 
 use app\dto\pdf\PdfOptions;
 use app\dto\pdf\RenderBundle;
+use app\exceptions\GotenbergException;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Psr7\MultipartStream;
-use Psr\Log\LoggerInterface;
 
 final class GotenbergClient
 {
@@ -227,7 +226,6 @@ final class GotenbergClient
 
     public function __construct(
         private readonly Client $httpClient,
-        private readonly LoggerInterface $logger,
         private readonly string $baseUrl = 'http://aimm_gotenberg:3000',
     ) {}
 
@@ -256,11 +254,12 @@ final class GotenbergClient
                 $snippet = substr($body, 0, 2000);
                 $retryable = $status >= 500;
 
-                $this->logger->error('Gotenberg render failed', [
+                \Yii::error([
+                    'message' => 'Gotenberg render failed',
                     'traceId' => $bundle->traceId,
                     'status' => $status,
                     'body' => $snippet,
-                ]);
+                ], self::class);
 
                 throw new GotenbergException(
                     "Failed to render PDF (HTTP {$status})",
@@ -274,10 +273,11 @@ final class GotenbergClient
 
             return $body;
         } catch (GuzzleException $e) {
-            $this->logger->error('Gotenberg render failed', [
+            \Yii::error([
+                'message' => 'Gotenberg render failed',
                 'traceId' => $bundle->traceId,
                 'error' => $e->getMessage(),
-            ]);
+            ], self::class);
 
             throw new GotenbergException(
                 "Failed to render PDF: {$e->getMessage()}",
@@ -338,13 +338,13 @@ final class GotenbergClient
 }
 ```
 
-**Create** `yii/src/clients/GotenbergException.php`:
+**Create** `yii/src/exceptions/GotenbergException.php`:
 ```php
 <?php
 
 declare(strict_types=1);
 
-namespace app\clients;
+namespace app\exceptions;
 
 final class GotenbergException extends \RuntimeException
 {
@@ -449,12 +449,18 @@ use GuzzleHttp\Client;
 
 // Add to container definitions:
 GotenbergClient::class => static function () {
+    $baseUrl = \Yii::$app->params['gotenbergBaseUrl'] ?? 'http://aimm_gotenberg:3000';
+
     return new GotenbergClient(
         new Client(),
-        \Yii::getLogger(),
-        'http://aimm_gotenberg:3000',
+        $baseUrl,
     );
 },
+```
+
+**Update** `yii/config/params.php`:
+```php
+'gotenbergBaseUrl' => getenv('GOTENBERG_BASE_URL') ?: 'http://aimm_gotenberg:3000',
 ```
 
 ### Phase 1 Verification
@@ -1476,7 +1482,7 @@ final class PdfGenerationHandler
 
     private function isRetryable(\Throwable $e): bool
     {
-        if ($e instanceof \app\clients\GotenbergException) {
+        if ($e instanceof \app\exceptions\GotenbergException) {
             return $e->retryable;
         }
 
@@ -1492,9 +1498,9 @@ final class PdfGenerationHandler
         return match (true) {
             $e instanceof \app\exceptions\SecurityException => 'SECURITY_VIOLATION',
             $e instanceof \app\exceptions\BundleSizeExceededException => 'BUNDLE_TOO_LARGE',
-            $e instanceof \app\clients\GotenbergException && $e->statusCode !== null && $e->statusCode < 500 => 'GOTENBERG_4XX',
-            $e instanceof \app\clients\GotenbergException && $e->statusCode !== null => 'GOTENBERG_5XX',
-            $e instanceof \app\clients\GotenbergException => 'GOTENBERG_ERROR',
+            $e instanceof \app\exceptions\GotenbergException && $e->statusCode !== null && $e->statusCode < 500 => 'GOTENBERG_4XX',
+            $e instanceof \app\exceptions\GotenbergException && $e->statusCode !== null => 'GOTENBERG_5XX',
+            $e instanceof \app\exceptions\GotenbergException => 'GOTENBERG_ERROR',
             default => 'UNKNOWN_ERROR',
         };
     }
@@ -1657,10 +1663,11 @@ StorageInterface::class => static function () {
 
 // Gotenberg
 GotenbergClient::class => static function () {
+    $baseUrl = \Yii::$app->params['gotenbergBaseUrl'] ?? 'http://aimm_gotenberg:3000';
+
     return new GotenbergClient(
         new \GuzzleHttp\Client(),
-        \Yii::getLogger(),
-        'http://aimm_gotenberg:3000',
+        $baseUrl,
     );
 },
 
@@ -1766,7 +1773,7 @@ final class AnalyticsClient
         private readonly Client $httpClient,
         private readonly CacheInterface $cache,
         private readonly LoggerInterface $logger,
-        private readonly string $baseUrl = 'http://aimm_python:5000',
+        private readonly string $baseUrl = 'http://aimm_analytics:5000',
     ) {}
 
     public function generateChart(string $type, array $data): ChartDto
@@ -1876,12 +1883,7 @@ docker exec aimm_yii php yii pdf/compare-golden --fixture=sample_report --fuzz=5
 
 ### Remove Old Python Renderer
 
-```bash
-# After verifying new system works
-rm -rf python-renderer/
-
-# Update docker-compose.yml - remove aimm_python service (if no longer needed)
-```
+Completed: `python-renderer/` and the `aimm_python` service have been removed.
 
 ### Add Monitoring
 

@@ -93,7 +93,7 @@ Version B (Pipeline + Admin UI) is the active layout for the site.
 - **Phase 3: Render**
   - Inputs: ReportDTO.
   - Outputs: report.pdf.
-  - Python renderer, no business logic.
+  - Gotenberg renderer (HTML/CSS), no business logic.
 - **Flow Diagram Section**
   - Inline diagram of the three phases (from project description).
 - Source: `docs/design/project-description.md` (Pipeline, CLI Commands)
@@ -157,8 +157,8 @@ Version B (Pipeline + Admin UI) is the active layout for the site.
   - industry-datapack schema
   - report-dto schema
 - **Application Params**
-  - `schemaPath`, `industriesPath`, `datapacksPath`, `pythonRendererPath`.
-  - `pythonBinary`, `macroStalenessThresholdDays`, `renderTimeoutSeconds`.
+  - `schemaPath`, `industriesPath`, `datapacksPath`, `gotenbergBaseUrl`.
+  - `macroStalenessThresholdDays`, `renderTimeoutSeconds`.
 - Source: `docs/design/project-description.md` (Industry Config, Application Parameters)
 
 ### 8) CLI Usage
@@ -177,12 +177,12 @@ Version B (Pipeline + Admin UI) is the active layout for the site.
 ### 9) Tech Stack
 **Goal:** Document the core technologies and constraints.
 - **Orchestration:** Yii2 (PHP 8.2+)
-- **Rendering:** Python 3.11+ with ReportLab + matplotlib
+- **Rendering:** Gotenberg (Chromium HTML-to-PDF)
 - **Schema Validation:** JSON Schema draft-07 (opis/json-schema)
 - **Process:** Symfony Process
 - **Queue:** yii2-queue (optional)
 - **Dependencies Summary**
-  - PHP and Python dependency lists (from project description).
+  - PHP and Gotenberg dependency lists (from project description).
 - Source: `docs/design/project-description.md` (Dependencies)
 
 ### 10) Glossary
@@ -210,7 +210,7 @@ Version B (Pipeline + Admin UI) is the active layout for the site.
 ### 12) Directory Structure
 **Goal:** Provide a navigable map of the repository layout.
 - **Top-Level Map**
-  - `commands/`, `handlers/`, `queries/`, `validators/`, `transformers/`, `factories/`, `dto/`, `clients/`, `adapters/`, `enums/`, `exceptions/`, `jobs/`, `config/`, `python-renderer/`, `runtime/`, `tests/`.
+  - `commands/`, `handlers/`, `queries/`, `validators/`, `transformers/`, `factories/`, `dto/`, `clients/`, `adapters/`, `enums/`, `exceptions/`, `jobs/`, `config/`, `runtime/`, `tests/`.
 - **Dropped Types**
   - `services/`, `helpers/`, `components/`, `utils/`.
 - Source: `docs/design/project-description.md` (Directory Structure)

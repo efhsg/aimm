@@ -36,13 +36,6 @@ aimm/
 │       ├── integration/
 │       └── fixtures/
 │
-├── python-renderer/            # PDF generation
-│   ├── render_pdf.py
-│   ├── charts.py
-│   ├── layout.py
-│   ├── styles.py
-│   └── requirements.txt
-│
 ├── docs/                       # Internal documentation
 │   ├── design/
 │   ├── rules/
@@ -154,7 +147,7 @@ External integrations. Clear boundary with external systems.
 clients/
 ├── WebSearchClient.php
 ├── WebFetchClient.php
-└── PythonRendererClient.php
+└── GotenbergClient.php
 ```
 
 ### Adapters (`adapters/`)

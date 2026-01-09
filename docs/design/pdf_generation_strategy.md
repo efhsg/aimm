@@ -36,7 +36,7 @@ This document defines the technical design for "institutional-grade" PDF reporti
    - Acquire row lock (`SELECT ... FOR UPDATE`) inside a DB transaction.
    - Atomically transitions job `queued → processing` (guard against double-processing).
    - Fetches data from MySQL (financials, peer groups).
-   - Calls Analytics Service (Python) to obtain chart **bytes** (PNG @ 2x/3x).
+   - Calls analytics service to obtain chart **bytes** (PNG @ 2x/3x).
    - Renders Yii2 view templates into standalone HTML (`index.html`), plus `header.html` / `footer.html`.
    - Assembles `RenderBundle` (HTML + compiled CSS + fonts + images).
    - Sends bundle to Gotenberg `POST /forms/chromium/convert/html`.
@@ -92,7 +92,8 @@ This document defines the technical design for "institutional-grade" PDF reporti
 
 ### 4.1 Gotenberg Service
 
-We replace the old `aimm_python` *PDF renderer* service with Gotenberg. (Python may remain as `aimm_analytics`.)
+We replace the old `aimm_python` *PDF renderer* service with Gotenberg. If analytics is needed later, add a separate
+`aimm_analytics` service.
 
 **Important:** The stock `gotenberg/gotenberg` image may not include `curl/wget`. To make healthchecks reliable, we use a tiny derived image that includes `curl`.
 
@@ -100,7 +101,9 @@ We replace the old `aimm_python` *PDF renderer* service with Gotenberg. (Python 
 ```dockerfile
 FROM gotenberg/gotenberg:8
 USER root
-RUN apk add --no-cache curl || true
+RUN apt-get update \
+    && apt-get install -y curl \
+    && rm -rf /var/lib/apt/lists/*
 USER gotenberg
 ```
 
@@ -113,7 +116,6 @@ services:
     restart: unless-stopped
     command:
       - "gotenberg"
-      - "--api-retry-count=3"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s
@@ -333,7 +335,7 @@ Responsibilities:
 - `footer.html` (optional)
 - Other assets using their relative paths as filenames (`assets/report.css`, `assets/fonts/*.woff2`, `charts/*.png`, etc.)
 
-### 5.3 Python Analytics Service Contract
+### 5.3 Analytics Service Contract
 
 - **Timeout:** 15s per call.
 - **Retries:** 1 retry on timeout (only).
@@ -717,4 +719,4 @@ Track via metrics:
 - [ ] SCSS: add build pipeline and ship compiled `report.css` as an immutable artifact.
 - [ ] Storage: implement `StorageInterface` (local MVP), `output_uri` in jobs.
 - [ ] Testing: torture fixtures + golden masters.
-- [ ] Cleanup: remove old `python-renderer` service and files.
+- [x] Cleanup: remove old `python-renderer` service and files.

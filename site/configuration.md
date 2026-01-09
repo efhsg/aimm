@@ -113,8 +113,7 @@ return [
     'schemaPath' => '@app/config/schemas',
     'industriesPath' => '@app/config/industries',
     'datapacksPath' => '@runtime/datapacks',
-    'pythonRendererPath' => '@app/python-renderer',
-    'pythonBinary' => '/usr/bin/python3',
+    'gotenbergBaseUrl' => getenv('GOTENBERG_BASE_URL') ?: 'http://aimm_gotenberg:3000',
     'macroStalenessThresholdDays' => 10,
     'renderTimeoutSeconds' => 120,
 ];
@@ -125,7 +124,6 @@ return [
 | `schemaPath` | Location of JSON Schema files |
 | `industriesPath` | Location of industry config files |
 | `datapacksPath` | Output location for datapacks |
-| `pythonRendererPath` | Python renderer source directory |
-| `pythonBinary` | Path to Python 3 executable |
+| `gotenbergBaseUrl` | Base URL for Gotenberg |
 | `macroStalenessThresholdDays` | Max age for macro data (Collection Gate) |
 | `renderTimeoutSeconds` | Timeout for PDF rendering subprocess |
