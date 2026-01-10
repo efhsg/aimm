@@ -1,6 +1,7 @@
 # Admin UI
 
-The Admin UI provides a web interface for managing pipeline inputs and monitoring collection runs.
+The Admin UI provides a web interface for managing industries, collection policies,
+and collection runs.
 
 ## Access Control
 
@@ -15,35 +16,32 @@ All authenticated users have full access. There are no role-based restrictions.
 
 ### Audit Trail
 
-All create/update operations log:
+Create/update operations store:
 - `created_by` / `updated_by` with username
 - `created_at` / `updated_at` timestamps
 
 ## Entities
 
-The Admin UI manages four core entities:
+The Admin UI manages these core entities:
 
 | Entity | Purpose |
 |--------|---------|
-| [Industry Configs](/admin-ui/industry-configs) | Industry-level inputs for collection |
-| [Peer Groups](/admin-ui/peer-groups) | Focal company + peer sets |
-| [Collection Policies](/admin-ui/collection-policies) | Data requirements + macro rules |
-| [Collection Runs](/admin-ui/collection-runs) | Execution history + outcomes |
+| Industries | Industry metadata and company membership |
+| Collection Policies | Data requirements + macro rules |
+| Collection Runs | Execution history + outcomes |
 
 ## How It Maps to the Pipeline
 
 ```
-┌─────────────────────┐     ┌─────────────────────┐
-│  Industry Config    │     │  Collection Policy  │
-│  (industry inputs)  │     │  (requirements)     │
-└─────────┬───────────┘     └─────────┬───────────┘
-          │                           │
-          │         ┌─────────────────┘
-          │         │
-          ▼         ▼
 ┌─────────────────────┐
-│     Peer Group      │
-│  (focal + peers)    │
+│  Collection Policy  │
+│  (requirements)     │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│     Industry        │
+│  (companies + meta) │
 └─────────┬───────────┘
           │
           ▼
@@ -54,26 +52,24 @@ The Admin UI manages four core entities:
           │
           ▼
 ┌─────────────────────┐
-│      Artifacts      │
-│  datapack, DTO, PDF │
+│   Dossier + Reports │
+│  (DB + PDFs)        │
 └─────────────────────┘
 ```
 
 ### Relationship Summary
 
-1. **Industry Config** defines the industry inputs for collection (companies, macro requirements)
-2. **Collection Policy** defines data requirements (which metrics, how much history)
-3. **Peer Group** links a policy to a set of companies (focal + peers)
-4. **Collection Run** executes the pipeline and produces artifacts
+1. **Collection Policy** defines what data to collect (metrics, history, macro inputs).
+2. **Industry** links a policy to a set of companies.
+3. **Collection Run** executes Phase 1 for an industry and records results.
 
 ## Navigation
 
 | Page | Purpose |
 |------|---------|
-| [Industry Configs](/admin-ui/industry-configs) | Manage industry configuration records |
-| [Peer Groups](/admin-ui/peer-groups) | Manage peer sets and trigger collection |
-| [Collection Policies](/admin-ui/collection-policies) | Define data collection requirements |
-| [Collection Runs](/admin-ui/collection-runs) | View run history and diagnostics |
+| Industries | Manage industries and company membership |
+| Collection Policies | Define data collection requirements |
+| Collection Runs | View run history and diagnostics |
 
 ## Environment Setup
 

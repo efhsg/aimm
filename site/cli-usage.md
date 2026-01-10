@@ -1,123 +1,109 @@
 # CLI Usage
 
-AIMM provides CLI commands for each pipeline phase.
+AIMM provides CLI commands for managing the data pipeline.
+
+> **Note:** The pipeline is database-driven. Industry configurations must exist in the database before collection.
 
 ## Phase 1: Collect
 
 ### List Available Industries
 
+Shows all industries currently configured in the database.
+
 ```bash
 yii collect/list
 ```
 
-Shows all configured industries in `config/industries/`.
+**Output:**
+```
++--------------------+--------------------+-----------+-----------+
+| Industry           | Slug               | Sector    | Companies |
++--------------------+--------------------+-----------+-----------+
+| Integrated Oil     | integrated_oil_gas | Energy    | 5         |
++--------------------+--------------------+-----------+-----------+
+```
 
 ### Collect Industry Data
+
+Triggers the collection process for a specific industry by its slug.
 
 ```bash
 yii collect/industry integrated_oil_gas
 ```
 
+**What it does:**
+1.  Loads industry configuration from the database.
+2.  Collects Macro data.
+3.  Collects data for all companies in the industry.
+4.  Validates the result (Collection Gate).
+5.  Updates the persistent **Company Dossier** in the database.
+6.  Records the run status.
+
 **Output:**
-- `runtime/datapacks/integrated_oil_gas/{uuid}/datapack.json`
-- `runtime/datapacks/integrated_oil_gas/{uuid}/validation.json`
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `--force` | Re-collect even if recent datapack exists |
-| `--company=SHEL` | Collect only specified company |
+```
++--------------------+--------------------------------------+----------+----------+
+| Industry           | Datapack ID                          | Status   | Duration |
++--------------------+--------------------------------------+----------+----------+
+| integrated_oil_gas | 550e8400-e29b-41d4-a716-446655440000 | Complete | 45.20s   |
++--------------------+--------------------------------------+----------+----------+
+```
 
 ## Phase 2: Analyze
 
-### Generate Report DTO
+### Analyze Industry
+
+Analyzes the latest successfully collected data for an industry.
 
 ```bash
-yii analyze/report \
-    --datapack=runtime/datapacks/integrated_oil_gas/{uuid}/datapack.json \
-    --focal=SHEL \
-    --peers=BP,XOM,CVX,TTE
+yii analyze/industry integrated_oil_gas
+```
+
+**What it does:**
+1.  Finds the latest successful Collection Run for the industry.
+2.  Builds an IndustryDataPack from dossier tables.
+3.  Calculates peer averages, valuation gaps, and ratings for analyzable companies.
+4.  Generates a Ranked Report (RankedReportDTO).
+5.  Saves the Ranked Report to `analysis_report` by default.
+6.  Outputs the report JSON to stdout (or file).
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--output=<path>` | Write the Report JSON to a specific file instead of stdout. |
+| `--no-save` | Skip saving the report to `analysis_report`. |
+
+**Example:**
+```bash
+yii analyze/industry integrated_oil_gas --output=report.json
+```
+
+**Note:** Companies without at least 2 years of annual data or missing market cap
+are skipped in the ranking.
+
+## Phase 3: Render (PDF)
+
+PDF generation is handled asynchronously via the Job Queue.
+
+### Test PDF Generation
+
+You can verify the connection to the Gotenberg rendering service using the test command:
+
+```bash
+yii pdf/test
 ```
 
 **Output:**
-- `runtime/datapacks/integrated_oil_gas/{uuid}/report-dto.json`
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `--datapack` | Path to IndustryDataPack JSON (required) |
-| `--focal` | Ticker of focal company (required) |
-| `--peers` | Comma-separated list of peer tickers (required) |
-
-## Phase 3: Render
-
-### Generate PDF
-
-```bash
-yii render/pdf \
-    --dto=runtime/datapacks/integrated_oil_gas/{uuid}/report-dto.json
 ```
-
-**Output:**
-- `runtime/datapacks/integrated_oil_gas/{uuid}/report.pdf`
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `--dto` | Path to ReportDTO JSON (required) |
-| `--output` | Custom output path (optional) |
-
-## Full Pipeline
-
-### Run All Phases
-
-```bash
-yii pipeline/run integrated_oil_gas --focal=SHEL --peers=BP,XOM,CVX,TTE
+Generating test PDF with traceId: test-20231027103000
+PDF generated: /app/runtime/test-test-20231027103000.pdf
+Size: 15420 bytes
 ```
-
-Runs collect → analyze → render in sequence.
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `--focal` | Ticker of focal company (required) |
-| `--peers` | Comma-separated list of peer tickers (required) |
-| `--skip-collect` | Use existing datapack |
-| `--skip-render` | Stop after analysis |
 
 ## Exit Codes
 
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 65 | Data/validation error (gate failed) |
-| 70 | Internal error (exception) |
-
-## Examples
-
-### Collect and Analyze Oil & Gas
-
-```bash
-# Collect industry data
-yii collect/industry integrated_oil_gas
-
-# Analyze Shell vs peers
-yii analyze/report \
-    --datapack=runtime/datapacks/integrated_oil_gas/latest/datapack.json \
-    --focal=SHEL \
-    --peers=BP,XOM,CVX,TTE
-
-# Render PDF
-yii render/pdf \
-    --dto=runtime/datapacks/integrated_oil_gas/latest/report-dto.json
-```
-
-### Full Pipeline in One Command
-
-```bash
-yii pipeline/run integrated_oil_gas --focal=SHEL --peers=BP,XOM,CVX,TTE
-```
+| 1 | Unspecified Error |
+| 65 | Data Error (e.g., Industry not found, data missing) |

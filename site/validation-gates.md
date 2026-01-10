@@ -1,85 +1,29 @@
 # Validation Gates
 
-Gates are checkpoints between phases that prevent bad data from flowing downstream. If a gate fails, the pipeline stops.
+Gates are checkpoints between phases. In the current pipeline, gates are implemented
+as status checks and minimum data checks.
 
 ## Collection Gate (after Phase 1)
 
-The Collection Gate validates the `IndustryDataPack` before it can be used for analysis.
-
-### Checks Performed
+Collection gate validation is based on collection results:
 
 | Check | Description | Failure Severity |
 |-------|-------------|------------------|
-| Schema compliance | DataPack matches `industry-datapack.schema.json` | Error |
-| Required datapoints | All metrics marked `required: true` have values | Error |
-| Company coverage | All companies in config are present in output | Error |
-| Macro freshness | Macro data retrieved within 10 days | Error |
-| History depth | Minimum years of financial history present | Warning |
-
-### Example Failure Output
-
-```json
-{
-  "passed": false,
-  "errors": [
-    {
-      "code": "MISSING_REQUIRED_DATAPOINT",
-      "company": "SHEL",
-      "metric": "fwd_pe",
-      "message": "Required valuation metric 'fwd_pe' is missing"
-    }
-  ],
-  "warnings": [
-    {
-      "code": "INSUFFICIENT_HISTORY",
-      "company": "SHEL",
-      "expected": 5,
-      "actual": 3,
-      "message": "Only 3 years of annual data available (expected 5)"
-    }
-  ]
-}
-```
+| Company status | `failed` companies fail the gate | Error |
+| Company status | `partial` companies are warnings | Warning |
+| Macro status | `failed` macro collection fails the gate | Error |
+| Macro status | `partial` macro collection warns | Warning |
+| Missing companies | Configured tickers not collected | Warning |
 
 ## Analysis Gate (after Phase 2)
 
-The Analysis Gate validates the `ReportDTO` before rendering.
-
-### Checks Performed
+Analysis gate validation checks minimum data requirements:
 
 | Check | Description | Failure Severity |
 |-------|-------------|------------------|
-| Schema compliance | ReportDTO matches `report-dto.schema.json` | Error |
-| Peer average recomputation | Recalculated averages match reported values | Error |
-| Valuation gap recomputation | Recalculated gap matches reported value | Error |
-| Rating rule path | Re-running rules produces same rating | Error |
-| Temporal sanity | No past dates marked as "upcoming" | Warning |
-
-### Why Recomputation?
-
-The Analysis Gate recomputes key values to ensure:
-
-1. **Determinism**: Same inputs always produce same outputs
-2. **Auditability**: Values can be verified independently
-3. **Integrity**: No calculation errors slipped through
-
-### Example Failure Output
-
-```json
-{
-  "passed": false,
-  "errors": [
-    {
-      "code": "PEER_AVERAGE_MISMATCH",
-      "metric": "fwd_pe",
-      "reported": 15.2,
-      "recomputed": 14.8,
-      "message": "Peer average mismatch for 'fwd_pe'"
-    }
-  ],
-  "warnings": []
-}
-```
+| Minimum companies | At least 2 companies required | Error |
+| Analyzable companies | At least 2 companies with >= 2 years + market cap | Error |
+| Data freshness | Warn if data older than 30 days | Warning |
 
 ## Gate Result Structure
 
@@ -99,13 +43,5 @@ class GateResult
 | Code | Constant | When |
 |------|----------|------|
 | 0 | `ExitCode::OK` | Gate passed |
+| 1 | `ExitCode::UNSPECIFIED_ERROR` | Internal error |
 | 65 | `ExitCode::DATAERR` | Gate failed with errors |
-| 70 | `ExitCode::SOFTWARE` | Internal error during validation |
-
-## Gate Bypass
-
-::: danger Not Recommended
-Gates should never be bypassed in production. They exist to prevent downstream errors.
-:::
-
-For debugging purposes only, gates can be run in "warn-only" mode during development.

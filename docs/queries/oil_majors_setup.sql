@@ -104,8 +104,9 @@ SET @industry_id := LAST_INSERT_ID();
 INSERT INTO company (ticker, exchange, name, industry_id, currency, fiscal_year_end) VALUES
 ('SHEL', 'NYSE', 'Shell plc', @industry_id, 'USD', 12),
 ('XOM',  'NYSE', 'Exxon Mobil Corporation', @industry_id, 'USD', 12),
-('BP',   'NYSE', 'BP plc', @industry_id, 'USD', 12),
+('COP',  'NYSE', 'ConocoPhillips', @industry_id, 'USD', 12),
 ('CVX',  'NYSE', 'Chevron Corporation', @industry_id, 'USD', 12),
-('TTE',  'NYSE', 'TotalEnergies SE', @industry_id, 'USD', 12);
+('TTE',  'NYSE', 'TotalEnergies SE', @industry_id, 'USD', 12)
+ON DUPLICATE KEY UPDATE name = VALUES(name), industry_id = VALUES(industry_id);
 
 COMMIT;

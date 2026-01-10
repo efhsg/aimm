@@ -20,9 +20,10 @@ AIMM uses PHP for orchestration and Gotenberg for PDF rendering.
     "php": ">=8.2",
     "yiisoft/yii2": "~2.0.49",
     "opis/json-schema": "^2.3",
-    "symfony/process": "^6.4",
+    "symfony/process": "^5.4 || ^6.4 || ^7.0",
     "yiisoft/yii2-queue": "^2.3",
-    "ramsey/uuid": "^4.7"
+    "ramsey/uuid": "^4.7",
+    "guzzlehttp/guzzle": "^7.10"
   },
   "require-dev": {
     "codeception/codeception": "^5.0",
@@ -40,6 +41,7 @@ AIMM uses PHP for orchestration and Gotenberg for PDF rendering.
 | `symfony/process` | Subprocess execution for external tools |
 | `yiisoft/yii2-queue` | Background job processing |
 | `ramsey/uuid` | UUID generation for artifact folders |
+| `guzzlehttp/guzzle` | HTTP client for external services |
 | `codeception/codeception` | Unit and integration testing |
 
 ## Gotenberg

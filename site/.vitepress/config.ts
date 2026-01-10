@@ -7,6 +7,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Overview', link: '/' },
+      { text: 'Setup', link: '/setup' },
       { text: 'Pipeline', link: '/pipeline' },
       { text: 'Architecture', link: '/architecture' },
       { text: 'Data Quality', link: '/data-quality' },
@@ -22,6 +23,7 @@ export default defineConfig({
         text: 'Guide',
         items: [
           { text: 'Overview', link: '/' },
+          { text: 'Setup', link: '/setup' },
           { text: 'Pipeline', link: '/pipeline' },
           { text: 'Architecture', link: '/architecture' },
           { text: 'Data Quality', link: '/data-quality' },
@@ -44,7 +46,7 @@ export default defineConfig({
         text: 'Admin UI',
         items: [
           { text: 'Overview', link: '/admin-ui/' },
-          { text: 'Peer Groups', link: '/admin-ui/peer-groups' },
+          { text: 'Industries', link: '/admin-ui/peer-groups' },
           { text: 'Collection Policies', link: '/admin-ui/collection-policies' },
           { text: 'Collection Runs', link: '/admin-ui/collection-runs' },
           { text: 'Industry Configs', link: '/admin-ui/industry-configs' }

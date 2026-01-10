@@ -98,11 +98,11 @@ SET @industry_id := LAST_INSERT_ID();
 
 -- Companies (all US-listed, FMP free tier compatible)
 INSERT INTO company (ticker, exchange, name, industry_id, currency, fiscal_year_end) VALUES
-('XOM', 'NYSE', 'Exxon Mobil Corporation', @industry_id, 'USD', 12),
-('CVX', 'NYSE', 'Chevron Corporation', @industry_id, 'USD', 12),
-('COP', 'NYSE', 'ConocoPhillips', @industry_id, 'USD', 12),
 ('EOG', 'NYSE', 'EOG Resources Inc', @industry_id, 'USD', 12),
-('OXY', 'NYSE', 'Occidental Petroleum Corporation', @industry_id, 'USD', 12)
+('OXY', 'NYSE', 'Occidental Petroleum Corporation', @industry_id, 'USD', 12),
+('PSX', 'NYSE', 'Phillips 66', @industry_id, 'USD', 12),
+('MPC', 'NYSE', 'Marathon Petroleum Corporation', @industry_id, 'USD', 12),
+('VLO', 'NYSE', 'Valero Energy Corporation', @industry_id, 'USD', 12)
 ON DUPLICATE KEY UPDATE name = VALUES(name), industry_id = VALUES(industry_id);
 
 COMMIT;

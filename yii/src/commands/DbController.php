@@ -50,8 +50,8 @@ final class DbController extends Controller
         $this->stdout("\n");
 
         // Run all seeders
-        $this->stdout("=== Seeding data ===\n", Console::FG_YELLOW);
-        $seedResult = Yii::$app->runAction('seed/all', ['interactive' => false]);
+        $this->stdout("=== Seeding configuration ===\n", Console::FG_YELLOW);
+        $seedResult = Yii::$app->runAction('seed/config', ['interactive' => false]);
 
         if ($seedResult !== ExitCode::OK) {
             return $seedResult;

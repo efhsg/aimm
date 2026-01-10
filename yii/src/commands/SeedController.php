@@ -15,13 +15,14 @@ use yii\helpers\Console;
 final class SeedController extends Controller
 {
     /**
-     * Runs all seeders.
+     * Seeds industry configurations (Policies, Groups, Companies).
+     * Does NOT load financial test data.
      *
-     * Usage: yii seed/all
+     * Usage: yii seed/config
      */
-    public function actionAll(): int
+    public function actionConfig(): int
     {
-        $this->stdout("Running all seeders...\n\n");
+        $this->stdout("Seeding industry configurations...\n\n");
 
         $result = $this->actionOilMajors();
         if ($result !== ExitCode::OK) {
@@ -38,7 +39,7 @@ final class SeedController extends Controller
             return $result;
         }
 
-        $this->stdout("\nAll seeders completed.\n", Console::FG_GREEN);
+        $this->stdout("\nConfiguration seeding completed.\n", Console::FG_GREEN);
 
         return ExitCode::OK;
     }
@@ -170,6 +171,25 @@ final class SeedController extends Controller
     }
 
     /**
+     * Seeds realistic test data for all configured industries.
+     *
+     * Usage: yii seed/testdata
+     */
+    public function actionTestdata(): int
+    {
+        $this->stdout("Seeding financial test data...\n\n");
+
+        $result = $this->actionSupermajorsTestdata();
+        if ($result !== ExitCode::OK) {
+            return $result;
+        }
+
+        $this->stdout("\nTest data seeding completed.\n", Console::FG_GREEN);
+
+        return ExitCode::OK;
+    }
+
+    /**
      * Seeds realistic test data for Global Energy Supermajors.
      *
      * Adds annual financials (5 years), quarterly financials (8 quarters),
@@ -231,15 +251,15 @@ final class SeedController extends Controller
     public function actionIndex(): int
     {
         $this->stdout("Seeders:\n\n");
-        $this->stdout("  yii seed/all                    Run all seeders\n");
-        $this->stdout("  yii seed/oil-majors             Seed Global Energy Supermajors\n");
-        $this->stdout("  yii seed/us-energy-majors       Seed US Energy Majors (FMP free tier)\n");
-        $this->stdout("  yii seed/us-tech-giants         Seed US Tech Giants (FMP free tier)\n");
-        $this->stdout("  yii seed/supermajors-testdata   Seed realistic test data (no API needed)\n");
+        $this->stdout("  yii seed/config                 Seed industry configurations (Policies, Groups, Companies)\n");
+        $this->stdout("  yii seed/testdata               Seed financial test data (for Phase 2/3 dev)\n");
+        $this->stdout("  yii seed/oil-majors             Seed Global Energy Supermajors (Config only)\n");
+        $this->stdout("  yii seed/us-energy-majors       Seed US Energy Majors (Config only)\n");
+        $this->stdout("  yii seed/us-tech-giants         Seed US Tech Giants (Config only)\n");
         $this->stdout("  yii seed/clear                  Clear all seed data\n");
         $this->stdout("\nDatabase setup:\n\n");
-        $this->stdout("  yii db/init                     Run migrations + all seeders\n");
-        $this->stdout("  yii db/reset                    Drop tables, migrate, and seed\n");
+        $this->stdout("  yii db/init                     Run migrations + seed/config\n");
+        $this->stdout("  yii db/reset                    Drop tables, migrate, and seed/config\n");
         $this->stdout("\n");
 
         return ExitCode::OK;

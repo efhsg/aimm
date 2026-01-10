@@ -36,6 +36,37 @@ final class CollectController extends Controller
     }
 
     /**
+     * List all available industries and their company counts.
+     */
+    public function actionList(): int
+    {
+        $industries = $this->industryQuery->findAllWithStats();
+
+        if (empty($industries)) {
+            $this->stdout("No industries found in the database.\n");
+            return ExitCode::OK;
+        }
+
+        $headers = [
+            self::HEADER_INDUSTRY,
+            'Slug',
+            'Sector',
+            'Companies',
+        ];
+
+        $rows = array_map(static fn (array $i): array => [
+            $i['name'],
+            $i['slug'],
+            $i['sector_name'] ?? 'N/A',
+            (string) ($i['company_count'] ?? 0),
+        ], $industries);
+
+        $this->stdout($this->renderTable($headers, $rows));
+
+        return ExitCode::OK;
+    }
+
+    /**
      * Collect data for an industry.
      *
      * @param string $slug The industry slug
@@ -118,9 +149,22 @@ final class CollectController extends Controller
             sprintf(self::DURATION_FORMAT, $durationSeconds),
         ];
 
+        return $this->renderTable($headers, [$values]);
+    }
+
+    /**
+     * @param string[] $headers
+     * @param list<string[]> $rows
+     */
+    private function renderTable(array $headers, array $rows): string
+    {
         $widths = [];
         foreach ($headers as $index => $header) {
-            $widths[$index] = max(strlen($header), strlen($values[$index]));
+            $maxWidth = strlen($header);
+            foreach ($rows as $row) {
+                $maxWidth = max($maxWidth, strlen($row[$index]));
+            }
+            $widths[$index] = $maxWidth;
         }
 
         $separator = '+' . implode('+', array_map(
@@ -128,11 +172,13 @@ final class CollectController extends Controller
             $widths
         )) . "+\n";
 
-        return $separator
-            . $this->formatRow($headers, $widths)
-            . $separator
-            . $this->formatRow($values, $widths)
-            . $separator;
+        $output = $separator . $this->formatRow($headers, $widths) . $separator;
+        foreach ($rows as $row) {
+            $output .= $this->formatRow($row, $widths);
+        }
+        $output .= $separator;
+
+        return $output;
     }
 
     /**

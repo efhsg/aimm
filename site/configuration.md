@@ -1,129 +1,84 @@
 # Configuration
 
-AIMM is driven by JSON configuration files and application parameters.
+AIMM is database-driven. Industry configuration is stored in the database and combined with
+collection policy settings at runtime. Application parameters live in `yii/config/params.php`.
 
-## Industry Config
+## Industry Configuration (DB)
 
-Each industry has a JSON config file at `config/industries/{industry_id}.json`.
+Industry configuration is assembled from these tables:
 
-### Structure
+- `sector`
+- `industry`
+- `company`
+- `collection_policy`
+
+The `industry.slug` value is the CLI identifier (used by `yii collect/industry <slug>` and
+`yii analyze/industry <slug>`).
+
+## Collection Policy Payload
+
+Policies store JSON arrays in DB columns (valuation, annual, quarterly, operational metrics,
+and indicators). Example JSON payload for a policy export:
 
 ```json
 {
-  "id": "integrated_oil_gas",
-  "name": "Integrated Oil & Gas",
-  "sector": "Energy",
-  "companies": [
-    {
-      "ticker": "SHEL",
-      "name": "Shell plc",
-      "listing_exchange": "NYSE",
-      "listing_currency": "USD",
-      "reporting_currency": "USD",
-      "fy_end_month": 12
-    }
+  "name": "Default Policy",
+  "description": "Baseline requirements",
+  "history_years": 5,
+  "quarters_to_fetch": 8,
+  "valuation_metrics": [
+    { "key": "market_cap", "unit": "currency", "required": true, "required_scope": "all" },
+    { "key": "fwd_pe", "unit": "ratio", "required": true, "required_scope": "all" }
   ],
-  "macro_requirements": {
-    "commodity_benchmark": "BRENT",
-    "margin_proxy": "CRACK_3_2_1",
-    "sector_index": "XLE",
-    "required_indicators": [],
-    "optional_indicators": []
-  },
-  "data_requirements": {
-    "history_years": 5,
-    "quarters_to_fetch": 4,
-    "valuation_metrics": [...],
-    "annual_financial_metrics": [...],
-    "quarter_metrics": [...],
-    "operational_metrics": []
-  }
-}
-```
-
-### Key Fields
-
-| Field | Description |
-|-------|-------------|
-| `id` | Machine identifier, used in CLI and file paths |
-| `name` | Human-readable industry name |
-| `sector` | Classification label for grouping |
-| `companies` | List of companies to collect data for |
-| `macro_requirements` | Industry-wide benchmarks and indicators |
-| `data_requirements` | What metrics to collect and how much history |
-
-### Company Fields
-
-| Field | Description |
-|-------|-------------|
-| `ticker` | Stock symbol |
-| `name` | Company name |
-| `listing_exchange` | Primary exchange |
-| `listing_currency` | Currency of stock price |
-| `reporting_currency` | Currency of financials |
-| `fy_end_month` | Fiscal year end month (1-12) |
-
-### Data Requirements
-
-```json
-{
-  "data_requirements": {
-    "history_years": 5,
-    "quarters_to_fetch": 4,
-    "valuation_metrics": [
-      { "key": "market_cap", "unit": "currency", "required": true },
-      { "key": "fwd_pe", "unit": "ratio", "required": true },
-      { "key": "ev_ebitda", "unit": "ratio", "required": true },
-      { "key": "fcf_yield", "unit": "percent", "required": false }
-    ],
-    "annual_financial_metrics": [
-      { "key": "revenue", "unit": "currency", "required": false },
-      { "key": "ebitda", "unit": "currency", "required": false }
-    ],
-    "quarter_metrics": [
-      { "key": "revenue", "unit": "currency", "required": false }
-    ],
-    "operational_metrics": []
+  "annual_financial_metrics": [],
+  "quarterly_financial_metrics": [],
+  "operational_metrics": [],
+  "commodity_benchmark": "BRENT",
+  "margin_proxy": "CRACK_3_2_1",
+  "sector_index": "XLE",
+  "required_indicators": [],
+  "optional_indicators": [],
+  "analysis_thresholds": {
+    "buy_gap_threshold": 15,
+    "fair_value_threshold": 5,
+    "min_metrics_for_gap": 2
   }
 }
 ```
 
 ## JSON Schemas
 
-AIMM uses JSON Schema draft-07 for validation.
-
-| Schema | Purpose |
-|--------|---------|
-| `industry-config.schema.json` | Validates industry config files |
-| `industry-datapack.schema.json` | Validates Phase 1 output |
-| `report-dto.schema.json` | Validates Phase 2 output |
-
-### Schema Rules
-
-- `additionalProperties: false` on all objects
-- Explicit `required` arrays
-- Typed datapoints (not generic `value: any`)
+Only `industry-datapack.schema.json` is present under `yii/config/schemas/`.
+It is used by `CollectionGateValidator` when validating a datapack object.
 
 ## Application Parameters
 
-Located in `config/params.php`:
+Located in `yii/config/params.php`:
 
 ```php
 return [
     'schemaPath' => '@app/config/schemas',
     'industriesPath' => '@app/config/industries',
     'datapacksPath' => '@runtime/datapacks',
-    'gotenbergBaseUrl' => getenv('GOTENBERG_BASE_URL') ?: 'http://aimm_gotenberg:3000',
     'macroStalenessThresholdDays' => 10,
     'renderTimeoutSeconds' => 120,
+    'gotenbergBaseUrl' => getenv('GOTENBERG_BASE_URL') ?: 'http://aimm_gotenberg:3000',
+    'allowedSourceDomains' => [
+        'financialmodelingprep.com',
+        'finance.yahoo.com',
+        'query1.finance.yahoo.com',
+        'www.reuters.com',
+        'www.wsj.com',
+        'www.bloomberg.com',
+        'www.morningstar.com',
+        'seekingalpha.com',
+        'stockanalysis.com',
+        'rigcount.bakerhughes.com',
+        'api.eia.gov',
+        'www.ecb.europa.eu',
+    ],
+    'eiaApiKey' => 'DEMO_KEY',
+    'fmpApiKey' => getenv('FMP_API_KEY') ?: null,
+    'rateLimiter' => 'file',
 ];
 ```
-
-| Parameter | Description |
-|-----------|-------------|
-| `schemaPath` | Location of JSON Schema files |
-| `industriesPath` | Location of industry config files |
-| `datapacksPath` | Output location for datapacks |
-| `gotenbergBaseUrl` | Base URL for Gotenberg |
-| `macroStalenessThresholdDays` | Max age for macro data (Collection Gate) |
-| `renderTimeoutSeconds` | Timeout for PDF rendering subprocess |

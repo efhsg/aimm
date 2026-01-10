@@ -2,6 +2,8 @@
 
 AIMM uses a deterministic, rule-based system to determine BUY/HOLD/SELL ratings.
 
+Output values are emitted as lowercase strings: `buy`, `hold`, `sell`.
+
 ## Rating Decision Tree
 
 ```
@@ -27,11 +29,11 @@ Each rating includes a `rule_path` that explains why the rating was assigned:
 
 | Rule Path | Rating | Condition |
 |-----------|--------|-----------|
-| `SELL_FUNDAMENTALS` | SELL | Fundamentals are deteriorating |
-| `SELL_RISK` | SELL | Risk level is unacceptable |
-| `HOLD_INSUFFICIENT_DATA` | HOLD | Cannot calculate valuation gap |
-| `BUY_ALL_CONDITIONS` | BUY | Gap > 15%, improving fundamentals, acceptable risk |
-| `HOLD_DEFAULT` | HOLD | Does not meet BUY criteria, not a SELL |
+| `SELL_FUNDAMENTALS` | sell | Fundamentals are deteriorating |
+| `SELL_RISK` | sell | Risk level is unacceptable |
+| `HOLD_INSUFFICIENT_DATA` | hold | Cannot calculate valuation gap |
+| `BUY_ALL_CONDITIONS` | buy | Gap > 15%, improving fundamentals, acceptable risk |
+| `HOLD_DEFAULT` | hold | Does not meet BUY criteria, not a SELL |
 
 ## Input Factors
 
@@ -53,17 +55,17 @@ Each rating includes a `rule_path` that explains why the rating was assigned:
 
 ### Valuation Gap
 
-A composite measure of how "cheap" the focal company is vs peers.
+A composite measure of how "cheap" a company is versus the industry average.
 
 ## Valuation Gap Calculation
 
 ```
 For each metric (fwd_pe, ev_ebitda, fcf_yield, div_yield):
-    IF focal_value AND peer_avg both non-null:
+    IF company_value AND group_avg both non-null:
         For P/E, EV/EBITDA (lower is better):
-            gap = ((peer_avg - focal) / peer_avg) × 100
+            gap = ((group_avg - company_value) / group_avg) × 100
         For yields (higher is better):
-            gap = ((focal - peer_avg) / peer_avg) × 100
+            gap = ((company_value - group_avg) / group_avg) × 100
 
 IF gaps.count >= 2:
     composite_gap = average(gaps)
@@ -73,7 +75,7 @@ ELSE:
 
 ### Example Calculation
 
-| Metric | Focal | Peer Avg | Gap |
+| Metric | Company | Group Avg | Gap |
 |--------|-------|----------|-----|
 | fwd_pe | 10.0 | 12.5 | +20% (cheaper) |
 | ev_ebitda | 5.0 | 6.0 | +16.7% (cheaper) |

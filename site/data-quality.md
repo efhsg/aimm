@@ -30,7 +30,7 @@ Every collected value must include:
 | `as_of` | The date the value represents |
 | `retrieved_at` | When the value was collected (ISO 8601) |
 | `source_url` | Where the value came from |
-| `method` | How it was collected (`web_fetch`, `api`, `not_found`) |
+| `method` | How it was collected (`web_fetch`, `web_search`, `api`, `cache`, `derived`, `not_found`) |
 | `source_locator` | How to find the value in the source |
 
 ## Typed Datapoints
@@ -41,7 +41,10 @@ Every collected value must include:
 | `DataPointMoney` | Monetary values | `value`, `currency`, `scale`, `fx_conversion` |
 | `DataPointPercent` | Percentages (yields, margins) | `value` (stored as 4.5 for 4.5%) |
 | `DataPointRatio` | Dimensionless ratios (P/E, EV/EBITDA) | `value` (stored as 12.5 for 12.5x) |
-| `DataPointUrl` | URLs to documents | `value`, `verified_accessible` |
+
+Additional provenance fields are required for specific methods:
+- `derived`: `derived_from`, `formula`
+- `cache`: `cache_source`, `cache_age_days`
 
 ## Nullable vs Required
 
@@ -78,21 +81,17 @@ Gates are checkpoints that prevent bad data from flowing downstream.
 
 | Check | Description |
 |-------|-------------|
-| Schema compliance | JSON Schema validation passes |
-| Required datapoints | All required metrics present |
-| Company coverage | All configured companies collected |
-| Macro freshness | Within threshold (10 days) |
-| History depth | Minimum financial history present |
+| Company status | Fail on `failed`, warn on `partial` |
+| Macro status | Fail on `failed`, warn on `partial` |
+| Company coverage | Missing configured tickers are warnings |
 
 ### Analysis Gate (after Phase 2)
 
 | Check | Description |
 |-------|-------------|
-| Schema compliance | JSON Schema validation passes |
-| Peer averages | Recomputed values match reported |
-| Valuation gap | Recomputed value matches reported |
-| Rating consistency | Rule path produces same rating |
-| Temporal sanity | No past catalysts marked "upcoming" |
+| Minimum companies | At least 2 companies required |
+| Analyzable companies | At least 2 companies with >= 2 years + market cap |
+| Data freshness | Warn when data is older than 30 days |
 
 ## Error Handling
 
@@ -118,4 +117,4 @@ class GateResult
 |------|----------|---------|
 | 0 | `ExitCode::OK` | Success |
 | 65 | `ExitCode::DATAERR` | Data/validation error (gate failed) |
-| 70 | `ExitCode::SOFTWARE` | Internal error (exception) |
+| 1 | `ExitCode::UNSPECIFIED_ERROR` | Internal error (exception) |
