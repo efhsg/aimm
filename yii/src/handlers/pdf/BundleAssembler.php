@@ -18,6 +18,7 @@ class BundleAssembler
     public function __construct(
         private readonly string $cssPath,
         private readonly string $fontsPath,
+        private readonly string $imagesPath,
     ) {
     }
 
@@ -36,6 +37,9 @@ class BundleAssembler
 
         // Add fonts
         $this->addFontAssets($factory);
+
+        // Add images
+        $this->addImageAssets($factory);
 
         // Add chart images (when available)
         $this->addChartAssets($factory, $data);
@@ -81,6 +85,29 @@ class BundleAssembler
 
             $fontName = basename($fontFile);
             $factory->addFile("assets/fonts/{$fontName}", $fontBytes, strlen($fontBytes));
+        }
+    }
+
+    private function addImageAssets(RenderBundleFactory $factory): void
+    {
+        if (!is_dir($this->imagesPath)) {
+            return;
+        }
+
+        // Support SVG and PNG logos
+        $logoFiles = [
+            'logo.svg',
+            'logo.png',
+        ];
+
+        foreach ($logoFiles as $file) {
+            $fullPath = $this->imagesPath . '/' . $file;
+            if (file_exists($fullPath)) {
+                $content = file_get_contents($fullPath);
+                if ($content !== false) {
+                    $factory->addFile("assets/images/{$file}", $content, strlen($content));
+                }
+            }
         }
     }
 

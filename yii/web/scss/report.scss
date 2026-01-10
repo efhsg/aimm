@@ -7,6 +7,44 @@
 @use 'print';
 
 // ========================================
+// FONTS
+// ========================================
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../fonts/IBMPlexMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+}
+
+// ========================================
 // BASE RESET
 // ========================================
 *,
@@ -43,21 +81,31 @@ body {
   // HEADER SECTION
   // ========================================
   &__header {
-    margin-bottom: tokens.$space-10;
-    padding-bottom: tokens.$space-6;
+    margin-bottom: tokens.$space-6;
+    padding-bottom: tokens.$space-4;
     border-bottom: 2px solid tokens.$brand-primary;
   }
 
+  &__branding {
+    margin-bottom: tokens.$space-3;
+  }
+
+  &__logo {
+    height: 6mm;
+    width: auto;
+    display: block;
+  }
+
   &__title {
-    font-size: tokens.$text-3xl;
+    font-size: tokens.$text-2xl;
     font-weight: tokens.$font-bold;
     color: tokens.$brand-primary;
-    margin: 0 0 tokens.$space-3;
+    margin: 0 0 tokens.$space-2;
     line-height: tokens.$leading-tight;
   }
 
   &__subtitle {
-    font-size: tokens.$text-lg;
+    font-size: tokens.$text-base;
     color: tokens.$text-secondary;
     margin: 0;
     line-height: tokens.$leading-snug;
@@ -69,8 +117,8 @@ body {
   &__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: tokens.$space-6;
-    margin-top: tokens.$space-4;
+    gap: tokens.$space-4;
+    margin-top: tokens.$space-2;
     font-size: tokens.$text-sm;
     color: tokens.$text-secondary;
   }
@@ -90,17 +138,17 @@ body {
   // SECTIONS
   // ========================================
   &__section {
-    margin-bottom: tokens.$space-10;
+    margin-bottom: tokens.$space-8;
     break-inside: avoid;
     page-break-inside: avoid;
 
     &-title {
-      font-size: tokens.$text-xl;
+      font-size: tokens.$text-lg;
       font-weight: tokens.$font-semibold;
       color: tokens.$brand-primary;
       border-bottom: 2px solid tokens.$brand-accent;
       padding-bottom: tokens.$space-2;
-      margin: 0 0 tokens.$space-5;
+      margin: 0 0 tokens.$space-4;
     }
 
     &-subtitle {

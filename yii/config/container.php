@@ -523,6 +523,7 @@ return [
             return new BundleAssembler(
                 Yii::getAlias('@webroot/css'),
                 Yii::getAlias('@webroot/fonts'),
+                Yii::getAlias('@webroot/images'),
             );
         },
 

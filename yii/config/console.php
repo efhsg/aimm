@@ -20,6 +20,7 @@ return [
     'controllerNamespace' => 'app\\commands',
     'aliases' => [
         '@app' => dirname(__DIR__) . '/src',
+        '@webroot' => dirname(__DIR__) . '/web',
     ],
     'controllerMap' => [
         'migrate' => [

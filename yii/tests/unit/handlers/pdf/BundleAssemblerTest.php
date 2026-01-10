@@ -24,6 +24,7 @@ final class BundleAssemblerTest extends Unit
     private string $tempDir;
     private string $cssPath;
     private string $fontsPath;
+    private string $imagesPath;
 
     protected function setUp(): void
     {
@@ -32,9 +33,11 @@ final class BundleAssemblerTest extends Unit
         $this->tempDir = sys_get_temp_dir() . '/bundle_assembler_test_' . uniqid();
         $this->cssPath = $this->tempDir . '/css';
         $this->fontsPath = $this->tempDir . '/fonts';
+        $this->imagesPath = $this->tempDir . '/images';
 
         mkdir($this->cssPath, 0755, true);
         mkdir($this->fontsPath, 0755, true);
+        mkdir($this->imagesPath, 0755, true);
 
         file_put_contents($this->cssPath . '/report.css', '.report { color: black; }');
     }
@@ -47,7 +50,7 @@ final class BundleAssemblerTest extends Unit
 
     public function testAssemblesBasicBundle(): void
     {
-        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath);
+        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath, $this->imagesPath);
 
         $views = new RenderedViews(
             '<div>Main content</div>',
@@ -67,7 +70,7 @@ final class BundleAssemblerTest extends Unit
 
     public function testIncludesCssAsset(): void
     {
-        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath);
+        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath, $this->imagesPath);
 
         $views = new RenderedViews('<div>Content</div>', '<div>Header</div>', '<div>Footer</div>');
         $data = $this->createReportData();
@@ -83,7 +86,7 @@ final class BundleAssemblerTest extends Unit
         $emptyCssPath = $this->tempDir . '/empty_css';
         mkdir($emptyCssPath, 0755, true);
 
-        $assembler = new BundleAssembler($emptyCssPath, $this->fontsPath);
+        $assembler = new BundleAssembler($emptyCssPath, $this->fontsPath, $this->imagesPath);
 
         $views = new RenderedViews('<div>Content</div>', '<div>Header</div>', '<div>Footer</div>');
         $data = $this->createReportData();
@@ -98,7 +101,7 @@ final class BundleAssemblerTest extends Unit
     {
         file_put_contents($this->fontsPath . '/inter.woff2', 'font-data');
 
-        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath);
+        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath, $this->imagesPath);
 
         $views = new RenderedViews('<div>Content</div>', '<div>Header</div>', '<div>Footer</div>');
         $data = $this->createReportData();
@@ -113,7 +116,7 @@ final class BundleAssemblerTest extends Unit
     {
         $noFontsPath = $this->tempDir . '/no_fonts';
 
-        $assembler = new BundleAssembler($this->cssPath, $noFontsPath);
+        $assembler = new BundleAssembler($this->cssPath, $noFontsPath, $this->imagesPath);
 
         $views = new RenderedViews('<div>Content</div>', '<div>Header</div>', '<div>Footer</div>');
         $data = $this->createReportData();
@@ -130,7 +133,7 @@ final class BundleAssemblerTest extends Unit
 
     public function testIncludesAvailableCharts(): void
     {
-        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath);
+        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath, $this->imagesPath);
 
         $views = new RenderedViews('<div>Content</div>', '<div>Header</div>', '<div>Footer</div>');
         $data = $this->createReportDataWithCharts();
@@ -143,7 +146,7 @@ final class BundleAssemblerTest extends Unit
 
     public function testExcludesUnavailableCharts(): void
     {
-        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath);
+        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath, $this->imagesPath);
 
         $views = new RenderedViews('<div>Content</div>', '<div>Header</div>', '<div>Footer</div>');
         $data = $this->createReportData();
@@ -156,6 +159,21 @@ final class BundleAssemblerTest extends Unit
         );
 
         $this->assertEmpty($chartKeys);
+    }
+
+    public function testIncludesImageAssets(): void
+    {
+        file_put_contents($this->imagesPath . '/logo.png', 'LOGO-DATA');
+
+        $assembler = new BundleAssembler($this->cssPath, $this->fontsPath, $this->imagesPath);
+
+        $views = new RenderedViews('<div>Content</div>', '<div>Header</div>', '<div>Footer</div>');
+        $data = $this->createReportData();
+
+        $bundle = $assembler->assemble($views, $data);
+
+        $this->assertArrayHasKey('assets/images/logo.png', $bundle->files);
+        $this->assertSame('LOGO-DATA', $bundle->files['assets/images/logo.png']);
     }
 
     private function createReportData(): ReportData
