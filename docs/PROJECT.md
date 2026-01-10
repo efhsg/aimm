@@ -224,15 +224,12 @@ yii/
 │   │   └── [industry_id].json
 │   │
 │   └── schemas/                        # JSON Schema definitions
-│       ├── industry-config.schema.json
-│       ├── industry-datapack.schema.json
-│       └── report-dto.schema.json
+│       └── industry-datapack.schema.json
 │
 ├── commands/                           # Console controllers (Yii2 convention)
 │   ├── CollectController.php           # Phase 1: yii collect/industry
 │   ├── AnalyzeController.php           # Phase 2: yii analyze/report
-│   ├── RenderController.php            # Phase 3: yii render/pdf
-│   └── PipelineController.php          # Full pipeline: yii pipeline/run
+│   └── PdfController.php               # Phase 3: yii pdf/test
 │
 ├── handlers/                           # Business flow & orchestration
 │   ├── collection/                     # Phase 1: Data gathering
@@ -245,8 +242,8 @@ yii/
 │   │   ├── CalculateGapsHandler.php    # Valuation gap calculations
 │   │   └── DetermineRatingHandler.php  # BUY/HOLD/SELL logic
 │   │
-│   └── rendering/                      # Phase 3: PDF generation
-│       └── RenderPdfHandler.php        # Calls Gotenberg
+│   └── pdf/                            # Phase 3: PDF generation
+│       └── PdfGenerationHandler.php    # Calls Gotenberg
 │
 ├── queries/                            # Data retrieval (no business rules)
 │   ├── IndustryConfigQuery.php         # Load/validate industry configs
@@ -286,14 +283,12 @@ yii/
 │       └── SourceLocator.php
 │
 ├── clients/                            # External integrations
-│   ├── WebSearchClient.php             # Web search abstraction
-│   ├── WebFetchClient.php              # Web page fetching
+│   ├── GuzzleWebFetchClient.php        # Web page fetching
 │   └── GotenbergClient.php             # PDF rendering client
 │
 ├── adapters/                           # Map external responses → internal DTOs
 │   ├── YahooFinanceAdapter.php         # Parse Yahoo Finance pages
-│   ├── ReutersAdapter.php              # Parse Reuters pages
-│   └── SearchResultAdapter.php         # Parse search results
+│   └── ReutersAdapter.php              # Parse Reuters pages
 │
 ├── enums/                              # Enumerated types
 │   ├── Rating.php                      # BUY, HOLD, SELL
