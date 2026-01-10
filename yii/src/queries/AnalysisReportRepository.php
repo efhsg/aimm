@@ -33,6 +33,7 @@ final class AnalysisReportRepository implements AnalysisReportReader
             'rule_path' => $topRated?->rulePath->value ?? 'unknown',
             'report_json' => Json::encode($report->toArray()),
             'generated_at' => $report->metadata->generatedAt->format('Y-m-d H:i:s'),
+            'data_as_of' => $report->metadata->dataAsOf->format('Y-m-d H:i:s'),
         ])->execute();
 
         return (int) $this->db->getLastInsertID();

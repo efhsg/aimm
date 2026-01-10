@@ -57,7 +57,8 @@ git diff --staged
 
 Suggest commit message per `.claude/rules/commits.md`.
 
-Ask user for confirmation before committing.
+**STOP.** Display the suggested commit message and ask for confirmation.
+**DO NOT** run `git commit` until the user approves.
 
 ## Task
 
