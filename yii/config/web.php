@@ -82,7 +82,7 @@ return [
                 // Report API
                 'POST api/reports/generate' => 'report/generate',
                 'GET api/jobs/<id:\d+>' => 'report/job-status',
-                'GET api/reports/<reportId:[a-zA-Z0-9_-]+>/download' => 'report/download',
+                'GET api/reports/<reportId:[a-zA-Z0-9._-]+>/download' => 'report/download',
 
                 // Report preview (dev only)
                 'report/preview' => 'report/preview',
