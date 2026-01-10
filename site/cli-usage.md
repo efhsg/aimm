@@ -83,11 +83,40 @@ are skipped in the ranking.
 
 ## Phase 3: Render (PDF)
 
-PDF generation is handled asynchronously via the Job Queue.
+While testing is performed via CLI, actual report generation is triggered through the Web API.
+
+### Generate Actual Report
+
+To generate a PDF for an analysis report, use the following API flow:
+
+#### 1. Create Generation Job
+Initiate the generation process using a Report ID (found in Phase 2 output).
+
+```bash
+curl -X POST http://localhost:8510/api/reports/generate \
+  -H "Content-Type: application/json" \
+  -d '{"reportId": "rpt_20260110_..."}'
+```
+**Response:** `{"jobId": 123}`
+
+#### 2. Check Job Status
+Poll the status endpoint using the `jobId` from the previous step.
+
+```bash
+curl http://localhost:8510/api/jobs/123
+```
+**Response:** `{"status": "complete", "outputUri": "..."}`
+
+#### 3. Download Report
+Once the status is `complete`, download the resulting PDF.
+
+```bash
+curl -O http://localhost:8510/api/reports/rpt_20260110_.../download
+```
 
 ### Test PDF Generation
 
-You can verify the connection to the Gotenberg rendering service using the test command:
+Verify the connection to the Gotenberg rendering service:
 
 ```bash
 yii pdf/test
