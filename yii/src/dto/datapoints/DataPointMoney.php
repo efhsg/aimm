@@ -34,6 +34,7 @@ final readonly class DataPointMoney
         public ?FxConversion $fxConversion = null,
         public ?string $cacheSource = null,
         public ?int $cacheAgeDays = null,
+        public ?string $providerId = null,
     ) {
         $this->validateProvenanceForMethod();
     }
@@ -145,6 +146,7 @@ final readonly class DataPointMoney
             'fx_conversion' => $this->fxConversion?->toArray(),
             'cache_source' => $this->cacheSource,
             'cache_age_days' => $this->cacheAgeDays,
+            'provider_id' => $this->providerId,
         ];
     }
 }

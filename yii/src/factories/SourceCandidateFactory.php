@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\factories;
 
 use app\dto\SourceCandidate;
+use app\dto\SourcePriorities;
 use yii\log\Logger;
 
 /**
@@ -258,8 +259,11 @@ final class SourceCandidateFactory
      *
      * @return list<SourceCandidate>
      */
-    public function forTicker(string $ticker, ?string $exchange = null): array
-    {
+    public function forTicker(
+        string $ticker,
+        ?string $exchange = null,
+        ?SourcePriorities $priorities = null
+    ): array {
         $candidates = [];
 
         // Add FMP valuation endpoints first (priority 1) - most reliable for US stocks
@@ -302,7 +306,9 @@ final class SourceCandidateFactory
             $a->priority <=> $b->priority
         );
 
-        return $candidates;
+        // Apply policy-based reordering if priorities are specified
+        $adapterOrder = $this->getAdapterOrder('valuation', $priorities);
+        return $this->reorderByAdapterPriority($candidates, $adapterOrder);
     }
 
     /**
@@ -350,10 +356,14 @@ final class SourceCandidateFactory
      * Per the Hybrid Strategy: Yahoo handles commodity prices (free, daily updates).
      * ECB handles FX rates.
      *
+     * @param string $dataType 'macro' for economic indicators, 'benchmarks' for indices/commodities
      * @return list<SourceCandidate>
      */
-    public function forMacro(string $macroKey): array
-    {
+    public function forMacro(
+        string $macroKey,
+        ?SourcePriorities $priorities = null,
+        string $dataType = 'macro'
+    ): array {
         $candidates = [];
 
         $macroKey = trim($macroKey);
@@ -443,7 +453,53 @@ final class SourceCandidateFactory
             $a->priority <=> $b->priority
         );
 
-        return $candidates;
+        // Apply policy-based reordering if priorities are specified
+        $adapterOrder = $this->getAdapterOrder($dataType, $priorities);
+        return $this->reorderByAdapterPriority($candidates, $adapterOrder);
+    }
+
+    /**
+     * Generate source candidates for multiple macro indicators.
+     *
+     * Aggregates unique sources across all indicator keys to ensure complete
+     * source coverage for batch collection of mixed indicator sets.
+     *
+     * @param list<string> $macroKeys
+     * @return list<SourceCandidate>
+     */
+    public function forMacroIndicators(
+        array $macroKeys,
+        ?SourcePriorities $priorities = null,
+        string $dataType = 'macro'
+    ): array {
+        if ($macroKeys === []) {
+            return [];
+        }
+
+        // Collect unique candidates by URL to avoid duplicates
+        $candidatesByUrl = [];
+
+        foreach ($macroKeys as $macroKey) {
+            $keyCandidates = $this->forMacro($macroKey, $priorities, $dataType);
+            foreach ($keyCandidates as $candidate) {
+                // Use URL as unique key to deduplicate
+                if (!isset($candidatesByUrl[$candidate->url])) {
+                    $candidatesByUrl[$candidate->url] = $candidate;
+                }
+            }
+        }
+
+        $candidates = array_values($candidatesByUrl);
+
+        usort(
+            $candidates,
+            static fn (SourceCandidate $a, SourceCandidate $b): int =>
+            $a->priority <=> $b->priority
+        );
+
+        // Apply policy-based reordering to preserve configured adapter priorities
+        $adapterOrder = $this->getAdapterOrder($dataType, $priorities);
+        return $this->reorderByAdapterPriority($candidates, $adapterOrder);
     }
 
     /**
@@ -549,8 +605,11 @@ final class SourceCandidateFactory
      *
      * @return list<SourceCandidate>
      */
-    public function forFinancials(string $ticker, ?string $exchange = null): array
-    {
+    public function forFinancials(
+        string $ticker,
+        ?string $exchange = null,
+        ?SourcePriorities $priorities = null
+    ): array {
         $candidates = [];
 
         // Add FMP candidates first (priority 1) - primary source for financials
@@ -588,7 +647,9 @@ final class SourceCandidateFactory
             $a->priority <=> $b->priority
         );
 
-        return $candidates;
+        // Apply policy-based reordering if priorities are specified
+        $adapterOrder = $this->getAdapterOrder('financials', $priorities);
+        return $this->reorderByAdapterPriority($candidates, $adapterOrder);
     }
 
     /**
@@ -600,7 +661,8 @@ final class SourceCandidateFactory
         string $ticker,
         string $metricKey,
         ?string $exchange = null,
-        string $period = self::FMP_PERIOD_ANNUAL
+        string $period = self::FMP_PERIOD_ANNUAL,
+        ?SourcePriorities $priorities = null
     ): array {
         $candidates = [];
 
@@ -660,7 +722,95 @@ final class SourceCandidateFactory
             $a->priority <=> $b->priority
         );
 
-        return $candidates;
+        // Apply policy-based reordering - use appropriate type based on period
+        $dataType = $period === self::FMP_PERIOD_QUARTER ? 'quarters' : 'financials';
+        $adapterOrder = $this->getAdapterOrder($dataType, $priorities);
+        return $this->reorderByAdapterPriority($candidates, $adapterOrder);
+    }
+
+    /**
+     * Generate source candidates for multiple financial metrics.
+     *
+     * Aggregates all unique statement types needed across all metrics to ensure
+     * complete source coverage for batch collection.
+     *
+     * @param list<string> $metricKeys
+     * @return list<SourceCandidate>
+     */
+    public function forFinancialsMetrics(
+        string $ticker,
+        array $metricKeys,
+        ?string $exchange = null,
+        string $period = self::FMP_PERIOD_ANNUAL,
+        ?SourcePriorities $priorities = null
+    ): array {
+        if ($metricKeys === []) {
+            return [];
+        }
+
+        // Aggregate all unique statement types needed across all metrics
+        $allStatementTypes = [];
+        foreach ($metricKeys as $metricKey) {
+            $types = self::FMP_FINANCIALS_STATEMENT_MAP[$metricKey] ?? null;
+            if ($types === null) {
+                // Unknown metric - include all statement types as fallback
+                $allStatementTypes = array_keys(self::FMP_STATEMENT_PRIORITIES);
+                break;
+            }
+            foreach ($types as $type) {
+                $allStatementTypes[$type] = true;
+            }
+        }
+        $statementTypes = array_keys($allStatementTypes);
+
+        $candidates = [];
+
+        $fmpCandidates = $this->buildFmpFinancialsCandidates($ticker, $period, $statementTypes);
+        $candidates = array_merge($candidates, $fmpCandidates);
+
+        $supportsKey = $period === self::FMP_PERIOD_QUARTER
+            ? self::KEY_SUPPORTS_QUARTERS
+            : self::KEY_SUPPORTS_FINANCIALS;
+
+        // Add fallback sources (skip disabled ones like Yahoo API)
+        foreach (self::SOURCE_TEMPLATES as $adapterId => $config) {
+            if ($config[self::KEY_DISABLED] ?? false) {
+                continue;
+            }
+
+            if (!($config[$supportsKey] ?? false)) {
+                continue;
+            }
+
+            $url = $this->buildUrl($config, $ticker, $exchange);
+            if ($url === null) {
+                continue;
+            }
+
+            // Fallback sources get higher priority number (lower priority) than FMP
+            $priority = $config[self::KEY_PRIORITY];
+            if ($this->fmpApiKey !== null) {
+                $priority += 5;
+            }
+
+            $candidates[] = new SourceCandidate(
+                url: $url,
+                adapterId: $adapterId,
+                priority: $priority,
+                domain: $config[self::KEY_DOMAIN],
+            );
+        }
+
+        usort(
+            $candidates,
+            static fn (SourceCandidate $a, SourceCandidate $b): int =>
+            $a->priority <=> $b->priority
+        );
+
+        // Apply policy-based reordering
+        $dataType = $period === self::FMP_PERIOD_QUARTER ? 'quarters' : 'financials';
+        $adapterOrder = $this->getAdapterOrder($dataType, $priorities);
+        return $this->reorderByAdapterPriority($candidates, $adapterOrder);
     }
 
     /**
@@ -671,13 +821,15 @@ final class SourceCandidateFactory
     public function forQuartersMetric(
         string $ticker,
         string $metricKey,
-        ?string $exchange = null
+        ?string $exchange = null,
+        ?SourcePriorities $priorities = null
     ): array {
         return $this->forFinancialsMetric(
             ticker: $ticker,
             metricKey: $metricKey,
             exchange: $exchange,
-            period: self::FMP_PERIOD_QUARTER
+            period: self::FMP_PERIOD_QUARTER,
+            priorities: $priorities
         );
     }
 
@@ -689,8 +841,11 @@ final class SourceCandidateFactory
      *
      * @return list<SourceCandidate>
      */
-    public function forQuarters(string $ticker, ?string $exchange = null): array
-    {
+    public function forQuarters(
+        string $ticker,
+        ?string $exchange = null,
+        ?SourcePriorities $priorities = null
+    ): array {
         $candidates = [];
 
         // Add FMP candidates first (priority 1) - primary source for quarters
@@ -728,7 +883,9 @@ final class SourceCandidateFactory
             $a->priority <=> $b->priority
         );
 
-        return $candidates;
+        // Apply policy-based reordering if priorities are specified
+        $adapterOrder = $this->getAdapterOrder('quarters', $priorities);
+        return $this->reorderByAdapterPriority($candidates, $adapterOrder);
     }
 
     private function toYahooTicker(string $ticker, ?string $exchange): string
@@ -857,5 +1014,66 @@ final class SourceCandidateFactory
         $url = str_replace('{ticker}', urlencode($ticker), $template);
 
         return $url . '&apikey=' . urlencode($this->fmpApiKey);
+    }
+
+    /**
+     * Get default adapter order for a data type.
+     *
+     * @return list<string>
+     */
+    public function getDefaultAdapters(string $dataType): array
+    {
+        return match ($dataType) {
+            'valuation' => ['fmp', 'yahoo_finance', 'stockanalysis'],
+            'financials', 'quarters' => ['fmp', 'yahoo_finance'],
+            'macro' => ['ecb', 'eia_inventory'],
+            'benchmarks' => ['yahoo_finance', 'fmp'],
+            default => [],
+        };
+    }
+
+    /**
+     * Get adapter priority order for a data type, using policy overrides or defaults.
+     *
+     * @return list<string>
+     */
+    public function getAdapterOrder(string $dataType, ?SourcePriorities $priorities): array
+    {
+        if ($priorities !== null && $priorities->hasForDataType($dataType)) {
+            return $priorities->getForDataType($dataType);
+        }
+
+        return $this->getDefaultAdapters($dataType);
+    }
+
+    /**
+     * Reorder candidates based on adapter priority list.
+     *
+     * @param list<SourceCandidate> $candidates
+     * @param list<string> $adapterOrder
+     * @return list<SourceCandidate>
+     */
+    private function reorderByAdapterPriority(array $candidates, array $adapterOrder): array
+    {
+        if ($adapterOrder === []) {
+            return $candidates;
+        }
+
+        // Create priority map: adapterId => position (lower = higher priority)
+        $orderMap = array_flip($adapterOrder);
+
+        usort($candidates, static function (SourceCandidate $a, SourceCandidate $b) use ($orderMap): int {
+            $aOrder = $orderMap[$a->adapterId] ?? PHP_INT_MAX;
+            $bOrder = $orderMap[$b->adapterId] ?? PHP_INT_MAX;
+
+            if ($aOrder !== $bOrder) {
+                return $aOrder <=> $bOrder;
+            }
+
+            // For same adapter, preserve original priority
+            return $a->priority <=> $b->priority;
+        });
+
+        return $candidates;
     }
 }

@@ -61,6 +61,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             $macroResult = $this->macroCollector->collect(
                 new CollectMacroRequest(
                     requirements: $request->config->macroRequirements,
+                    sourcePriorities: $request->config->sourcePriorities,
                 )
             );
             $totalAttempts = count($macroResult->sourceAttempts);
@@ -90,6 +91,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                                 ticker: $companyConfig->ticker,
                                 config: $companyConfig,
                                 requirements: $request->config->dataRequirements,
+                                sourcePriorities: $request->config->sourcePriorities,
                             )
                         );
 

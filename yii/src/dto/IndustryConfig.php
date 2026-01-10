@@ -22,6 +22,7 @@ final readonly class IndustryConfig
         public array $companies,
         public MacroRequirements $macroRequirements,
         public DataRequirements $dataRequirements,
+        public ?SourcePriorities $sourcePriorities = null,
     ) {
     }
 
@@ -41,6 +42,7 @@ final readonly class IndustryConfig
             ),
             'macro_requirements' => $this->macroRequirements->toArray(),
             'data_requirements' => $this->dataRequirements->toArray(),
+            'source_priorities' => $this->sourcePriorities?->toArray(),
         ];
     }
 }

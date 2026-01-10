@@ -24,7 +24,24 @@ final readonly class HistoricalExtraction
         public SourceLocator $locator,
         public ?string $currency = null,
         public ?string $scale = null,
+        public ?string $providerId = null,
     ) {
+    }
+
+    /**
+     * Returns a new HistoricalExtraction with the given provider ID.
+     */
+    public function withProviderId(string $providerId): self
+    {
+        return new self(
+            datapointKey: $this->datapointKey,
+            periods: $this->periods,
+            unit: $this->unit,
+            locator: $this->locator,
+            currency: $this->currency,
+            scale: $this->scale,
+            providerId: $providerId,
+        );
     }
 
     public function isEmpty(): bool
@@ -70,5 +87,24 @@ final readonly class HistoricalExtraction
         }
         krsort($byQuarter);
         return $byQuarter;
+    }
+
+    /**
+     * Get the most recent period's end date.
+     */
+    public function getMostRecentDate(): ?\DateTimeImmutable
+    {
+        if ($this->periods === []) {
+            return null;
+        }
+
+        $mostRecent = null;
+        foreach ($this->periods as $period) {
+            if ($mostRecent === null || $period->endDate > $mostRecent) {
+                $mostRecent = $period->endDate;
+            }
+        }
+
+        return $mostRecent;
     }
 }

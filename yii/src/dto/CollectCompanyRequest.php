@@ -14,6 +14,7 @@ final readonly class CollectCompanyRequest
         public CompanyConfig $config,
         public DataRequirements $requirements,
         public int $maxDurationSeconds = 120,
+        public ?SourcePriorities $sourcePriorities = null,
     ) {
     }
 }

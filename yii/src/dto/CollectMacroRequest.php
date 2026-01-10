@@ -11,6 +11,7 @@ final readonly class CollectMacroRequest
 {
     public function __construct(
         public MacroRequirements $requirements,
+        public ?SourcePriorities $sourcePriorities = null,
     ) {
     }
 }

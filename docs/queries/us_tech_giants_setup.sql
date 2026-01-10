@@ -22,6 +22,7 @@ INSERT INTO collection_policy (
     sector_index,
     required_indicators,
     optional_indicators,
+    source_priorities,
     created_by,
     created_at,
     updated_at
@@ -66,6 +67,13 @@ INSERT INTO collection_policy (
     NULL,
     JSON_ARRAY(),
     JSON_ARRAY('SP500'),
+    JSON_OBJECT(
+        'valuation', JSON_ARRAY('fmp', 'yahoo_finance', 'stockanalysis'),
+        'financials', JSON_ARRAY('fmp', 'yahoo_finance'),
+        'quarters', JSON_ARRAY('fmp', 'yahoo_finance'),
+        'macro', JSON_ARRAY('ecb'),
+        'benchmarks', JSON_ARRAY('yahoo_finance', 'fmp')
+    ),
     'admin',
     NOW(),
     NOW()

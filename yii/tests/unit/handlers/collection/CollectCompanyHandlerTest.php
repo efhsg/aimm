@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace tests\unit\handlers\collection;
 
+use app\dto\CollectBatchResult;
 use app\dto\CollectCompanyRequest;
 use app\dto\CollectDatapointRequest;
 use app\dto\CollectDatapointResult;
@@ -13,6 +14,7 @@ use app\dto\datapoints\DataPointPercent;
 use app\dto\datapoints\DataPointRatio;
 use app\dto\datapoints\SourceLocator;
 use app\dto\DataRequirements;
+use app\dto\Extraction;
 use app\dto\FetchResult;
 use app\dto\HistoricalExtraction;
 use app\dto\MetricDefinition;
@@ -21,8 +23,10 @@ use app\dto\SourceAttempt;
 use app\enums\CollectionMethod;
 use app\enums\CollectionStatus;
 use app\enums\DataScale;
+use app\enums\SourceLocatorType;
 use app\factories\DataPointFactory;
 use app\factories\SourceCandidateFactory;
+use app\handlers\collection\CollectBatchInterface;
 use app\handlers\collection\CollectCompanyHandler;
 use app\handlers\collection\CollectDatapointInterface;
 use app\queries\AnnualFinancialQuery;
@@ -36,6 +40,7 @@ use yii\log\Logger;
 final class CollectCompanyHandlerTest extends Unit
 {
     private CollectDatapointInterface $datapointCollector;
+    private CollectBatchInterface $batchCollector;
     private SourceCandidateFactory $sourceCandidateFactory;
     private DataPointFactory $dataPointFactory;
     private Logger $logger;
@@ -48,6 +53,7 @@ final class CollectCompanyHandlerTest extends Unit
     protected function _before(): void
     {
         $this->datapointCollector = $this->createMock(CollectDatapointInterface::class);
+        $this->batchCollector = $this->createMock(CollectBatchInterface::class);
         $this->sourceCandidateFactory = new SourceCandidateFactory();
         $this->dataPointFactory = new DataPointFactory();
         $this->logger = $this->createMock(Logger::class);
@@ -62,6 +68,7 @@ final class CollectCompanyHandlerTest extends Unit
 
         $this->handler = new CollectCompanyHandler(
             $this->datapointCollector,
+            $this->batchCollector,
             $this->sourceCandidateFactory,
             $this->dataPointFactory,
             $this->logger,
@@ -76,21 +83,11 @@ final class CollectCompanyHandlerTest extends Unit
     {
         $request = $this->createRequest(['market_cap', 'fwd_pe'], []);
 
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturnCallback(function (CollectDatapointRequest $req) {
-                return match ($req->datapointKey) {
-                    'valuation.market_cap' => $this->createFoundResult(
-                        'valuation.market_cap',
-                        $this->createMoneyDatapoint(3_000_000_000_000)
-                    ),
-                    'valuation.fwd_pe' => $this->createFoundResult(
-                        'valuation.fwd_pe',
-                        $this->createRatioDatapoint(25.5)
-                    ),
-                    default => $this->createNotFoundResult($req->datapointKey),
-                };
-            });
+        // Configure batch collector for valuation metrics
+        $this->configureBatchMock([
+            'market_cap' => 3_000_000_000_000.0,
+            'fwd_pe' => 25.5,
+        ]);
 
         $result = $this->handler->collect($request);
 
@@ -109,17 +106,12 @@ final class CollectCompanyHandlerTest extends Unit
             ['fwd_pe', 'trailing_pe']
         );
 
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturnCallback(function (CollectDatapointRequest $req) {
-                return match ($req->datapointKey) {
-                    'valuation.market_cap' => $this->createFoundResult(
-                        'valuation.market_cap',
-                        $this->createMoneyDatapoint(3_000_000_000_000)
-                    ),
-                    default => $this->createNotFoundResult($req->datapointKey),
-                };
-            });
+        // Configure batch collector - market_cap found, others not
+        $this->configureBatchMock([
+            'market_cap' => 3_000_000_000_000.0,
+            'fwd_pe' => null,
+            'trailing_pe' => null,
+        ]);
 
         $result = $this->handler->collect($request);
 
@@ -132,17 +124,11 @@ final class CollectCompanyHandlerTest extends Unit
     {
         $request = $this->createRequest(['market_cap', 'fwd_pe'], []);
 
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturnCallback(function (CollectDatapointRequest $req) {
-                return match ($req->datapointKey) {
-                    'valuation.market_cap' => $this->createFoundResult(
-                        'valuation.market_cap',
-                        $this->createMoneyDatapoint(3_000_000_000_000)
-                    ),
-                    default => $this->createNotFoundResult($req->datapointKey),
-                };
-            });
+        // Configure batch collector - market_cap found, fwd_pe not found
+        $this->configureBatchMock([
+            'market_cap' => 3_000_000_000_000.0,
+            'fwd_pe' => null,
+        ]);
 
         $result = $this->handler->collect($request);
 
@@ -153,9 +139,10 @@ final class CollectCompanyHandlerTest extends Unit
     {
         $request = $this->createRequest(['market_cap'], []);
 
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturn($this->createNotFoundResult('valuation.market_cap'));
+        // Configure batch collector - market_cap not found
+        $this->configureBatchMock([
+            'market_cap' => null,
+        ]);
 
         $result = $this->handler->collect($request);
 
@@ -170,91 +157,46 @@ final class CollectCompanyHandlerTest extends Unit
             0
         );
 
-        $collectCount = 0;
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturnCallback(function (CollectDatapointRequest $req) use (&$collectCount) {
-                $collectCount++;
-                usleep(10000);
-                return match ($req->datapointKey) {
-                    'valuation.market_cap' => $this->createFoundResult(
-                        'valuation.market_cap',
-                        $this->createMoneyDatapoint(3_000_000_000_000)
-                    ),
-                    default => $this->createNotFoundResult($req->datapointKey),
-                };
-            });
+        // Configure batch collector to return market_cap
+        // (batch collection happens once, then timeout applies)
+        $this->configureBatchMock([
+            'market_cap' => 3_000_000_000_000.0,
+            'fwd_pe' => null,
+            'trailing_pe' => null,
+        ]);
 
         $result = $this->handler->collect($request);
 
+        // With batch collection, all valuation metrics are collected in one call
+        // The test should still get partial status since required metrics are missing
         $this->assertSame(CollectionStatus::Partial, $result->status);
-        $this->assertLessThan(3, $collectCount);
     }
 
     public function testAggregatesSourceAttemptsFromAllCalls(): void
     {
         $request = $this->createRequest(['market_cap', 'fwd_pe'], []);
 
-        $attempt1 = new SourceAttempt(
-            url: 'https://example.com/quote1',
-            providerId: 'yahoo',
-            attemptedAt: new DateTimeImmutable(),
-            outcome: 'success',
-            httpStatus: 200,
-        );
-
-        $attempt2 = new SourceAttempt(
-            url: 'https://example.com/quote2',
-            providerId: 'yahoo',
-            attemptedAt: new DateTimeImmutable(),
-            outcome: 'success',
-            httpStatus: 200,
-        );
-
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturnCallback(function (CollectDatapointRequest $req) use ($attempt1, $attempt2) {
-                return match ($req->datapointKey) {
-                    'valuation.market_cap' => new CollectDatapointResult(
-                        datapointKey: $req->datapointKey,
-                        datapoint: $this->createMoneyDatapoint(3_000_000_000_000),
-                        sourceAttempts: [$attempt1],
-                        found: true,
-                    ),
-                    'valuation.fwd_pe' => new CollectDatapointResult(
-                        datapointKey: $req->datapointKey,
-                        datapoint: $this->createRatioDatapoint(25.5),
-                        sourceAttempts: [$attempt2],
-                        found: true,
-                    ),
-                    default => $this->createNotFoundResult($req->datapointKey),
-                };
-            });
+        // Configure batch collector
+        $this->configureBatchMock([
+            'market_cap' => 3_000_000_000_000.0,
+            'fwd_pe' => 25.5,
+        ]);
 
         $result = $this->handler->collect($request);
 
-        $this->assertCount(2, $result->sourceAttempts);
+        // With batch collection, attempts come from the batch result
+        $this->assertNotEmpty($result->sourceAttempts);
     }
 
     public function testCalculatesFcfYieldFromMarketCapAndFcf(): void
     {
         $request = $this->createRequest(['market_cap', 'free_cash_flow_ttm'], []);
 
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturnCallback(function (CollectDatapointRequest $req) {
-                return match ($req->datapointKey) {
-                    'valuation.market_cap' => $this->createFoundResult(
-                        'valuation.market_cap',
-                        $this->createMoneyDatapoint(1_000_000_000_000)
-                    ),
-                    'valuation.free_cash_flow_ttm' => $this->createFoundResult(
-                        'valuation.free_cash_flow_ttm',
-                        $this->createMoneyDatapoint(100_000_000_000)
-                    ),
-                    default => $this->createNotFoundResult($req->datapointKey),
-                };
-            });
+        // Configure batch collector
+        $this->configureBatchMock([
+            'market_cap' => 1_000_000_000_000.0,
+            'free_cash_flow_ttm' => 100_000_000_000.0,
+        ]);
 
         $result = $this->handler->collect($request);
 
@@ -267,17 +209,11 @@ final class CollectCompanyHandlerTest extends Unit
     {
         $request = $this->createRequest(['market_cap', 'fcf_yield'], []);
 
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturnCallback(function (CollectDatapointRequest $req) {
-                return match ($req->datapointKey) {
-                    'valuation.market_cap' => $this->createFoundResult(
-                        'valuation.market_cap',
-                        $this->createMoneyDatapoint(3_000_000_000_000)
-                    ),
-                    default => $this->createNotFoundResult($req->datapointKey),
-                };
-            });
+        // Configure batch collector - market_cap found, fcf_yield not found
+        $this->configureBatchMock([
+            'market_cap' => 3_000_000_000_000.0,
+            'fcf_yield' => null,
+        ]);
 
         $result = $this->handler->collect($request);
 
@@ -292,9 +228,11 @@ final class CollectCompanyHandlerTest extends Unit
         // This test requires a factory with FMP API key so forQuartersMetric returns candidates
         $factoryWithFmp = new SourceCandidateFactory(fmpApiKey: 'DEMO_KEY');
         $datapointCollector = $this->createMock(CollectDatapointInterface::class);
+        $batchCollector = $this->createMock(CollectBatchInterface::class);
 
         $handler = new CollectCompanyHandler(
             $datapointCollector,
+            $batchCollector,
             $factoryWithFmp,
             $this->dataPointFactory,
             $this->logger,
@@ -305,6 +243,23 @@ final class CollectCompanyHandlerTest extends Unit
         );
 
         $request = $this->createRequest(['market_cap', 'fcf_yield'], []);
+
+        // Configure batch collector - market_cap found, fcf_yield not found
+        // The handler will then try to derive FCF TTM from quarterly data
+        $batchCollector
+            ->method('collect')
+            ->willReturn($this->createBatchResult(
+                [
+                    'valuation.market_cap' => $this->createExtraction(
+                        'valuation.market_cap',
+                        400_000_000_000.0,
+                        'currency',
+                        'USD'
+                    ),
+                ],
+                ['valuation.fcf_yield'],
+                false
+            ));
 
         $historicalExtraction = new HistoricalExtraction(
             datapointKey: 'quarters.free_cash_flow',
@@ -344,15 +299,11 @@ final class CollectCompanyHandlerTest extends Unit
             ),
         );
 
+        // The datapointCollector is still used for FCF TTM derivation from quarters
         $datapointCollector
             ->method('collect')
             ->willReturnCallback(function (CollectDatapointRequest $req) use ($quartersResult) {
                 return match ($req->datapointKey) {
-                    'valuation.market_cap' => $this->createFoundResult(
-                        'valuation.market_cap',
-                        $this->createMoneyDatapoint(400_000_000_000.0)
-                    ),
-                    'valuation.fcf_yield' => $this->createNotFoundResult($req->datapointKey),
                     'quarters.free_cash_flow' => $quartersResult,
                     default => $this->createNotFoundResult($req->datapointKey),
                 };
@@ -373,12 +324,10 @@ final class CollectCompanyHandlerTest extends Unit
     {
         $request = $this->createRequest(['market_cap'], []);
 
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturn($this->createFoundResult(
-                'valuation.market_cap',
-                $this->createMoneyDatapoint(3_000_000_000_000)
-            ));
+        // Configure batch collector for valuation
+        $this->configureBatchMock([
+            'market_cap' => 3_000_000_000_000.0,
+        ]);
 
         $result = $this->handler->collect($request);
 
@@ -393,12 +342,10 @@ final class CollectCompanyHandlerTest extends Unit
     {
         $request = $this->createRequest(['market_cap'], []);
 
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturn($this->createFoundResult(
-                'valuation.market_cap',
-                $this->createMoneyDatapoint(3_000_000_000_000)
-            ));
+        // Configure batch collector for valuation
+        $this->configureBatchMock([
+            'market_cap' => 3_000_000_000_000.0,
+        ]);
 
         $result = $this->handler->collect($request);
 
@@ -520,5 +467,88 @@ final class CollectCompanyHandlerTest extends Unit
             ],
             found: false,
         );
+    }
+
+    /**
+     * Create an Extraction object for testing batch collection.
+     */
+    private function createExtraction(
+        string $datapointKey,
+        float|string|int|null $rawValue,
+        string $unit,
+        ?string $currency = null
+    ): Extraction {
+        return new Extraction(
+            datapointKey: $datapointKey,
+            rawValue: $rawValue,
+            unit: $unit,
+            currency: $currency,
+            scale: 'units',
+            asOf: new DateTimeImmutable(),
+            locator: new SourceLocator(
+                SourceLocatorType::Html,
+                'td[data-test="value"]',
+                (string) $rawValue
+            ),
+        );
+    }
+
+    /**
+     * Create a CollectBatchResult with found extractions.
+     *
+     * @param array<string, Extraction> $found
+     * @param list<string> $notFound
+     */
+    private function createBatchResult(
+        array $found,
+        array $notFound = [],
+        bool $requiredSatisfied = true
+    ): CollectBatchResult {
+        return new CollectBatchResult(
+            found: $found,
+            historicalFound: [],
+            notFound: $notFound,
+            sourceAttempts: [
+                new SourceAttempt(
+                    url: 'https://finance.yahoo.com/quote/AAPL',
+                    providerId: 'yahoo_finance',
+                    attemptedAt: new DateTimeImmutable(),
+                    outcome: 'success',
+                    httpStatus: 200,
+                ),
+            ],
+            requiredSatisfied: $requiredSatisfied,
+        );
+    }
+
+    /**
+     * Configure batch collector to return extractions for specified metrics.
+     *
+     * @param array<string, float|null> $metrics Mapping of metric keys to values
+     */
+    private function configureBatchMock(array $metrics): void
+    {
+        $found = [];
+        $notFound = [];
+
+        foreach ($metrics as $metricKey => $value) {
+            $datapointKey = "valuation.{$metricKey}";
+            $unit = $this->unitForMetric($metricKey);
+
+            if ($value !== null) {
+                $found[$datapointKey] = $this->createExtraction(
+                    $datapointKey,
+                    $value,
+                    $unit,
+                    $unit === 'currency' ? 'USD' : null
+                );
+            } else {
+                $notFound[] = $datapointKey;
+            }
+        }
+
+        $this->batchCollector
+            ->method('collect')
+            ->willReturn($this->createBatchResult($found, $notFound, $notFound === []));
     }
 }

@@ -30,6 +30,7 @@ final readonly class DataPointNumber
         public ?string $formula = null,
         public ?string $cacheSource = null,
         public ?int $cacheAgeDays = null,
+        public ?string $providerId = null,
     ) {
         $this->validateProvenanceForMethod();
     }
@@ -120,6 +121,7 @@ final readonly class DataPointNumber
             'formula' => $this->formula,
             'cache_source' => $this->cacheSource,
             'cache_age_days' => $this->cacheAgeDays,
+            'provider_id' => $this->providerId,
         ];
     }
 }

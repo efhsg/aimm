@@ -12,6 +12,7 @@ use app\dto\industry\CollectIndustryResult;
 use app\dto\IndustryConfig;
 use app\dto\MacroRequirements;
 use app\dto\MetricDefinition;
+use app\dto\SourcePriorities;
 use app\handlers\collection\CollectIndustryInterface as InternalCollector;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
@@ -173,6 +174,8 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             $companyConfigs[] = $this->buildCompanyConfig($company);
         }
 
+        $sourcePriorities = SourcePriorities::fromJson($policy['source_priorities'] ?? null);
+
         return new IndustryConfig(
             industryId: (int) $industry['id'],
             id: $industry['slug'],
@@ -181,6 +184,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             companies: $companyConfigs,
             macroRequirements: $this->buildMacroRequirements($policy),
             dataRequirements: $this->buildDataRequirements($policy),
+            sourcePriorities: $sourcePriorities,
         );
     }
 

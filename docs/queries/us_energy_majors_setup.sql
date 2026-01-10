@@ -23,6 +23,7 @@ INSERT INTO collection_policy (
     sector_index,
     required_indicators,
     optional_indicators,
+    source_priorities,
     created_by,
     created_at,
     updated_at
@@ -64,6 +65,13 @@ INSERT INTO collection_policy (
     'XLE',
     JSON_ARRAY('natural_gas', 'wti_crude', 'rig_count', 'oil_inventory'),
     NULL,
+    JSON_OBJECT(
+        'valuation', JSON_ARRAY('fmp', 'yahoo_finance', 'stockanalysis'),
+        'financials', JSON_ARRAY('fmp', 'yahoo_finance'),
+        'quarters', JSON_ARRAY('fmp', 'yahoo_finance'),
+        'macro', JSON_ARRAY('eia_inventory', 'ecb'),
+        'benchmarks', JSON_ARRAY('yahoo_finance', 'fmp')
+    ),
     'admin',
     NOW(),
     NOW()

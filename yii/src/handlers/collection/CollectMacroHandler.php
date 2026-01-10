@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace app\handlers\collection;
 
+use app\dto\CollectBatchRequest;
 use app\dto\CollectDatapointRequest;
 use app\dto\CollectMacroRequest;
 use app\dto\CollectMacroResult;
@@ -11,6 +12,7 @@ use app\dto\datapoints\DataPointMoney;
 use app\dto\datapoints\DataPointNumber;
 use app\dto\MacroData;
 use app\dto\SourceAttempt;
+use app\dto\SourcePriorities;
 use app\enums\CollectionStatus;
 use app\enums\Severity;
 use app\factories\DataPointFactory;
@@ -33,6 +35,7 @@ final class CollectMacroHandler implements CollectMacroInterface
 {
     public function __construct(
         private readonly CollectDatapointInterface $datapointCollector,
+        private readonly CollectBatchInterface $batchCollector,
         private readonly SourceCandidateFactory $sourceCandidateFactory,
         private readonly DataPointFactory $dataPointFactory,
         private readonly Logger $logger,
@@ -59,25 +62,29 @@ final class CollectMacroHandler implements CollectMacroInterface
         $commodityBenchmark = $this->collectBenchmark(
             $request->requirements->commodityBenchmark,
             'macro.commodity_benchmark',
-            $allAttempts
+            $allAttempts,
+            $request->sourcePriorities
         );
 
         $marginProxy = $this->collectBenchmark(
             $request->requirements->marginProxy,
             'macro.margin_proxy',
-            $allAttempts
+            $allAttempts,
+            $request->sourcePriorities
         );
 
         $sectorIndex = $this->collectIndex(
             $request->requirements->sectorIndex,
             'macro.sector_index',
-            $allAttempts
+            $allAttempts,
+            $request->sourcePriorities
         );
 
         $additionalIndicators = $this->collectIndicators(
             $request->requirements->requiredIndicators,
             $request->requirements->optionalIndicators,
-            $allAttempts
+            $allAttempts,
+            $request->sourcePriorities
         );
 
         // Save to Dossier
@@ -143,6 +150,7 @@ final class CollectMacroHandler implements CollectMacroInterface
                         'currency' => $commodity->currency,
                         'source_adapter' => 'web_fetch',
                         'collected_at' => $now->format('Y-m-d H:i:s'),
+                        'provider_id' => $commodity->providerId,
                     ]);
                 }
             }
@@ -159,6 +167,7 @@ final class CollectMacroHandler implements CollectMacroInterface
                         'currency' => $margin->currency,
                         'source_adapter' => 'web_fetch',
                         'collected_at' => $now->format('Y-m-d H:i:s'),
+                        'provider_id' => $margin->providerId,
                     ]);
                 }
             }
@@ -176,6 +185,7 @@ final class CollectMacroHandler implements CollectMacroInterface
                         'currency' => 'XXX',
                         'source_adapter' => 'web_fetch',
                         'collected_at' => $now->format('Y-m-d H:i:s'),
+                        'provider_id' => $index->providerId,
                     ]);
                 }
             }
@@ -200,6 +210,7 @@ final class CollectMacroHandler implements CollectMacroInterface
                             'source_adapter' => 'web_fetch',
                             'source_url' => $datapoint->sourceUrl,
                             'collected_at' => $now->format('Y-m-d H:i:s'),
+                            'provider_id' => $datapoint->providerId,
                         ]);
                     }
                 }
@@ -223,13 +234,14 @@ final class CollectMacroHandler implements CollectMacroInterface
     private function collectBenchmark(
         ?string $benchmarkKey,
         string $datapointKey,
-        array &$allAttempts
+        array &$allAttempts,
+        ?SourcePriorities $priorities = null
     ): ?DataPointMoney {
         if ($benchmarkKey === null) {
             return null;
         }
 
-        $sources = $this->sourceCandidateFactory->forMacro($benchmarkKey);
+        $sources = $this->sourceCandidateFactory->forMacro($benchmarkKey, $priorities, 'benchmarks');
 
         if (empty($sources)) {
             $this->logger->log(
@@ -270,13 +282,14 @@ final class CollectMacroHandler implements CollectMacroInterface
     private function collectIndex(
         ?string $indexKey,
         string $datapointKey,
-        array &$allAttempts
+        array &$allAttempts,
+        ?SourcePriorities $priorities = null
     ): ?DataPointNumber {
         if ($indexKey === null) {
             return null;
         }
 
-        $sources = $this->sourceCandidateFactory->forMacro($indexKey);
+        $sources = $this->sourceCandidateFactory->forMacro($indexKey, $priorities, 'benchmarks');
 
         if (empty($sources)) {
             $this->logger->log(
@@ -320,20 +333,65 @@ final class CollectMacroHandler implements CollectMacroInterface
     private function collectIndicators(
         array $requiredIndicators,
         array $optionalIndicators,
-        array &$allAttempts
+        array &$allAttempts,
+        ?SourcePriorities $priorities = null
     ): array {
-        $indicators = [];
+        $allIndicatorKeys = array_merge($requiredIndicators, $optionalIndicators);
 
-        foreach ($requiredIndicators as $indicatorKey) {
-            $datapoint = $this->collectIndicator($indicatorKey, Severity::Required, $allAttempts);
-            if ($datapoint !== null) {
-                $indicators[$indicatorKey] = $datapoint;
-            }
+        if ($allIndicatorKeys === []) {
+            return [];
         }
 
-        foreach ($optionalIndicators as $indicatorKey) {
-            $datapoint = $this->collectIndicator($indicatorKey, Severity::Optional, $allAttempts);
-            if ($datapoint !== null) {
+        // Get sources for all indicators - aggregates unique sources across all keys
+        $sources = $this->sourceCandidateFactory->forMacroIndicators($allIndicatorKeys, $priorities, 'macro');
+
+        if (empty($sources)) {
+            $this->logger->log(
+                [
+                    'message' => 'No sources available for indicators batch',
+                    'indicator_count' => count($allIndicatorKeys),
+                ],
+                Logger::LEVEL_WARNING,
+                'collection'
+            );
+            return [];
+        }
+
+        $this->logger->log(
+            [
+                'message' => 'Starting batch indicators collection',
+                'all_keys' => count($allIndicatorKeys),
+                'required_keys' => count($requiredIndicators),
+            ],
+            Logger::LEVEL_INFO,
+            'collection'
+        );
+
+        $batchResult = $this->batchCollector->collect(new CollectBatchRequest(
+            datapointKeys: $allIndicatorKeys,
+            requiredKeys: $requiredIndicators,
+            sourceCandidates: $sources,
+        ));
+
+        $allAttempts = array_merge($allAttempts, $batchResult->sourceAttempts);
+
+        $this->logger->log(
+            [
+                'message' => 'Batch indicators collection complete',
+                'found' => count($batchResult->found),
+                'not_found' => count($batchResult->notFound),
+            ],
+            Logger::LEVEL_INFO,
+            'collection'
+        );
+
+        // Convert extractions to datapoints
+        $indicators = [];
+        foreach ($batchResult->found as $indicatorKey => $extraction) {
+            $datapoint = $this->dataPointFactory->fromBatchExtraction($extraction);
+            if ($datapoint instanceof DataPointMoney && $datapoint->value !== null) {
+                $indicators[$indicatorKey] = $datapoint;
+            } elseif ($datapoint instanceof DataPointNumber && $datapoint->value !== null) {
                 $indicators[$indicatorKey] = $datapoint;
             }
         }
@@ -347,9 +405,10 @@ final class CollectMacroHandler implements CollectMacroInterface
     private function collectIndicator(
         string $indicatorKey,
         Severity $severity,
-        array &$allAttempts
+        array &$allAttempts,
+        ?SourcePriorities $priorities = null
     ): DataPointMoney|DataPointNumber|null {
-        $sources = $this->sourceCandidateFactory->forMacro($indicatorKey);
+        $sources = $this->sourceCandidateFactory->forMacro($indicatorKey, $priorities, 'macro');
 
         if (empty($sources)) {
             $this->logger->log(

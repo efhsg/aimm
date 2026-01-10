@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace tests\unit\handlers\collection;
 
+use app\dto\CollectBatchResult;
 use app\dto\CollectDatapointRequest;
 use app\dto\CollectDatapointResult;
 use app\dto\CollectMacroRequest;
 use app\dto\datapoints\DataPointMoney;
 use app\dto\datapoints\DataPointNumber;
 use app\dto\datapoints\SourceLocator;
+use app\dto\Extraction;
 use app\dto\MacroRequirements;
 use app\dto\SourceAttempt;
 use app\enums\CollectionMethod;
@@ -17,6 +19,7 @@ use app\enums\CollectionStatus;
 use app\enums\DataScale;
 use app\factories\DataPointFactory;
 use app\factories\SourceCandidateFactory;
+use app\handlers\collection\CollectBatchInterface;
 use app\handlers\collection\CollectDatapointInterface;
 use app\handlers\collection\CollectMacroHandler;
 use app\queries\MacroIndicatorQuery;
@@ -28,12 +31,12 @@ use yii\log\Logger;
 final class CollectMacroHandlerTest extends Unit
 {
     private CollectDatapointInterface $datapointCollector;
+    private CollectBatchInterface $batchCollector;
     private SourceCandidateFactory $sourceCandidateFactory;
     private DataPointFactory $dataPointFactory;
     private Logger $logger;
     private MacroIndicatorQuery $macroQuery;
     private PriceHistoryQuery $priceQuery;
-    private CollectMacroHandler $handler;
 
     protected function _before(): void
     {
@@ -43,15 +46,35 @@ final class CollectMacroHandlerTest extends Unit
         $this->logger = $this->createMock(Logger::class);
         $this->macroQuery = $this->createMock(MacroIndicatorQuery::class);
         $this->priceQuery = $this->createMock(PriceHistoryQuery::class);
+    }
 
-        $this->handler = new CollectMacroHandler(
+    private function createHandler(?CollectBatchInterface $batchCollector = null): CollectMacroHandler
+    {
+        $this->batchCollector = $batchCollector ?? $this->createEmptyBatchCollector();
+
+        return new CollectMacroHandler(
             $this->datapointCollector,
+            $this->batchCollector,
             $this->sourceCandidateFactory,
             $this->dataPointFactory,
             $this->logger,
             $this->macroQuery,
-            $this->priceQuery
+            $this->priceQuery,
         );
+    }
+
+    private function createEmptyBatchCollector(): CollectBatchInterface
+    {
+        $mock = $this->createMock(CollectBatchInterface::class);
+        $mock->method('collect')
+            ->willReturn(new CollectBatchResult(
+                found: [],
+                notFound: [],
+                historicalFound: [],
+                sourceAttempts: [],
+                requiredSatisfied: true,
+            ));
+        return $mock;
     }
 
     public function testFullSuccessWithAllMacroTypes(): void
@@ -84,7 +107,8 @@ final class CollectMacroHandlerTest extends Unit
                 };
             });
 
-        $result = $this->handler->collect($request);
+        $handler = $this->createHandler();
+        $result = $handler->collect($request);
 
         $this->assertSame(CollectionStatus::Complete, $result->status);
         $this->assertNotNull($result->data->commodityBenchmark);
@@ -118,7 +142,8 @@ final class CollectMacroHandlerTest extends Unit
                 };
             });
 
-        $result = $this->handler->collect($request);
+        $handler = $this->createHandler();
+        $result = $handler->collect($request);
 
         $this->assertSame(CollectionStatus::Partial, $result->status);
         $this->assertNotNull($result->data->commodityBenchmark);
@@ -139,7 +164,8 @@ final class CollectMacroHandlerTest extends Unit
                 return $this->createNotFoundResult($req->datapointKey);
             });
 
-        $result = $this->handler->collect($request);
+        $handler = $this->createHandler();
+        $result = $handler->collect($request);
 
         $this->assertSame(CollectionStatus::Complete, $result->status);
         $this->assertEmpty($result->data->additionalIndicators);
@@ -157,7 +183,8 @@ final class CollectMacroHandlerTest extends Unit
             ->method('collect')
             ->willReturn($this->createNotFoundResult('macro.commodity_benchmark'));
 
-        $result = $this->handler->collect($request);
+        $handler = $this->createHandler();
+        $result = $handler->collect($request);
 
         $this->assertSame(CollectionStatus::Failed, $result->status);
         $this->assertNull($result->data->commodityBenchmark);
@@ -184,7 +211,19 @@ final class CollectMacroHandlerTest extends Unit
                 };
             });
 
-        $result = $this->handler->collect($request);
+        // Batch collector returns not found for the required indicator
+        $batchCollector = $this->createMock(CollectBatchInterface::class);
+        $batchCollector->method('collect')
+            ->willReturn(new CollectBatchResult(
+                found: [],
+                notFound: ['macro.gold_price'],
+                historicalFound: [],
+                sourceAttempts: [],
+                requiredSatisfied: false,
+            ));
+
+        $handler = $this->createHandler($batchCollector);
+        $result = $handler->collect($request);
 
         $this->assertSame(CollectionStatus::Partial, $result->status);
         $this->assertNotNull($result->data->commodityBenchmark);
@@ -197,7 +236,8 @@ final class CollectMacroHandlerTest extends Unit
             requirements: new MacroRequirements(),
         );
 
-        $result = $this->handler->collect($request);
+        $handler = $this->createHandler();
+        $result = $handler->collect($request);
 
         $this->assertSame(CollectionStatus::Complete, $result->status);
         $this->assertNull($result->data->commodityBenchmark);
@@ -252,7 +292,8 @@ final class CollectMacroHandlerTest extends Unit
                 };
             });
 
-        $result = $this->handler->collect($request);
+        $handler = $this->createHandler();
+        $result = $handler->collect($request);
 
         $this->assertCount(2, $result->sourceAttempts);
     }
@@ -266,23 +307,22 @@ final class CollectMacroHandlerTest extends Unit
             ),
         );
 
-        $this->datapointCollector
-            ->method('collect')
-            ->willReturnCallback(function (CollectDatapointRequest $req) {
-                return match ($req->datapointKey) {
-                    'macro.oil_price' => $this->createFoundMoneyResult(
-                        $req->datapointKey,
-                        75.50
-                    ),
-                    'macro.gold_price' => $this->createFoundMoneyResult(
-                        $req->datapointKey,
-                        1850.00
-                    ),
-                    default => $this->createNotFoundResult($req->datapointKey),
-                };
-            });
+        // Configure batch collector to return found extractions
+        $batchCollector = $this->createMock(CollectBatchInterface::class);
+        $batchCollector->method('collect')
+            ->willReturn(new CollectBatchResult(
+                found: [
+                    'macro.oil_price' => $this->createExtraction('macro.oil_price', 75.50),
+                    'macro.gold_price' => $this->createExtraction('macro.gold_price', 1850.00),
+                ],
+                notFound: [],
+                historicalFound: [],
+                sourceAttempts: [],
+                requiredSatisfied: true,
+            ));
 
-        $result = $this->handler->collect($request);
+        $handler = $this->createHandler($batchCollector);
+        $result = $handler->collect($request);
 
         $this->assertSame(CollectionStatus::Complete, $result->status);
         $this->assertCount(2, $result->data->additionalIndicators);
@@ -311,7 +351,8 @@ final class CollectMacroHandlerTest extends Unit
                 };
             });
 
-        $result = $this->handler->collect($request);
+        $handler = $this->createHandler();
+        $result = $handler->collect($request);
 
         $this->assertSame(CollectionStatus::Partial, $result->status);
         $this->assertNotNull($result->data->commodityBenchmark);
@@ -326,7 +367,8 @@ final class CollectMacroHandlerTest extends Unit
             ),
         );
 
-        $result = $this->handler->collect($request);
+        $handler = $this->createHandler();
+        $result = $handler->collect($request);
 
         $this->assertSame(CollectionStatus::Failed, $result->status);
         $this->assertNull($result->data->commodityBenchmark);
@@ -410,6 +452,19 @@ final class CollectMacroHandlerTest extends Unit
                 ),
             ],
             found: false,
+        );
+    }
+
+    private function createExtraction(string $key, float $value): Extraction
+    {
+        return new Extraction(
+            datapointKey: $key,
+            rawValue: $value,
+            unit: 'currency',
+            currency: 'USD',
+            scale: 'units',
+            asOf: new DateTimeImmutable(),
+            locator: SourceLocator::html('td.value', (string) $value),
         );
     }
 }

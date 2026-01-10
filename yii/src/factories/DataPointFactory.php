@@ -40,6 +40,7 @@ final class DataPointFactory
                 sourceLocator: $extraction->locator,
                 currency: $extraction->currency,
                 scale: $extraction->scale,
+                providerId: $extraction->providerId,
             );
         }
 
@@ -61,6 +62,7 @@ final class DataPointFactory
                 retrievedAt: $fetchResult->retrievedAt,
                 method: CollectionMethod::WebFetch,
                 sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
             ),
             'ratio' => new DataPointRatio(
                 value: $extraction->rawValue,
@@ -69,6 +71,7 @@ final class DataPointFactory
                 retrievedAt: $fetchResult->retrievedAt,
                 method: CollectionMethod::WebFetch,
                 sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
             ),
             'percent' => new DataPointPercent(
                 value: $extraction->rawValue,
@@ -77,6 +80,7 @@ final class DataPointFactory
                 retrievedAt: $fetchResult->retrievedAt,
                 method: CollectionMethod::WebFetch,
                 sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
             ),
             default => new DataPointNumber(
                 value: $extraction->rawValue,
@@ -85,6 +89,62 @@ final class DataPointFactory
                 retrievedAt: $fetchResult->retrievedAt,
                 method: CollectionMethod::WebFetch,
                 sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
+            ),
+        };
+    }
+
+    /**
+     * Create DataPoint from batch extraction.
+     *
+     * Used by batch collectors where FetchResult is not tracked per extraction.
+     * Source URL should be provided - defaults to 'batch-collection' placeholder if not available.
+     */
+    public function fromBatchExtraction(
+        Extraction $extraction,
+        string $sourceUrl = 'batch-collection'
+    ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber {
+        $asOf = $extraction->asOf ?? new DateTimeImmutable();
+        $now = new DateTimeImmutable();
+
+        return match ($extraction->unit) {
+            'currency' => new DataPointMoney(
+                value: $extraction->rawValue,
+                currency: $extraction->currency ?? 'USD',
+                scale: $this->parseScale($extraction->scale),
+                asOf: $asOf,
+                sourceUrl: $sourceUrl,
+                retrievedAt: $now,
+                method: CollectionMethod::WebFetch,
+                sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
+            ),
+            'ratio' => new DataPointRatio(
+                value: $extraction->rawValue,
+                asOf: $asOf,
+                sourceUrl: $sourceUrl,
+                retrievedAt: $now,
+                method: CollectionMethod::WebFetch,
+                sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
+            ),
+            'percent' => new DataPointPercent(
+                value: $extraction->rawValue,
+                asOf: $asOf,
+                sourceUrl: $sourceUrl,
+                retrievedAt: $now,
+                method: CollectionMethod::WebFetch,
+                sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
+            ),
+            default => new DataPointNumber(
+                value: $extraction->rawValue,
+                asOf: $asOf,
+                sourceUrl: $sourceUrl,
+                retrievedAt: $now,
+                method: CollectionMethod::WebFetch,
+                sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
             ),
         };
     }
@@ -149,7 +209,8 @@ final class DataPointFactory
         float $value,
         array $derivedFrom,
         string $formula,
-        ?string $currency = null
+        ?string $currency = null,
+        ?string $providerId = 'derived'
     ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber {
         $now = new DateTimeImmutable();
 
@@ -164,6 +225,7 @@ final class DataPointFactory
                 method: CollectionMethod::Derived,
                 derivedFrom: $derivedFrom,
                 formula: $formula,
+                providerId: $providerId,
             ),
             'ratio' => new DataPointRatio(
                 value: $value,
@@ -173,6 +235,7 @@ final class DataPointFactory
                 method: CollectionMethod::Derived,
                 derivedFrom: $derivedFrom,
                 formula: $formula,
+                providerId: $providerId,
             ),
             'percent' => new DataPointPercent(
                 value: $value,
@@ -182,6 +245,7 @@ final class DataPointFactory
                 method: CollectionMethod::Derived,
                 derivedFrom: $derivedFrom,
                 formula: $formula,
+                providerId: $providerId,
             ),
             default => new DataPointNumber(
                 value: $value,
@@ -191,6 +255,7 @@ final class DataPointFactory
                 method: CollectionMethod::Derived,
                 derivedFrom: $derivedFrom,
                 formula: $formula,
+                providerId: $providerId,
             ),
         };
     }
@@ -206,7 +271,8 @@ final class DataPointFactory
         int $cacheAgeDays,
         ?SourceLocator $sourceLocator = null,
         ?string $currency = null,
-        ?string $scale = null
+        ?string $scale = null,
+        ?string $providerId = null
     ): DataPointMoney|DataPointRatio|DataPointPercent|DataPointNumber {
         $now = new DateTimeImmutable();
 
@@ -222,6 +288,7 @@ final class DataPointFactory
                 sourceLocator: $sourceLocator,
                 cacheSource: $cacheSource,
                 cacheAgeDays: $cacheAgeDays,
+                providerId: $providerId,
             ),
             'ratio' => new DataPointRatio(
                 value: $value,
@@ -232,6 +299,7 @@ final class DataPointFactory
                 sourceLocator: $sourceLocator,
                 cacheSource: $cacheSource,
                 cacheAgeDays: $cacheAgeDays,
+                providerId: $providerId,
             ),
             'percent' => new DataPointPercent(
                 value: $value,
@@ -242,6 +310,7 @@ final class DataPointFactory
                 sourceLocator: $sourceLocator,
                 cacheSource: $cacheSource,
                 cacheAgeDays: $cacheAgeDays,
+                providerId: $providerId,
             ),
             default => new DataPointNumber(
                 value: $value,
@@ -252,6 +321,7 @@ final class DataPointFactory
                 sourceLocator: $sourceLocator,
                 cacheSource: $cacheSource,
                 cacheAgeDays: $cacheAgeDays,
+                providerId: $providerId,
             ),
         };
     }
@@ -341,6 +411,104 @@ final class DataPointFactory
         );
     }
 
+    /**
+     * Create DataPoints from batch historical extraction, keyed by fiscal year.
+     *
+     * Used by batch collectors where FetchResult is not tracked per extraction.
+     *
+     * @return array<int, DataPointMoney|DataPointNumber>
+     */
+    public function fromBatchHistoricalExtractionByYear(
+        HistoricalExtraction $extraction,
+        int $maxYears,
+        string $sourceUrl = 'batch-collection'
+    ): array {
+        $result = [];
+        $byYear = $extraction->getByYear();
+        $count = 0;
+
+        foreach ($byYear as $year => $periods) {
+            if ($count >= $maxYears) {
+                break;
+            }
+
+            // For annual data, take the most recent period in the year
+            $period = $periods[0];
+            $result[$year] = $this->createDataPointForPeriodBatch(
+                $period,
+                $extraction,
+                $sourceUrl
+            );
+            $count++;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Create DataPoints from batch historical extraction, keyed by quarter key (e.g., "2024Q3").
+     *
+     * Used by batch collectors where FetchResult is not tracked per extraction.
+     *
+     * @return array<string, DataPointMoney|DataPointNumber>
+     */
+    public function fromBatchHistoricalExtractionByQuarter(
+        HistoricalExtraction $extraction,
+        int $maxQuarters,
+        string $sourceUrl = 'batch-collection'
+    ): array {
+        $result = [];
+        $byQuarter = $extraction->getByQuarter();
+        $count = 0;
+
+        foreach ($byQuarter as $quarterKey => $period) {
+            if ($count >= $maxQuarters) {
+                break;
+            }
+
+            $result[$quarterKey] = $this->createDataPointForPeriodBatch(
+                $period,
+                $extraction,
+                $sourceUrl
+            );
+            $count++;
+        }
+
+        return $result;
+    }
+
+    private function createDataPointForPeriodBatch(
+        PeriodValue $period,
+        HistoricalExtraction $extraction,
+        string $sourceUrl
+    ): DataPointMoney|DataPointNumber {
+        $now = new DateTimeImmutable();
+
+        if ($extraction->unit === 'number') {
+            return new DataPointNumber(
+                value: $period->value,
+                asOf: $period->endDate,
+                sourceUrl: $sourceUrl,
+                retrievedAt: $now,
+                method: CollectionMethod::WebFetch,
+                sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
+            );
+        }
+
+        return new DataPointMoney(
+            value: $period->value,
+            currency: $extraction->currency ?? 'USD',
+            scale: $this->parseScale($extraction->scale),
+            asOf: $period->endDate,
+            sourceUrl: $sourceUrl,
+            retrievedAt: $now,
+            method: CollectionMethod::WebFetch,
+            sourceLocator: $extraction->locator,
+            providerId: $extraction->providerId,
+        );
+    }
+
     private function createDataPointForPeriod(
         PeriodValue $period,
         HistoricalExtraction $extraction,
@@ -354,6 +522,7 @@ final class DataPointFactory
                 retrievedAt: $fetchResult->retrievedAt,
                 method: CollectionMethod::WebFetch,
                 sourceLocator: $extraction->locator,
+                providerId: $extraction->providerId,
             );
         }
 
@@ -366,6 +535,7 @@ final class DataPointFactory
             retrievedAt: $fetchResult->retrievedAt,
             method: CollectionMethod::WebFetch,
             sourceLocator: $extraction->locator,
+            providerId: $extraction->providerId,
         );
     }
 

@@ -75,12 +75,12 @@ final class AdapterChain implements SourceAdapterInterface
                 ));
 
                 foreach ($result->extractions as $key => $extraction) {
-                    $allExtractions[$key] = $extraction;
+                    $allExtractions[$key] = $extraction->withProviderId($adapterId);
                     $allNotFound = array_diff($allNotFound, [$key]);
                 }
 
                 foreach ($result->historicalExtractions as $key => $historicalExtraction) {
-                    $allHistoricalExtractions[$key] = $historicalExtraction;
+                    $allHistoricalExtractions[$key] = $historicalExtraction->withProviderId($adapterId);
                     $allNotFound = array_diff($allNotFound, [$key]);
                 }
 

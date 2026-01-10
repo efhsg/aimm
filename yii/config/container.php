@@ -49,6 +49,8 @@ use app\handlers\analysis\DetermineRatingHandler;
 use app\handlers\analysis\DetermineRatingInterface;
 use app\handlers\analysis\RankCompaniesHandler;
 use app\handlers\analysis\RankCompaniesInterface;
+use app\handlers\collection\CollectBatchHandler;
+use app\handlers\collection\CollectBatchInterface;
 use app\handlers\collection\CollectCompanyHandler;
 use app\handlers\collection\CollectCompanyInterface;
 use app\handlers\collection\CollectDatapointHandler;
@@ -248,9 +250,18 @@ return [
             );
         },
 
+        CollectBatchInterface::class => static function (Container $container): CollectBatchInterface {
+            return new CollectBatchHandler(
+                webFetchClient: $container->get(WebFetchClientInterface::class),
+                sourceAdapter: $container->get(SourceAdapterInterface::class),
+                logger: Yii::getLogger(),
+            );
+        },
+
         CollectCompanyInterface::class => static function (Container $container): CollectCompanyInterface {
             return new CollectCompanyHandler(
                 datapointCollector: $container->get(CollectDatapointInterface::class),
+                batchCollector: $container->get(CollectBatchInterface::class),
                 sourceCandidateFactory: $container->get(SourceCandidateFactory::class),
                 dataPointFactory: $container->get(DataPointFactory::class),
                 logger: Yii::getLogger(),
@@ -264,6 +275,7 @@ return [
         CollectMacroInterface::class => static function (Container $container): CollectMacroInterface {
             return new CollectMacroHandler(
                 datapointCollector: $container->get(CollectDatapointInterface::class),
+                batchCollector: $container->get(CollectBatchInterface::class),
                 sourceCandidateFactory: $container->get(SourceCandidateFactory::class),
                 dataPointFactory: $container->get(DataPointFactory::class),
                 logger: Yii::getLogger(),

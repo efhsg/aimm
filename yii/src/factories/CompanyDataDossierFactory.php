@@ -91,17 +91,18 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
         }
 
         $collectedAt = $snapshot['collected_at'] ?? $snapshot['snapshot_date'] ?? null;
+        $providerId = $snapshot['provider_id'] ?? null;
 
         return new ValuationData(
-            marketCap: $this->moneyFromDossier($snapshot['market_cap'], $currency, $collectedAt),
-            fwdPe: $this->ratioFromDossier($snapshot['forward_pe'] ?? null, $collectedAt),
-            trailingPe: $this->ratioFromDossier($snapshot['trailing_pe'] ?? null, $collectedAt),
-            evEbitda: $this->ratioFromDossier($snapshot['ev_to_ebitda'] ?? null, $collectedAt),
+            marketCap: $this->moneyFromDossier($snapshot['market_cap'], $currency, $collectedAt, $providerId),
+            fwdPe: $this->ratioFromDossier($snapshot['forward_pe'] ?? null, $collectedAt, $providerId),
+            trailingPe: $this->ratioFromDossier($snapshot['trailing_pe'] ?? null, $collectedAt, $providerId),
+            evEbitda: $this->ratioFromDossier($snapshot['ev_to_ebitda'] ?? null, $collectedAt, $providerId),
             freeCashFlowTtm: $this->loadTtmFreeCashFlow($companyId, $currency),
-            fcfYield: $this->percentFromDossier($snapshot['fcf_yield'] ?? null, $collectedAt),
-            divYield: $this->percentFromDossier($snapshot['dividend_yield'] ?? null, $collectedAt),
-            netDebtEbitda: $this->ratioFromDossier($snapshot['net_debt_to_ebitda'] ?? null, $collectedAt),
-            priceToBook: $this->ratioFromDossier($snapshot['price_to_book'] ?? null, $collectedAt),
+            fcfYield: $this->percentFromDossier($snapshot['fcf_yield'] ?? null, $collectedAt, $providerId),
+            divYield: $this->percentFromDossier($snapshot['dividend_yield'] ?? null, $collectedAt, $providerId),
+            netDebtEbitda: $this->ratioFromDossier($snapshot['net_debt_to_ebitda'] ?? null, $collectedAt, $providerId),
+            priceToBook: $this->ratioFromDossier($snapshot['price_to_book'] ?? null, $collectedAt, $providerId),
         );
     }
 
@@ -115,11 +116,12 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
             return $this->moneyFromDossier(
                 $ttm['free_cash_flow'],
                 $ttm['currency'] ?? $currency,
-                $ttm['calculated_at'] ?? null
+                $ttm['calculated_at'] ?? null,
+                $ttm['provider_id'] ?? null
             );
         }
 
-        // Fallback: sum last 4 quarters
+        // Fallback: sum last 4 quarters (derived, so provider_id = 'derived')
         $quarters = $this->quarterlyQuery->findLastFourQuarters($companyId, $now);
         if (count($quarters) >= 4) {
             $sum = 0.0;
@@ -133,7 +135,7 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
                 }
             }
             if ($sum !== 0.0) {
-                return $this->moneyFromDossier($sum, $currency, $latestDate);
+                return $this->moneyFromDossier($sum, $currency, $latestDate, 'derived');
             }
         }
 
@@ -153,25 +155,26 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
             $year = (int) $row['fiscal_year'];
             $currency = $row['currency'] ?? 'USD';
             $collectedAt = $row['collected_at'] ?? null;
+            $providerId = $row['provider_id'] ?? null;
 
             $mapped[$year] = new AnnualFinancials(
                 fiscalYear: $year,
                 periodEndDate: isset($row['period_end_date'])
                     ? new DateTimeImmutable($row['period_end_date'])
                     : null,
-                revenue: $this->moneyFromDossier($row['revenue'] ?? null, $currency, $collectedAt),
-                grossProfit: $this->moneyFromDossier($row['gross_profit'] ?? null, $currency, $collectedAt),
-                operatingIncome: $this->moneyFromDossier($row['operating_income'] ?? null, $currency, $collectedAt),
-                ebitda: $this->moneyFromDossier($row['ebitda'] ?? null, $currency, $collectedAt),
-                netIncome: $this->moneyFromDossier($row['net_income'] ?? null, $currency, $collectedAt),
-                freeCashFlow: $this->moneyFromDossier($row['free_cash_flow'] ?? null, $currency, $collectedAt),
-                totalAssets: $this->moneyFromDossier($row['total_assets'] ?? null, $currency, $collectedAt),
-                totalLiabilities: $this->moneyFromDossier($row['total_liabilities'] ?? null, $currency, $collectedAt),
-                totalEquity: $this->moneyFromDossier($row['total_equity'] ?? null, $currency, $collectedAt),
-                totalDebt: $this->moneyFromDossier($row['total_debt'] ?? null, $currency, $collectedAt),
-                cashAndEquivalents: $this->moneyFromDossier($row['cash_and_equivalents'] ?? null, $currency, $collectedAt),
-                netDebt: $this->moneyFromDossier($row['net_debt'] ?? null, $currency, $collectedAt),
-                sharesOutstanding: $this->numberFromDossier($row['shares_outstanding'] ?? null, $collectedAt),
+                revenue: $this->moneyFromDossier($row['revenue'] ?? null, $currency, $collectedAt, $providerId),
+                grossProfit: $this->moneyFromDossier($row['gross_profit'] ?? null, $currency, $collectedAt, $providerId),
+                operatingIncome: $this->moneyFromDossier($row['operating_income'] ?? null, $currency, $collectedAt, $providerId),
+                ebitda: $this->moneyFromDossier($row['ebitda'] ?? null, $currency, $collectedAt, $providerId),
+                netIncome: $this->moneyFromDossier($row['net_income'] ?? null, $currency, $collectedAt, $providerId),
+                freeCashFlow: $this->moneyFromDossier($row['free_cash_flow'] ?? null, $currency, $collectedAt, $providerId),
+                totalAssets: $this->moneyFromDossier($row['total_assets'] ?? null, $currency, $collectedAt, $providerId),
+                totalLiabilities: $this->moneyFromDossier($row['total_liabilities'] ?? null, $currency, $collectedAt, $providerId),
+                totalEquity: $this->moneyFromDossier($row['total_equity'] ?? null, $currency, $collectedAt, $providerId),
+                totalDebt: $this->moneyFromDossier($row['total_debt'] ?? null, $currency, $collectedAt, $providerId),
+                cashAndEquivalents: $this->moneyFromDossier($row['cash_and_equivalents'] ?? null, $currency, $collectedAt, $providerId),
+                netDebt: $this->moneyFromDossier($row['net_debt'] ?? null, $currency, $collectedAt, $providerId),
+                sharesOutstanding: $this->numberFromDossier($row['shares_outstanding'] ?? null, $collectedAt, $providerId),
             );
         }
 
@@ -197,15 +200,16 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
             $key = "{$year}Q{$quarter}";
             $currency = $row['currency'] ?? 'USD';
             $collectedAt = $row['collected_at'] ?? null;
+            $providerId = $row['provider_id'] ?? null;
 
             $mapped[$key] = new QuarterFinancials(
                 fiscalYear: $year,
                 fiscalQuarter: $quarter,
                 periodEnd: new DateTimeImmutable($row['period_end_date']),
-                revenue: $this->moneyFromDossier($row['revenue'] ?? null, $currency, $collectedAt),
-                ebitda: $this->moneyFromDossier($row['ebitda'] ?? null, $currency, $collectedAt),
-                netIncome: $this->moneyFromDossier($row['net_income'] ?? null, $currency, $collectedAt),
-                freeCashFlow: $this->moneyFromDossier($row['free_cash_flow'] ?? null, $currency, $collectedAt),
+                revenue: $this->moneyFromDossier($row['revenue'] ?? null, $currency, $collectedAt, $providerId),
+                ebitda: $this->moneyFromDossier($row['ebitda'] ?? null, $currency, $collectedAt, $providerId),
+                netIncome: $this->moneyFromDossier($row['net_income'] ?? null, $currency, $collectedAt, $providerId),
+                freeCashFlow: $this->moneyFromDossier($row['free_cash_flow'] ?? null, $currency, $collectedAt, $providerId),
             );
 
             $count++;
@@ -217,7 +221,8 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
     private function moneyFromDossier(
         mixed $value,
         string $currency,
-        ?string $collectedAt
+        ?string $collectedAt,
+        ?string $providerId = null
     ): DataPointMoney {
         if ($value === null) {
             return $this->dataPointFactory->notFound('currency', ['dossier'], $currency);
@@ -236,12 +241,14 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
             cacheSource: 'dossier',
             cacheAgeDays: $ageDays,
             currency: $currency,
+            providerId: $providerId,
         );
     }
 
     private function ratioFromDossier(
         mixed $value,
-        ?string $collectedAt
+        ?string $collectedAt,
+        ?string $providerId = null
     ): ?DataPointRatio {
         if ($value === null) {
             return null;
@@ -259,12 +266,14 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
             originalAsOf: $collected,
             cacheSource: 'dossier',
             cacheAgeDays: $ageDays,
+            providerId: $providerId,
         );
     }
 
     private function percentFromDossier(
         mixed $value,
-        ?string $collectedAt
+        ?string $collectedAt,
+        ?string $providerId = null
     ): ?DataPointPercent {
         if ($value === null) {
             return null;
@@ -282,12 +291,14 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
             originalAsOf: $collected,
             cacheSource: 'dossier',
             cacheAgeDays: $ageDays,
+            providerId: $providerId,
         );
     }
 
     private function numberFromDossier(
         mixed $value,
-        ?string $collectedAt
+        ?string $collectedAt,
+        ?string $providerId = null
     ): ?DataPointNumber {
         if ($value === null) {
             return null;
@@ -305,6 +316,7 @@ final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterf
             originalAsOf: $collected,
             cacheSource: 'dossier',
             cacheAgeDays: $ageDays,
+            providerId: $providerId,
         );
     }
 }
