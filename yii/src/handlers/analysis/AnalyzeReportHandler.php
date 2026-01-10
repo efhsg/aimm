@@ -6,8 +6,8 @@ namespace app\handlers\analysis;
 
 use app\dto\analysis\AnalyzeReportRequest;
 use app\dto\analysis\AnalyzeReportResult;
+use app\dto\analysis\IndustryAnalysisContext;
 use app\dto\CompanyData;
-use app\dto\IndustryDataPack;
 use app\dto\report\CompanyAnalysis;
 use app\dto\report\MacroContext;
 use app\dto\report\RankedReportDTO;
@@ -45,21 +45,21 @@ final class AnalyzeReportHandler implements AnalyzeReportInterface
 
     public function handle(AnalyzeReportRequest $request): AnalyzeReportResult
     {
-        $dataPack = $request->dataPack;
+        $context = $request->context;
         $thresholds = $request->thresholds;
 
-        // 1. Validate datapack
-        $gateResult = $this->gateValidator->validate($dataPack);
+        // 1. Validate context
+        $gateResult = $this->gateValidator->validate($context);
         if (!$gateResult->passed) {
             return AnalyzeReportResult::gateFailed($gateResult);
         }
 
         // 2. Calculate group averages (all companies)
-        $groupAverages = $this->peerAverageTransformer->transform($dataPack->companies);
+        $groupAverages = $this->peerAverageTransformer->transform($context->companies);
 
         // 3. Analyze each company
         $companyAnalyses = [];
-        foreach ($dataPack->companies as $company) {
+        foreach ($context->companies as $company) {
             // Skip companies with insufficient data
             if (!$this->hasMinimumData($company)) {
                 continue;
@@ -104,10 +104,10 @@ final class AnalyzeReportHandler implements AnalyzeReportInterface
 
         // 5. Assemble report
         $report = new RankedReportDTO(
-            metadata: $this->buildMetadata($request, $dataPack, count($rankedAnalyses)),
+            metadata: $this->buildMetadata($request, $context, count($rankedAnalyses)),
             companyAnalyses: $rankedAnalyses,
             groupAverages: $groupAverages,
-            macro: $this->buildMacroContext($dataPack),
+            macro: $this->buildMacroContext($context),
         );
 
         return AnalyzeReportResult::success($report);
@@ -123,16 +123,16 @@ final class AnalyzeReportHandler implements AnalyzeReportInterface
 
     private function buildMetadata(
         AnalyzeReportRequest $request,
-        IndustryDataPack $dataPack,
+        IndustryAnalysisContext $context,
         int $companyCount
     ): RankedReportMetadata {
         return new RankedReportMetadata(
             reportId: uniqid('rpt_', true),
-            industryId: $dataPack->industryId,
+            industryId: $request->industrySlug,
             industrySlug: $request->industrySlug,
             industryName: $request->industryName,
             generatedAt: new DateTimeImmutable(),
-            dataAsOf: $dataPack->collectedAt,
+            dataAsOf: $context->collectedAt,
             companyCount: $companyCount,
         );
     }
@@ -152,12 +152,12 @@ final class AnalyzeReportHandler implements AnalyzeReportInterface
         );
     }
 
-    private function buildMacroContext(IndustryDataPack $dataPack): MacroContext
+    private function buildMacroContext(IndustryAnalysisContext $context): MacroContext
     {
         return new MacroContext(
-            commodityBenchmark: $dataPack->macro->commodityBenchmark?->getBaseValue(),
-            marginProxy: $dataPack->macro->marginProxy?->getBaseValue(),
-            sectorIndex: $dataPack->macro->sectorIndex?->value,
+            commodityBenchmark: $context->macro->commodityBenchmark?->getBaseValue(),
+            marginProxy: $context->macro->marginProxy?->getBaseValue(),
+            sectorIndex: $context->macro->sectorIndex?->value,
         );
     }
 }

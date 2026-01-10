@@ -35,7 +35,6 @@ use app\clients\UserAgentProviderInterface;
 use app\clients\WebFetchClientInterface;
 use app\factories\CompanyDataFactory;
 use app\factories\DataPointFactory;
-use app\factories\IndustryDataPackFactory;
 use app\factories\pdf\ReportDataFactory;
 use app\factories\SourceCandidateFactory;
 use app\handlers\analysis\AnalyzeReportHandler;
@@ -99,8 +98,6 @@ use app\validators\CollectionGateValidator;
 use app\validators\CollectionGateValidatorInterface;
 use app\validators\SchemaValidator;
 use app\validators\SchemaValidatorInterface;
-use app\validators\SemanticValidator;
-use app\validators\SemanticValidatorInterface;
 use GuzzleHttp\Client;
 use yii\di\Container;
 
@@ -211,16 +208,7 @@ return [
         MorningstarAdapter::class => MorningstarAdapter::class,
         SeekingAlphaAdapter::class => SeekingAlphaAdapter::class,
 
-        SemanticValidatorInterface::class => SemanticValidator::class,
-
-        CollectionGateValidatorInterface::class => static function (Container $container): CollectionGateValidatorInterface {
-            $params = Yii::$app->params;
-            return new CollectionGateValidator(
-                schemaValidator: $container->get(SchemaValidatorInterface::class),
-                semanticValidator: $container->get(SemanticValidatorInterface::class),
-                macroStalenessThresholdDays: $params['macroStalenessThresholdDays'] ?? 10,
-            );
-        },
+        CollectionGateValidatorInterface::class => CollectionGateValidator::class,
 
         DataPointFactory::class => DataPointFactory::class,
         SourceCandidateFactory::class => static function (): SourceCandidateFactory {
@@ -234,7 +222,6 @@ return [
             );
         },
         CompanyDataFactory::class => CompanyDataFactory::class,
-        IndustryDataPackFactory::class => IndustryDataPackFactory::class,
 
         SourceBlockRepository::class => static function (): SourceBlockRepository {
             return new SourceBlockRepository(Yii::$app->db);
@@ -450,15 +437,25 @@ return [
             );
         },
 
-        // Dossier to DataPack Transformer
-        app\transformers\DossierToDataPackTransformer::class => static function (Container $container) {
-            return new app\transformers\DossierToDataPackTransformer(
+        // Industry Analysis Query and Factory
+        app\factories\CompanyDataDossierFactory::class => static function (Container $container) {
+            return new app\factories\CompanyDataDossierFactory(
                 companyQuery: $container->get(app\queries\CompanyQuery::class),
                 valuationQuery: $container->get(app\queries\ValuationSnapshotQuery::class),
                 annualQuery: $container->get(app\queries\AnnualFinancialQuery::class),
                 quarterlyQuery: $container->get(app\queries\QuarterlyFinancialQuery::class),
                 ttmQuery: $container->get(app\queries\TtmFinancialQuery::class),
                 dataPointFactory: $container->get(DataPointFactory::class),
+            );
+        },
+        app\factories\CompanyDataDossierFactoryInterface::class => app\factories\CompanyDataDossierFactory::class,
+
+        app\queries\IndustryAnalysisQuery::class => static function (Container $container) {
+            return new app\queries\IndustryAnalysisQuery(
+                companyQuery: $container->get(app\queries\CompanyQuery::class),
+                companyFactory: $container->get(app\factories\CompanyDataDossierFactoryInterface::class),
+                macroQuery: $container->get(app\queries\MacroIndicatorQuery::class),
+                priceHistoryQuery: $container->get(app\queries\PriceHistoryQuery::class),
             );
         },
 

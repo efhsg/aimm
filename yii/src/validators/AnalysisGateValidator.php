@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace app\validators;
 
+use app\dto\analysis\IndustryAnalysisContext;
 use app\dto\GateError;
 use app\dto\GateResult;
 use app\dto\GateWarning;
-use app\dto\IndustryDataPack;
 use DateTimeImmutable;
 
 /**
- * Validates datapack completeness before analysis.
+ * Validates analysis context completeness before analysis.
  *
  * Errors (blocking):
  * - Insufficient companies for comparison
@@ -36,12 +36,12 @@ final class AnalysisGateValidator implements AnalysisGateValidatorInterface
     private const RECOMMENDED_COMPANIES = 5;
     private const STALE_DAYS = 30;
 
-    public function validate(IndustryDataPack $dataPack): GateResult
+    public function validate(IndustryAnalysisContext $context): GateResult
     {
         $errors = [];
         $warnings = [];
 
-        $companyCount = count($dataPack->companies);
+        $companyCount = count($context->companies);
 
         // 1. Minimum companies for comparison
         if ($companyCount < self::MIN_COMPANIES) {
@@ -59,7 +59,7 @@ final class AnalysisGateValidator implements AnalysisGateValidatorInterface
 
         // 2. Check each company for analyzability
         $analyzableCount = 0;
-        foreach ($dataPack->companies as $ticker => $company) {
+        foreach ($context->companies as $ticker => $company) {
             $annualCount = count($company->financials->annualData);
             $hasMarketCap = $company->valuation->marketCap->getBaseValue() !== null;
 
@@ -97,11 +97,11 @@ final class AnalysisGateValidator implements AnalysisGateValidatorInterface
         }
 
         // 4. Data freshness (warning only)
-        $daysSinceCollection = (new DateTimeImmutable())->diff($dataPack->collectedAt)->days;
+        $daysSinceCollection = (new DateTimeImmutable())->diff($context->collectedAt)->days;
         if ($daysSinceCollection > self::STALE_DAYS) {
             $warnings[] = new GateWarning(
                 code: self::WARNING_STALE_DATA,
-                message: "Data is {$daysSinceCollection} days old (collected {$dataPack->collectedAt->format('Y-m-d')})",
+                message: "Data is {$daysSinceCollection} days old (collected {$context->collectedAt->format('Y-m-d')})",
             );
         }
 

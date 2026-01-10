@@ -2,23 +2,18 @@
 
 declare(strict_types=1);
 
-namespace app\transformers;
+namespace app\factories;
 
 use app\dto\AnnualFinancials;
-use app\dto\CollectionLog;
 use app\dto\CompanyData;
 use app\dto\datapoints\DataPointMoney;
 use app\dto\datapoints\DataPointNumber;
 use app\dto\datapoints\DataPointPercent;
 use app\dto\datapoints\DataPointRatio;
 use app\dto\FinancialsData;
-use app\dto\IndustryDataPack;
-use app\dto\MacroData;
 use app\dto\QuarterFinancials;
 use app\dto\QuartersData;
 use app\dto\ValuationData;
-use app\enums\CollectionStatus;
-use app\factories\DataPointFactory;
 use app\queries\AnnualFinancialQuery;
 use app\queries\CompanyQuery;
 use app\queries\QuarterlyFinancialQuery;
@@ -27,14 +22,12 @@ use app\queries\ValuationSnapshotQuery;
 use DateTimeImmutable;
 
 /**
- * Transforms dossier data into an IndustryDataPack for analysis.
- *
- * This bridges the gap between the database-backed dossier system
- * and the analysis pipeline which expects IndustryDataPack input.
+ * Builds CompanyData DTOs from dossier database records.
  */
-final class DossierToDataPackTransformer
+final class CompanyDataDossierFactory implements CompanyDataDossierFactoryInterface
 {
     private const DEFAULT_HISTORY_YEARS = 5;
+    private const MAX_QUARTERS = 8;
 
     public function __construct(
         private readonly CompanyQuery $companyQuery,
@@ -47,49 +40,16 @@ final class DossierToDataPackTransformer
     }
 
     /**
-     * Transform dossier data for an industry into an IndustryDataPack.
+     * Build a CompanyData DTO from a company row.
+     *
+     * @param array<string, mixed> $companyRow From CompanyQuery::findByIndustry()
      */
-    public function transform(int $industryId, string $industrySlug): IndustryDataPack
+    public function createFromDossier(array $companyRow): ?CompanyData
     {
-        $companyRows = $this->companyQuery->findByIndustry($industryId);
-        $now = new DateTimeImmutable();
+        $companyId = (int) $companyRow['id'];
+        $ticker = $companyRow['ticker'];
+        $name = $companyRow['name'] ?? $ticker;
 
-        $companies = [];
-        $companyStatuses = [];
-
-        foreach ($companyRows as $companyRow) {
-            $ticker = $companyRow['ticker'];
-            $companyId = (int) $companyRow['id'];
-
-            $companyData = $this->buildCompanyData($companyId, $ticker, $companyRow['name'] ?? $ticker);
-
-            if ($companyData !== null) {
-                $companies[$ticker] = $companyData;
-                $companyStatuses[$ticker] = CollectionStatus::Complete;
-            } else {
-                $companyStatuses[$ticker] = CollectionStatus::Failed;
-            }
-        }
-
-        return new IndustryDataPack(
-            industryId: $industrySlug,
-            datapackId: $industrySlug . '-' . $now->format('Ymd-His'),
-            collectedAt: $now,
-            macro: new MacroData(), // Empty macro for now
-            companies: $companies,
-            collectionLog: new CollectionLog(
-                startedAt: $now,
-                completedAt: $now,
-                durationSeconds: 0,
-                companyStatuses: $companyStatuses,
-                macroStatus: CollectionStatus::Complete,
-                totalAttempts: count($companyRows),
-            ),
-        );
-    }
-
-    private function buildCompanyData(int $companyId, string $ticker, string $name): ?CompanyData
-    {
         $company = $this->companyQuery->findById($companyId);
         if ($company === null) {
             return null;
@@ -106,7 +66,7 @@ final class DossierToDataPackTransformer
 
         return new CompanyData(
             ticker: $ticker,
-            name: $name ?: ($company['name'] ?? $ticker),
+            name: $name,
             listingExchange: $company['exchange'] ?? 'UNKNOWN',
             listingCurrency: $company['currency'] ?? 'USD',
             reportingCurrency: $company['currency'] ?? 'USD',
@@ -226,10 +186,9 @@ final class DossierToDataPackTransformer
         $quarters = $this->quarterlyQuery->findAllCurrentByCompany($companyId);
         $mapped = [];
         $count = 0;
-        $maxQuarters = 8; // Last 2 years of quarters
 
         foreach ($quarters as $row) {
-            if ($count >= $maxQuarters) {
+            if ($count >= self::MAX_QUARTERS) {
                 break;
             }
 

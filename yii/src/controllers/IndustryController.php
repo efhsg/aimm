@@ -24,10 +24,10 @@ use app\queries\AnalysisReportRepository;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
 use app\queries\CompanyQuery;
+use app\queries\IndustryAnalysisQuery;
 use app\queries\IndustryListQuery;
 use app\queries\IndustryMemberQuery;
 use app\queries\SectorQuery;
-use app\transformers\DossierToDataPackTransformer;
 use Yii;
 use yii\helpers\Json;
 use yii\web\Controller;
@@ -61,7 +61,7 @@ final class IndustryController extends Controller
         private readonly RemoveMemberInterface $removeMemberHandler,
         private readonly CollectIndustryInterface $collectHandler,
         private readonly AnalyzeReportInterface $analyzeHandler,
-        private readonly DossierToDataPackTransformer $dossierTransformer,
+        private readonly IndustryAnalysisQuery $analysisQuery,
         $config = []
     ) {
         parent::__construct($id, $module, $config);
@@ -422,17 +422,21 @@ final class IndustryController extends Controller
             throw new NotFoundHttpException('Industry not found.');
         }
 
-        // Build datapack from dossier data
-        $dataPack = $this->dossierTransformer->transform($industry->id, $industry->slug);
+        $policy = $industry->policyId !== null
+            ? $this->policyQuery->findById($industry->policyId)
+            : null;
+
+        // Build analysis context from dossier data
+        $context = $this->analysisQuery->getForAnalysis($industry->id, $industry->slug, $policy);
 
         // Check if we have any company data
-        if (empty($dataPack->companies)) {
+        if (empty($context->companies)) {
             Yii::$app->session->setFlash('error', 'No company data found. Run collection first.');
             return $this->redirect(['view', 'slug' => $slug]);
         }
 
         // Check minimum companies
-        if (count($dataPack->companies) < 2) {
+        if (count($context->companies) < 2) {
             Yii::$app->session->setFlash('error', 'At least 2 companies required for analysis.');
             return $this->redirect(['view', 'slug' => $slug]);
         }
@@ -442,7 +446,7 @@ final class IndustryController extends Controller
 
         // Run analysis
         $analysisRequest = new AnalyzeReportRequest(
-            $dataPack,
+            $context,
             $industry->slug,
             $industry->name,
             $thresholds

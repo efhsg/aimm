@@ -4,18 +4,16 @@ declare(strict_types=1);
 
 namespace tests\unit\validators;
 
+use app\dto\analysis\IndustryAnalysisContext;
 use app\dto\AnnualFinancials;
-use app\dto\CollectionLog;
 use app\dto\CompanyData;
 use app\dto\datapoints\DataPointMoney;
 use app\dto\datapoints\SourceLocator;
 use app\dto\FinancialsData;
-use app\dto\IndustryDataPack;
 use app\dto\MacroData;
 use app\dto\QuartersData;
 use app\dto\ValuationData;
 use app\enums\CollectionMethod;
-use app\enums\CollectionStatus;
 use app\enums\DataScale;
 use app\validators\AnalysisGateValidator;
 use Codeception\Test\Unit;
@@ -34,16 +32,16 @@ final class AnalysisGateValidatorTest extends Unit
         $this->validator = new AnalysisGateValidator();
     }
 
-    public function testPassesWithValidDatapack(): void
+    public function testPassesWithValidContext(): void
     {
-        $dataPack = $this->createDataPack(
+        $context = $this->createContext(
             companyCount: 3,
             annualYears: 2,
             marketCap: 3_000_000_000_000,
             collectedDaysAgo: 5
         );
 
-        $result = $this->validator->validate($dataPack);
+        $result = $this->validator->validate($context);
 
         $this->assertTrue($result->passed);
         $this->assertEmpty($result->errors);
@@ -51,13 +49,13 @@ final class AnalysisGateValidatorTest extends Unit
 
     public function testFailsWithInsufficientCompanies(): void
     {
-        $dataPack = $this->createDataPack(
+        $context = $this->createContext(
             companyCount: 1, // Only 1 company, need minimum 2
             annualYears: 2,
             marketCap: 3_000_000_000_000
         );
 
-        $result = $this->validator->validate($dataPack);
+        $result = $this->validator->validate($context);
 
         $this->assertFalse($result->passed);
         $this->assertTrue($result->hasErrorCode('INSUFFICIENT_COMPANIES'));
@@ -66,13 +64,13 @@ final class AnalysisGateValidatorTest extends Unit
     public function testFailsWithInsufficientAnalyzableCompanies(): void
     {
         // 2 companies but both have insufficient data
-        $dataPack = $this->createDataPack(
+        $context = $this->createContext(
             companyCount: 2,
             annualYears: 1, // Only 1 year, need 2
             marketCap: 3_000_000_000_000
         );
 
-        $result = $this->validator->validate($dataPack);
+        $result = $this->validator->validate($context);
 
         $this->assertFalse($result->passed);
         $this->assertTrue($result->hasErrorCode('NO_ANALYZABLE_COMPANIES'));
@@ -80,13 +78,13 @@ final class AnalysisGateValidatorTest extends Unit
 
     public function testFailsWhenNoCompaniesHaveMarketCap(): void
     {
-        $dataPack = $this->createDataPack(
+        $context = $this->createContext(
             companyCount: 3,
             annualYears: 2,
             marketCap: null // Missing market cap
         );
 
-        $result = $this->validator->validate($dataPack);
+        $result = $this->validator->validate($context);
 
         $this->assertFalse($result->passed);
         $this->assertTrue($result->hasErrorCode('NO_ANALYZABLE_COMPANIES'));
@@ -94,13 +92,13 @@ final class AnalysisGateValidatorTest extends Unit
 
     public function testWarnsOnLowCompanyCount(): void
     {
-        $dataPack = $this->createDataPack(
+        $context = $this->createContext(
             companyCount: 2, // Minimum but below recommended
             annualYears: 2,
             marketCap: 3_000_000_000_000
         );
 
-        $result = $this->validator->validate($dataPack);
+        $result = $this->validator->validate($context);
 
         $this->assertTrue($result->passed);
         $this->assertEmpty($result->errors);
@@ -110,14 +108,14 @@ final class AnalysisGateValidatorTest extends Unit
 
     public function testWarnsOnStaleData(): void
     {
-        $dataPack = $this->createDataPack(
+        $context = $this->createContext(
             companyCount: 5, // Above recommended
             annualYears: 2,
             marketCap: 3_000_000_000_000,
             collectedDaysAgo: 45 // Older than 30 days
         );
 
-        $result = $this->validator->validate($dataPack);
+        $result = $this->validator->validate($context);
 
         $this->assertTrue($result->passed);
         $this->assertEmpty($result->errors);
@@ -127,10 +125,10 @@ final class AnalysisGateValidatorTest extends Unit
 
     public function testWarnsWhenSomeCompaniesHaveInsufficientData(): void
     {
-        // Create a datapack where some companies have good data and some don't
-        $dataPack = $this->createMixedDataPack();
+        // Create a context where some companies have good data and some don't
+        $context = $this->createMixedContext();
 
-        $result = $this->validator->validate($dataPack);
+        $result = $this->validator->validate($context);
 
         $this->assertTrue($result->passed); // Still passes because 2+ are analyzable
         $hasInsufficientDataWarning = false;
@@ -143,12 +141,12 @@ final class AnalysisGateValidatorTest extends Unit
         $this->assertTrue($hasInsufficientDataWarning, 'Expected COMPANY_INSUFFICIENT_DATA warning');
     }
 
-    private function createDataPack(
+    private function createContext(
         int $companyCount,
         int $annualYears,
         ?float $marketCap,
         int $collectedDaysAgo = 0
-    ): IndustryDataPack {
+    ): IndustryAnalysisContext {
         $companies = [];
         $tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'];
 
@@ -159,24 +157,16 @@ final class AnalysisGateValidatorTest extends Unit
 
         $collectedAt = (new DateTimeImmutable())->modify("-{$collectedDaysAgo} days");
 
-        return new IndustryDataPack(
-            industryId: 'us-tech-giants',
-            datapackId: 'test-datapack-123',
+        return new IndustryAnalysisContext(
+            industryId: 1,
+            industrySlug: 'us-tech-giants',
             collectedAt: $collectedAt,
             macro: new MacroData(),
             companies: $companies,
-            collectionLog: new CollectionLog(
-                startedAt: $collectedAt,
-                completedAt: $collectedAt,
-                durationSeconds: 60,
-                companyStatuses: array_fill_keys(array_keys($companies), CollectionStatus::Complete),
-                macroStatus: CollectionStatus::Complete,
-                totalAttempts: count($companies),
-            ),
         );
     }
 
-    private function createMixedDataPack(): IndustryDataPack
+    private function createMixedContext(): IndustryAnalysisContext
     {
         $collectedAt = new DateTimeImmutable();
 
@@ -186,20 +176,12 @@ final class AnalysisGateValidatorTest extends Unit
             'GOOGL' => $this->createCompany('GOOGL', 1, 1_800_000_000_000), // Insufficient annual data
         ];
 
-        return new IndustryDataPack(
-            industryId: 'us-tech-giants',
-            datapackId: 'test-datapack-123',
+        return new IndustryAnalysisContext(
+            industryId: 1,
+            industrySlug: 'us-tech-giants',
             collectedAt: $collectedAt,
             macro: new MacroData(),
             companies: $companies,
-            collectionLog: new CollectionLog(
-                startedAt: $collectedAt,
-                completedAt: $collectedAt,
-                durationSeconds: 60,
-                companyStatuses: array_fill_keys(array_keys($companies), CollectionStatus::Complete),
-                macroStatus: CollectionStatus::Complete,
-                totalAttempts: count($companies),
-            ),
         );
     }
 

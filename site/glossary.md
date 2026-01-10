@@ -4,23 +4,28 @@ Key terms used throughout AIMM documentation.
 
 ## Pipeline Terms
 
-### Focal Company
+### Industry Set
 
-The company being analyzed (subject of the report). The rating, valuation gap, and analysis all center on this company.
+The companies assigned to an industry configuration. Analysis uses the full set to compute group averages and rankings.
 
-### Peers
+### Group Average
 
-Comparison companies in the same industry. Used to calculate peer averages for valuation gap analysis.
+Aggregate metrics calculated across the industry set. Used to measure valuation gaps.
 
-### DataPack
+### Company Dossier
 
-Collected raw data for an industry (Phase 1 output). Contains macro data and company data for all companies in the industry config.
+The persistent, database-backed record of a company's financial data.
 
-**Full name:** `IndustryDataPack`
+### Analysis Context
 
-### ReportDTO
+The in-memory context for industry analysis, built directly from the Company Dossier.
+The `IndustryAnalysisContext` DTO contains companies (as `CompanyData` objects),
+macro data, and metadata needed for the analysis phase. It replaces the older
+`IndustryDataPack` pattern.
 
-Analyzed data ready for rendering (Phase 2 output). Contains the focal company analysis, peer comparisons, rating, and all data needed for PDF generation.
+### RankedReportDTO
+
+Analyzed data ready for rendering (Phase 2 output). Contains ranked company analyses, group averages, and metadata used for PDF generation.
 
 ### Gate
 
@@ -33,7 +38,7 @@ A validation checkpoint between phases. Gates ensure data quality before proceed
 
 ### Valuation Gap
 
-Percentage difference between focal and peer average valuations. A positive gap indicates the focal company is "cheaper" than peers.
+Percentage difference between a company and the group average. A positive gap indicates the company is "cheaper" than the industry average.
 
 ### LTM
 

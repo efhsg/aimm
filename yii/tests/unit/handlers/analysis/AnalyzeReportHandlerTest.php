@@ -6,9 +6,9 @@ namespace tests\unit\handlers\analysis;
 
 use app\dto\analysis\AnalysisThresholds;
 use app\dto\analysis\AnalyzeReportRequest;
+use app\dto\analysis\IndustryAnalysisContext;
 use app\dto\analysis\RatingDeterminationResult;
 use app\dto\AnnualFinancials;
-use app\dto\CollectionLog;
 use app\dto\CompanyData;
 use app\dto\datapoints\DataPointMoney;
 use app\dto\datapoints\DataPointPercent;
@@ -17,7 +17,6 @@ use app\dto\datapoints\SourceLocator;
 use app\dto\FinancialsData;
 use app\dto\GateError;
 use app\dto\GateResult;
-use app\dto\IndustryDataPack;
 use app\dto\MacroData;
 use app\dto\QuartersData;
 use app\dto\report\CompanyAnalysis;
@@ -26,7 +25,6 @@ use app\dto\report\RiskBreakdown;
 use app\dto\report\ValuationGapSummary;
 use app\dto\ValuationData;
 use app\enums\CollectionMethod;
-use app\enums\CollectionStatus;
 use app\enums\DataScale;
 use app\enums\Fundamentals;
 use app\enums\GapDirection;
@@ -86,8 +84,8 @@ final class AnalyzeReportHandlerTest extends Unit
 
     public function testReturnsFailureWhenGateFails(): void
     {
-        $dataPack = $this->createDataPack();
-        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants');
+        $context = $this->createContext();
+        $request = new AnalyzeReportRequest($context, 'us-tech-giants', 'US Tech Giants');
 
         $gateResult = new GateResult(
             passed: false,
@@ -107,8 +105,8 @@ final class AnalyzeReportHandlerTest extends Unit
 
     public function testBuildsCompleteReportOnSuccess(): void
     {
-        $dataPack = $this->createDataPack();
-        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants');
+        $context = $this->createContext();
+        $request = new AnalyzeReportRequest($context, 'us-tech-giants', 'US Tech Giants');
 
         $this->setupSuccessMocks();
 
@@ -121,8 +119,8 @@ final class AnalyzeReportHandlerTest extends Unit
 
     public function testReportContainsAllCompanies(): void
     {
-        $dataPack = $this->createDataPack();
-        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants');
+        $context = $this->createContext();
+        $request = new AnalyzeReportRequest($context, 'us-tech-giants', 'US Tech Giants');
 
         $this->setupSuccessMocks();
 
@@ -142,9 +140,9 @@ final class AnalyzeReportHandlerTest extends Unit
 
     public function testReportUsesCustomThresholds(): void
     {
-        $dataPack = $this->createDataPack();
+        $context = $this->createContext();
         $thresholds = new AnalysisThresholds(buyGapThreshold: 25.0);
-        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants', $thresholds);
+        $request = new AnalyzeReportRequest($context, 'us-tech-giants', 'US Tech Giants', $thresholds);
 
         $this->setupSuccessMocks();
 
@@ -155,8 +153,8 @@ final class AnalyzeReportHandlerTest extends Unit
 
     public function testReturnsErrorWhenNoCompaniesHaveSufficientData(): void
     {
-        $dataPack = $this->createDataPackWithInsufficientData();
-        $request = new AnalyzeReportRequest($dataPack, 'us-tech-giants', 'US Tech Giants');
+        $context = $this->createContextWithInsufficientData();
+        $request = new AnalyzeReportRequest($context, 'us-tech-giants', 'US Tech Giants');
 
         $gateResult = new GateResult(passed: true, errors: [], warnings: []);
         $this->gateValidator->method('validate')->willReturn($gateResult);
@@ -224,7 +222,7 @@ final class AnalyzeReportHandlerTest extends Unit
             });
     }
 
-    private function createDataPack(): IndustryDataPack
+    private function createContext(): IndustryAnalysisContext
     {
         $companies = [
             'AAPL' => $this->createCompany('AAPL', 'Apple Inc', 3_000_000_000_000),
@@ -234,24 +232,16 @@ final class AnalyzeReportHandlerTest extends Unit
 
         $collectedAt = new DateTimeImmutable();
 
-        return new IndustryDataPack(
-            industryId: 'us-tech-giants',
-            datapackId: 'test-datapack-123',
+        return new IndustryAnalysisContext(
+            industryId: 1,
+            industrySlug: 'us-tech-giants',
             collectedAt: $collectedAt,
             macro: new MacroData(),
             companies: $companies,
-            collectionLog: new CollectionLog(
-                startedAt: $collectedAt,
-                completedAt: $collectedAt,
-                durationSeconds: 60,
-                companyStatuses: array_fill_keys(array_keys($companies), CollectionStatus::Complete),
-                macroStatus: CollectionStatus::Complete,
-                totalAttempts: count($companies),
-            ),
         );
     }
 
-    private function createDataPackWithInsufficientData(): IndustryDataPack
+    private function createContextWithInsufficientData(): IndustryAnalysisContext
     {
         $companies = [
             'AAPL' => $this->createCompanyWithInsufficientData('AAPL', 'Apple Inc'),
@@ -259,20 +249,12 @@ final class AnalyzeReportHandlerTest extends Unit
 
         $collectedAt = new DateTimeImmutable();
 
-        return new IndustryDataPack(
-            industryId: 'us-tech-giants',
-            datapackId: 'test-datapack-123',
+        return new IndustryAnalysisContext(
+            industryId: 1,
+            industrySlug: 'us-tech-giants',
             collectedAt: $collectedAt,
             macro: new MacroData(),
             companies: $companies,
-            collectionLog: new CollectionLog(
-                startedAt: $collectedAt,
-                completedAt: $collectedAt,
-                durationSeconds: 60,
-                companyStatuses: array_fill_keys(array_keys($companies), CollectionStatus::Complete),
-                macroStatus: CollectionStatus::Complete,
-                totalAttempts: count($companies),
-            ),
         );
     }
 

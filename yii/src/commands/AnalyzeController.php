@@ -6,10 +6,11 @@ namespace app\commands;
 
 use app\dto\analysis\AnalysisThresholds;
 use app\dto\analysis\AnalyzeReportRequest;
-use app\factories\IndustryDataPackFactory;
 use app\handlers\analysis\AnalyzeReportInterface;
+use app\queries\AnalysisReportRepository;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
+use app\queries\IndustryAnalysisQuery;
 use app\queries\IndustryQuery;
 use Throwable;
 use yii\base\Module;
@@ -29,6 +30,7 @@ final class AnalyzeController extends Controller
      * Output file path for the report JSON.
      */
     public ?string $output = null;
+    public bool $noSave = false;
 
     public function __construct(
         string $id,
@@ -37,6 +39,8 @@ final class AnalyzeController extends Controller
         private CollectionRunRepository $collectionRunRepository,
         private IndustryQuery $industryQuery,
         private CollectionPolicyQuery $collectionPolicyQuery,
+        private AnalysisReportRepository $reportRepository,
+        private IndustryAnalysisQuery $analysisQuery,
         private Logger $logger,
         array $config = []
     ) {
@@ -48,7 +52,7 @@ final class AnalyzeController extends Controller
      */
     public function options($actionID): array
     {
-        return array_merge(parent::options($actionID), ['output']);
+        return array_merge(parent::options($actionID), ['output', 'noSave']);
     }
 
     /**
@@ -67,35 +71,25 @@ final class AnalyzeController extends Controller
             return ExitCode::DATAERR;
         }
 
-        // Get latest successful datapack
-        $collectionRun = $this->collectionRunRepository->getLatestSuccessful($slug);
+        // Get latest successful collection run
+        $collectionRun = $this->collectionRunRepository->getLatestSuccessful((int) $group['id']);
         if ($collectionRun === null) {
             $this->stderr("No successful collection found for: {$slug}\n");
             return ExitCode::DATAERR;
         }
 
-        $filePath = $collectionRun['file_path'];
-        if (!file_exists($filePath)) {
-            $this->stderr("Datapack file not found: {$filePath}\n");
-            return ExitCode::DATAERR;
-        }
-
         try {
-            // Load and parse datapack
-            $datapackJson = file_get_contents($filePath);
-            if ($datapackJson === false) {
-                throw new \RuntimeException("Failed to read datapack file: {$filePath}");
-            }
+            $policy = $this->resolvePolicy($group);
 
-            $datapackArray = Json::decode($datapackJson);
-            $dataPack = IndustryDataPackFactory::fromArray($datapackArray);
+            // Build analysis context from dossier data
+            $context = $this->analysisQuery->getForAnalysis((int) $group['id'], $slug, $policy);
 
             // Load thresholds from policy if available
-            $thresholds = $this->loadThresholds($group);
+            $thresholds = $this->loadThresholds($policy);
 
             // Run analysis for all companies
             $industryName = $group['name'] ?? $slug;
-            $request = new AnalyzeReportRequest($dataPack, $slug, $industryName, $thresholds);
+            $request = new AnalyzeReportRequest($context, $slug, $industryName, $thresholds);
             $result = $this->analyzer->handle($request);
 
             if (!$result->success) {
@@ -108,6 +102,10 @@ final class AnalyzeController extends Controller
                 }
 
                 return ExitCode::DATAERR;
+            }
+
+            if (!$this->noSave) {
+                $this->reportRepository->saveRanked((int) $group['id'], $result->report);
             }
 
             // Output report
@@ -155,22 +153,51 @@ final class AnalyzeController extends Controller
     /**
      * Load analysis thresholds from policy if available.
      *
-     * @param array<string, mixed> $group
+     * @param array<string, mixed>|null $policy
      */
-    private function loadThresholds(array $group): AnalysisThresholds
+    private function loadThresholds(?array $policy): AnalysisThresholds
     {
-        $policyId = $group['collection_policy_id'] ?? null;
-        if ($policyId === null) {
+        if ($policy === null) {
             return new AnalysisThresholds();
         }
 
-        $thresholdsJson = $this->collectionPolicyQuery->findAnalysisThresholds((int) $policyId);
-        if ($thresholdsJson === null) {
+        $policyData = $this->decodeJson($policy['analysis_thresholds'] ?? null);
+        if (!is_array($policyData)) {
             return new AnalysisThresholds();
         }
-
-        $policyData = Json::decode($thresholdsJson);
 
         return AnalysisThresholds::fromPolicy($policyData);
+    }
+
+    /**
+     * @param array<string, mixed> $group
+     * @return array<string, mixed>|null
+     */
+    private function resolvePolicy(array $group): ?array
+    {
+        $policyId = $group['policy_id'] ?? $group['collection_policy_id'] ?? null;
+        if ($policyId === null) {
+            return null;
+        }
+
+        return $this->collectionPolicyQuery->findById((int) $policyId);
+    }
+
+    private function decodeJson(mixed $value): mixed
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            return json_last_error() === JSON_ERROR_NONE ? $decoded : null;
+        }
+
+        return null;
     }
 }
