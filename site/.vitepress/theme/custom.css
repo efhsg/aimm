@@ -73,6 +73,11 @@
 
   /* Focus ring for accessibility */
   --vp-focus-ring: 0 0 0 3px rgba(26, 74, 85, 0.4);
+
+  /* Header + sidebar alignment */
+  --vp-nav-bg-color: var(--vp-c-bg-soft);
+  --vp-sidebar-bg-color: var(--vp-c-bg-soft);
+  --vp-nav-logo-height: 28px;
 }
 
 /* ============================================
@@ -126,6 +131,61 @@
 /* Ensure theme toggle always visible on smaller screens */
 .VPNavBarAppearance {
   display: flex !important;
+}
+
+.docs-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--vp-c-text-1);
+}
+
+.docs-brand__logo {
+  width: 32px;
+  height: 28px;
+  display: block;
+}
+
+.docs-brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.docs-brand__name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  color: var(--vp-c-brand-1);
+}
+
+.docs-brand__tagline {
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+  font-weight: 600;
+}
+
+@media (min-width: 960px) {
+  .VPNavBar .container,
+  .VPNavBarTitle,
+  .VPNavBarTitle .title,
+  .VPNavBarMenu {
+    display: flex;
+    align-items: center;
+  }
+
+  .VPNavBarTitle .title {
+    gap: 8px;
+    padding: 0;
+  }
+
+  .VPNavBarTitle .logo {
+    display: block;
+    background: transparent;
+  }
 }
 
 /* Sidebar */

@@ -6,6 +6,7 @@ export default defineConfig({
   description: 'Equity intelligence pipeline for smarter investment decisions',
 
   head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
     ['link', {
@@ -15,7 +16,7 @@ export default defineConfig({
   ],
 
   themeConfig: {
-    logo: '/logo.svg',
+    siteTitle: false,
     nav: [
       { text: 'Overview', link: '/' },
       { text: 'Setup', link: '/setup' },
