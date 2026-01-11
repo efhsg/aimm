@@ -14,7 +14,6 @@ use app\dto\industry\UpdateIndustryRequest;
 use app\filters\AdminAuthFilter;
 use app\handlers\analysis\AnalyzeReportInterface;
 use app\handlers\industry\AddMembersInterface;
-use app\handlers\industry\CollectIndustryInterface;
 use app\handlers\industry\CreateIndustryInterface;
 use app\handlers\industry\RemoveMemberInterface;
 use app\handlers\industry\ToggleIndustryInterface;
@@ -60,7 +59,6 @@ final class IndustryController extends Controller
         private readonly ToggleIndustryInterface $toggleHandler,
         private readonly AddMembersInterface $addMembersHandler,
         private readonly RemoveMemberInterface $removeMemberHandler,
-        private readonly CollectIndustryInterface $collectHandler,
         private readonly AnalyzeReportInterface $analyzeHandler,
         private readonly IndustryAnalysisQuery $analysisQuery,
         $config = []
@@ -398,10 +396,12 @@ final class IndustryController extends Controller
 
         // 1. Create CollectionRun
         $datapackId = Uuid::uuid4()->toString();
+        $companyCount = $this->memberQuery->countByIndustry($industry->id);
         $run = new CollectionRun();
         $run->industry_id = $industry->id;
         $run->datapack_id = $datapackId;
         $run->status = CollectionRun::STATUS_PENDING;
+        $run->companies_total = $companyCount;
         $run->save(false);
 
         // 2. Launch background process
