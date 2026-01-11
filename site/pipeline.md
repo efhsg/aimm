@@ -28,24 +28,18 @@ The AIMM pipeline consists of three sequential phases, each with validation gate
 - Macro collection status (fail on `failed`, warn on `partial`)
 - Missing configured companies (warn)
 
-```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Macro     │    │  Company 1  │    │  Company N  │
-│  Collector  │    │  Collector  │    │  Collector  │
-└──────┬──────┘    └──────┬──────┘    └──────┬──────┘
-       │                  │                  │
-       └──────────────────┴──────────────────┘
-                          │
-                          ▼
-               ┌─────────────────────┐
-               │   Company Dossier   │
-               │     (Database)      │
-               └──────────┬──────────┘
-                          │
-                          ▼
-               ┌─────────────────────┐
-               │  COLLECTION GATE    │
-               └─────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Collectors
+        MC[Macro Collector]
+        C1[Company 1 Collector]
+        CN[Company N Collector]
+    end
+
+    MC --> CD[(Company Dossier<br/>Database)]
+    C1 --> CD
+    CN --> CD
+    CD --> CG[COLLECTION GATE]
 ```
 
 ## Phase 2: Analyze
@@ -77,34 +71,16 @@ The AIMM pipeline consists of three sequential phases, each with validation gate
 - At least 2 companies with >= 2 years of annual data and a market cap
 - Data freshness warning when data is older than 30 days
 
-```
-┌─────────────────────┐
-│ IndustryAnalysisQuery │
-│ (builds context)      │
-└──────────┬────────────┘
-           │
-           ▼
-┌─────────────────────┐
-│ IndustryAnalysisContext │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│    Gap      │  │   Rating    │  │   Report    │
-│ Calculator  │  │ Determiner  │  │   Builder   │
-└──────┬──────┘  └──────┬──────┘  └──────┬──────┘
-       │                │                │
-       └────────────────┴────────────────┘
-                        │
-                        ▼
-             ┌─────────────────────┐
-             │  RankedReportDTO    │
-             └──────────┬──────────┘
-                        │
-                        ▼
-             ┌─────────────────────┐
-             │   ANALYSIS GATE     │
-             └─────────────────────┘
+```mermaid
+flowchart TB
+    IAQ[IndustryAnalysisQuery<br/>builds context] --> IAC[IndustryAnalysisContext]
+    IAC --> GC[Gap Calculator]
+    IAC --> RD[Rating Determiner]
+    IAC --> RB[Report Builder]
+    GC --> RR[RankedReportDTO]
+    RD --> RR
+    RB --> RR
+    RR --> AG[ANALYSIS GATE]
 ```
 
 ## Phase 3: Render (PDF)
@@ -126,56 +102,38 @@ The AIMM pipeline consists of three sequential phases, each with validation gate
 4.  **Rendering**: Gotenberg converts the HTML bundle to PDF.
 5.  **Completion**: PDF is stored, and the job is marked as complete.
 
-```
-┌─────────────────┐      ┌─────────────┐
-│  pdf_job table  │ ◄─── │  Scheduler  │
-└───────┬─────────┘      └─────────────┘
-        │
-        ▼
-┌─────────────────────┐
-│ PdfGenerationHandler│
-│ (Job Processing)    │
-└─────────┬───────────┘
-          │
-          ▼
-  ┌─────────────────┐
-  │ HTML Generation │
-  └───────┬─────────┘
-          │
-          ▼
-  ┌─────────────────┐       ┌─────────────┐
-  │ Gotenberg       │ ◄──── │ HTML/Assets │
-  │ (Chromium)      │       └─────────────┘
-  └───────┬─────────┘
-          │
-          ▼
-  ┌─────────────────┐
-  │    Storage      │
-  │  (report.pdf)   │
-  └─────────────────┘
+```mermaid
+flowchart TB
+    S[Scheduler] --> PJ[(pdf_job table)]
+    PJ --> PGH[PdfGenerationHandler<br/>Job Processing]
+    PGH --> HG[HTML Generation]
+    HG --> GOT[Gotenberg<br/>Chromium]
+    HA[HTML/Assets] --> GOT
+    GOT --> ST[(Storage<br/>report.pdf)]
 ```
 
 ## Full Pipeline Diagram
 
-```
-PHASE 1: COLLECT
-────────────────
-DB Config ──► Collectors ──► Company Dossier (DB) ──► Collection Gate
-                                                            │
-                                                      PASS ─┴─ FAIL
-                                                       │
-                                                       ▼
-PHASE 2: ANALYZE
-────────────────
-Dossier ──► IndustryAnalysisQuery ──► IndustryAnalysisContext ──► Analysis
-                                                                      │
-                                                                      ▼
-                                                         RankedReportDTO ──► Analysis Gate
-                                                                                    │
-                                                                              PASS ─┴─ FAIL
-                                                                               │
-                                                                               ▼
-PHASE 3: RENDER (Async)
-───────────────────────
-Report ID ──► PdfJob Queue ──► PdfGenerationHandler ──► Gotenberg ──► PDF
+```mermaid
+flowchart TB
+    subgraph Phase1[PHASE 1: COLLECT]
+        DBC[DB Config] --> COL[Collectors] --> DOS[(Company Dossier)]
+    end
+
+    DOS --> CG{Collection Gate}
+    CG -->|PASS| Phase2
+    CG -.->|FAIL| STOP1[Stop]
+
+    subgraph Phase2[PHASE 2: ANALYZE]
+        D2[Dossier] --> IAQ[IndustryAnalysisQuery] --> IAC[IndustryAnalysisContext]
+        IAC --> RR[RankedReportDTO]
+    end
+
+    RR --> AG{Analysis Gate}
+    AG -->|PASS| Phase3
+    AG -.->|FAIL| STOP2[Stop]
+
+    subgraph Phase3[PHASE 3: RENDER]
+        RID[Report ID] --> PQ[PdfJob Queue] --> PGH[PdfGenerationHandler] --> GOT[Gotenberg] --> PDF[PDF]
+    end
 ```

@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   base: '/docs/',
   title: 'AIMM',
   description: 'Equity intelligence pipeline for smarter investment decisions',
@@ -81,4 +82,4 @@ export default defineConfig({
       provider: 'local'
     }
   }
-})
+}))

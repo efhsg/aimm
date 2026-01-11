@@ -32,29 +32,11 @@ The Admin UI manages these core entities:
 
 ## How It Maps to the Pipeline
 
-```
-┌─────────────────────┐
-│  Collection Policy  │
-│  (requirements)     │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│     Industry        │
-│  (companies + meta) │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   Collection Run    │
-│  (execution)        │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   Dossier + Reports │
-│  (DB + PDFs)        │
-└─────────────────────┘
+```mermaid
+flowchart TB
+    CP[Collection Policy<br/>requirements] --> IND[Industry<br/>companies + meta]
+    IND --> CR[Collection Run<br/>execution]
+    CR --> DR[(Dossier + Reports<br/>DB + PDFs)]
 ```
 
 ### Relationship Summary
