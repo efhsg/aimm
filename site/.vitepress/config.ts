@@ -39,7 +39,8 @@ export default defineConfig({
           { text: 'Validation Gates', link: '/validation-gates' },
           { text: 'Rating Logic', link: '/rating-logic' },
           { text: 'Outputs', link: '/outputs' },
-          { text: 'Directory Structure', link: '/directory-structure' }
+          { text: 'Directory Structure', link: '/directory-structure' },
+          { text: 'Squash Migrations', link: '/squash-migrations' }
         ]
       },
       {

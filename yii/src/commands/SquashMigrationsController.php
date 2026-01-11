@@ -24,11 +24,22 @@ final class SquashMigrationsController extends Controller
 
     public bool $archive = false;
 
+    public bool $withSeed = false;
+
+    /**
+     * Tables to include in seed migration (reference data required for FK constraints).
+     *
+     * @var list<string>
+     */
+    public array $seedTables = ['data_source'];
+
     public function options($actionID): array
     {
         return array_merge(parent::options($actionID), [
             'migrationPath',
             'archive',
+            'withSeed',
+            'seedTables',
         ]);
     }
 
@@ -37,6 +48,7 @@ final class SquashMigrationsController extends Controller
         return array_merge(parent::optionAliases(), [
             'a' => 'archive',
             'p' => 'migrationPath',
+            's' => 'withSeed',
         ]);
     }
 
@@ -92,6 +104,18 @@ final class SquashMigrationsController extends Controller
 
         $this->stdout("Created squashed migration: {$filename}\n", Console::FG_GREEN);
 
+        // Generate seed migration if requested
+        $seedFilename = null;
+        if ($this->withSeed) {
+            $seedResult = $this->generateSeedMigration($db, $migrationPath);
+            if ($seedResult === null) {
+                $this->stderr("Failed to generate seed migration.\n", Console::FG_RED);
+                return ExitCode::UNSPECIFIED_ERROR;
+            }
+            $seedFilename = $seedResult;
+            $this->stdout("Created seed migration: {$seedFilename}\n", Console::FG_GREEN);
+        }
+
         if ($this->archive) {
             $archivePath = $migrationPath . '/archived';
             if (!is_dir($archivePath) && !mkdir($archivePath, 0755, true)) {
@@ -112,9 +136,14 @@ final class SquashMigrationsController extends Controller
 
         $this->stdout("\nNext steps:\n", Console::FG_CYAN);
         $this->stdout("1. Review the generated migration: {$filename}\n");
-        $this->stdout("2. Reset the migration table: TRUNCATE TABLE migration;\n");
-        $this->stdout("3. Insert the squashed migration:\n");
-        $this->stdout("   INSERT INTO migration (version, apply_time) VALUES ('{$className}', UNIX_TIMESTAMP());\n");
+        if ($seedFilename !== null) {
+            $this->stdout("2. Review the seed migration: {$seedFilename}\n");
+            $this->stdout("3. Run: php yii migrate/fresh --interactive=0\n");
+        } else {
+            $this->stdout("2. Reset the migration table: TRUNCATE TABLE migration;\n");
+            $this->stdout("3. Insert the squashed migration:\n");
+            $this->stdout("   INSERT INTO migration (version, apply_time) VALUES ('{$className}', UNIX_TIMESTAMP());\n");
+        }
 
         return ExitCode::OK;
     }
@@ -266,14 +295,47 @@ final class SquashMigrationsController extends Controller
     private function getTableIndexes(Connection $db, string $tableName): array
     {
         $indexes = [];
+        $tableSchema = $db->getTableSchema($tableName);
+
+        if ($tableSchema === null) {
+            return [];
+        }
 
         try {
-            $tableIndexes = $db->schema->findUniqueIndexes($db->getTableSchema($tableName));
-            foreach ($tableIndexes as $indexName => $columns) {
-                $indexes[$indexName] = [
-                    'columns' => $columns,
-                    'unique' => true,
-                ];
+            // Query SHOW INDEX to get all indexes including non-unique ones
+            $sql = 'SHOW INDEX FROM ' . $db->quoteTableName($tableName);
+            $rows = $db->createCommand($sql)->queryAll();
+
+            $indexData = [];
+            foreach ($rows as $row) {
+                $indexName = $row['Key_name'];
+                $columnName = $row['Column_name'];
+                $nonUnique = (int) $row['Non_unique'];
+
+                // Skip PRIMARY key - handled separately
+                if ($indexName === 'PRIMARY') {
+                    continue;
+                }
+
+                if (!isset($indexData[$indexName])) {
+                    $indexData[$indexName] = [
+                        'columns' => [],
+                        'unique' => $nonUnique === 0,
+                    ];
+                }
+
+                $indexData[$indexName]['columns'][] = $columnName;
+            }
+
+            // Filter out indexes that are just foreign key indexes (same name as FK)
+            // These are auto-created by MySQL and will be recreated with the FK
+            $fkNames = array_keys($tableSchema->foreignKeys);
+            foreach ($indexData as $indexName => $index) {
+                // Keep unique indexes and named indexes that aren't just FK indexes
+                $isFkIndex = in_array($indexName, $fkNames, true);
+                if (!$isFkIndex || $index['unique']) {
+                    $indexes[$indexName] = $index;
+                }
             }
         } catch (\Throwable $e) {
             Yii::warning("Could not retrieve indexes for {$tableName}: " . $e->getMessage());
@@ -294,6 +356,9 @@ final class SquashMigrationsController extends Controller
             return [];
         }
 
+        // Get FK actions from information_schema
+        $fkActions = $this->getForeignKeyActions($db, $tableName);
+
         foreach ($tableSchema->foreignKeys as $fkName => $fk) {
             $refTable = array_shift($fk);
             $columns = [];
@@ -308,12 +373,48 @@ final class SquashMigrationsController extends Controller
                 'columns' => $columns,
                 'refTable' => $this->stripPrefix($db, $refTable),
                 'refColumns' => $refColumns,
-                'onDelete' => 'CASCADE',
-                'onUpdate' => 'CASCADE',
+                'onDelete' => $fkActions[$fkName]['onDelete'] ?? 'CASCADE',
+                'onUpdate' => $fkActions[$fkName]['onUpdate'] ?? 'CASCADE',
             ];
         }
 
         return $foreignKeys;
+    }
+
+    /**
+     * Get ON DELETE and ON UPDATE actions for foreign keys from information_schema.
+     *
+     * @return array<string, array{onDelete: string, onUpdate: string}>
+     */
+    private function getForeignKeyActions(Connection $db, string $tableName): array
+    {
+        $actions = [];
+        $strippedName = $this->stripPrefix($db, $tableName);
+
+        try {
+            $sql = <<<SQL
+                SELECT
+                    CONSTRAINT_NAME,
+                    DELETE_RULE,
+                    UPDATE_RULE
+                FROM information_schema.REFERENTIAL_CONSTRAINTS
+                WHERE CONSTRAINT_SCHEMA = DATABASE()
+                  AND TABLE_NAME = :tableName
+            SQL;
+
+            $rows = $db->createCommand($sql, [':tableName' => $strippedName])->queryAll();
+
+            foreach ($rows as $row) {
+                $actions[$row['CONSTRAINT_NAME']] = [
+                    'onDelete' => $row['DELETE_RULE'],
+                    'onUpdate' => $row['UPDATE_RULE'],
+                ];
+            }
+        } catch (\Throwable $e) {
+            Yii::warning("Could not retrieve FK actions for {$tableName}: " . $e->getMessage());
+        }
+
+        return $actions;
     }
 
     /**
@@ -339,14 +440,12 @@ use yii\db\Expression;
 use yii\db\Migration;
 
 /**
- * Squashed migration combining all previous migrations.
+ * Database schema - structure only, no seed data.
  *
- * This migration was auto-generated by squash-migrations command.
- *
- * Squashed migrations:
+ * Auto-generated by squash-migrations command. Consolidates:
  *   - {$archivedList}
  */
-class {$className} extends Migration
+final class {$className} extends Migration
 {
     public function safeUp(): void
     {
@@ -378,15 +477,20 @@ PHP;
                 $lines[] = "            '{$columnName}' => {$definition},";
             }
 
+            // Add explicit PRIMARY KEY for non-auto-increment primary keys
+            if (!empty($table['primaryKey']) && !$this->hasAutoIncrementPrimaryKey($table)) {
+                $pkColumns = implode(']], [[', $table['primaryKey']);
+                $lines[] = "            'PRIMARY KEY ([[{$pkColumns}]])',";
+            }
+
             $lines[] = "        ]);";
             $lines[] = "";
 
-            // Add indexes
+            // Add indexes (both unique and non-unique)
             foreach ($table['indexes'] as $indexName => $index) {
-                if ($index['unique']) {
-                    $columns = "'" . implode("', '", $index['columns']) . "'";
-                    $lines[] = "        \$this->createIndex('{$indexName}', '{{%{$tableName}}}', [{$columns}], true);";
-                }
+                $columns = "'" . implode("', '", $index['columns']) . "'";
+                $unique = $index['unique'] ? 'true' : 'false';
+                $lines[] = "        \$this->createIndex('{$indexName}', '{{%{$tableName}}}', [{$columns}], {$unique});";
             }
 
             if (!empty($table['indexes'])) {
@@ -399,14 +503,16 @@ PHP;
             foreach ($table['foreignKeys'] as $fkName => $fk) {
                 $columns = "'" . implode("', '", $fk['columns']) . "'";
                 $refColumns = "'" . implode("', '", $fk['refColumns']) . "'";
+                $onDelete = $fk['onDelete'] ?? 'CASCADE';
+                $onUpdate = $fk['onUpdate'] ?? 'CASCADE';
                 $lines[] = "        \$this->addForeignKey(";
                 $lines[] = "            '{$fkName}',";
                 $lines[] = "            '{{%{$tableName}}}',";
                 $lines[] = "            [{$columns}],";
                 $lines[] = "            '{{%{$fk['refTable']}}}',";
                 $lines[] = "            [{$refColumns}],";
-                $lines[] = "            'CASCADE',";
-                $lines[] = "            'CASCADE'";
+                $lines[] = "            '{$onDelete}',";
+                $lines[] = "            '{$onUpdate}'";
                 $lines[] = "        );";
                 $lines[] = "";
             }
@@ -484,5 +590,210 @@ PHP;
         }
 
         return $sorted;
+    }
+
+    /**
+     * Check if a table has an auto-increment primary key.
+     *
+     * @param array{columns: array<string, string>, primaryKey: list<string>, indexes: array, foreignKeys: array} $table
+     */
+    private function hasAutoIncrementPrimaryKey(array $table): bool
+    {
+        foreach ($table['columns'] as $definition) {
+            if (str_contains($definition, 'primaryKey()') || str_contains($definition, 'bigPrimaryKey()')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Generate a seed migration for reference data.
+     *
+     * @return string|null The filename if successful, null on failure
+     */
+    private function generateSeedMigration(Connection $db, string $migrationPath): ?string
+    {
+        $seedData = $this->collectSeedData($db);
+        if (empty($seedData)) {
+            $this->stdout("No seed data found in tables: " . implode(', ', $this->seedTables) . "\n", Console::FG_YELLOW);
+            return null;
+        }
+
+        $timestamp = date('ymd_His', strtotime('+1 second'));
+        $className = "m{$timestamp}_initial_seed";
+        $filename = "{$className}.php";
+        $filepath = $migrationPath . '/' . $filename;
+
+        $content = $this->generateSeedMigrationContent($className, $seedData);
+
+        if (file_put_contents($filepath, $content) === false) {
+            return null;
+        }
+
+        return $filename;
+    }
+
+    /**
+     * Collect seed data from configured tables.
+     *
+     * @return array<string, array{columns: list<string>, rows: list<list<mixed>>}>
+     */
+    private function collectSeedData(Connection $db): array
+    {
+        $seedData = [];
+
+        foreach ($this->seedTables as $tableName) {
+            $fullTableName = $db->tablePrefix . $tableName;
+            $tableSchema = $db->getTableSchema($fullTableName);
+
+            if ($tableSchema === null) {
+                $this->stderr("Seed table not found: {$tableName}\n", Console::FG_YELLOW);
+                continue;
+            }
+
+            // Get column names (exclude auto-generated timestamps)
+            $excludeColumns = ['created_at', 'updated_at'];
+            $columns = array_filter(
+                array_keys($tableSchema->columns),
+                fn (string $col) => !in_array($col, $excludeColumns, true)
+            );
+            $columns = array_values($columns);
+
+            // Fetch all rows
+            $rows = $db->createCommand("SELECT * FROM {$db->quoteTableName($fullTableName)}")->queryAll();
+
+            if (empty($rows)) {
+                continue;
+            }
+
+            // Extract only the columns we want
+            $seedRows = [];
+            foreach ($rows as $row) {
+                $seedRow = [];
+                foreach ($columns as $col) {
+                    $seedRow[] = $row[$col] ?? null;
+                }
+                $seedRows[] = $seedRow;
+            }
+
+            $seedData[$tableName] = [
+                'columns' => $columns,
+                'rows' => $seedRows,
+            ];
+        }
+
+        return $seedData;
+    }
+
+    /**
+     * Generate the seed migration file content.
+     *
+     * @param array<string, array{columns: list<string>, rows: list<list<mixed>>}> $seedData
+     */
+    private function generateSeedMigrationContent(string $className, array $seedData): string
+    {
+        $upCode = $this->generateSeedUpCode($seedData);
+        $downCode = $this->generateSeedDownCode($seedData);
+        $tableList = implode(', ', array_keys($seedData));
+
+        return <<<PHP
+<?php
+
+declare(strict_types=1);
+
+use yii\db\Migration;
+
+/**
+ * Seeds initial reference data required to run the application.
+ *
+ * This migration populates: {$tableList}
+ *
+ * Auto-generated by squash-migrations --with-seed command.
+ */
+final class {$className} extends Migration
+{
+    public function safeUp(): void
+    {
+{$upCode}
+    }
+
+    public function safeDown(): void
+    {
+{$downCode}
+    }
+}
+
+PHP;
+    }
+
+    /**
+     * Generate the safeUp code for seed migration.
+     *
+     * @param array<string, array{columns: list<string>, rows: list<list<mixed>>}> $seedData
+     */
+    private function generateSeedUpCode(array $seedData): string
+    {
+        $lines = [];
+
+        foreach ($seedData as $tableName => $data) {
+            $columnsStr = "['" . implode("', '", $data['columns']) . "']";
+            $lines[] = "        \$this->batchInsert('{{%{$tableName}}}', {$columnsStr}, [";
+
+            foreach ($data['rows'] as $row) {
+                $values = array_map(fn ($v) => $this->formatSeedValue($v), $row);
+                $lines[] = "            [" . implode(', ', $values) . "],";
+            }
+
+            $lines[] = "        ]);";
+            $lines[] = "";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Generate the safeDown code for seed migration.
+     *
+     * @param array<string, array{columns: list<string>, rows: list<list<mixed>>}> $seedData
+     */
+    private function generateSeedDownCode(array $seedData): string
+    {
+        $lines = [];
+
+        foreach ($seedData as $tableName => $data) {
+            // Find the primary key column (assume first column is PK for simplicity)
+            $pkColumn = $data['columns'][0];
+            $pkValues = array_map(fn ($row) => $this->formatSeedValue($row[0]), $data['rows']);
+
+            $lines[] = "        \$this->delete('{{%{$tableName}}}', [";
+            $lines[] = "            '{$pkColumn}' => [" . implode(', ', $pkValues) . "],";
+            $lines[] = "        ]);";
+            $lines[] = "";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Format a value for use in seed migration code.
+     */
+    private function formatSeedValue(mixed $value): string
+    {
+        if ($value === null) {
+            return 'null';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (string) $value;
+        }
+
+        // Escape single quotes in strings
+        return "'" . str_replace("'", "\\'", (string) $value) . "'";
     }
 }
