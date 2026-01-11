@@ -40,11 +40,16 @@ Map changed source files to test files by replacing `src` with `tests/unit`.
 
 ```bash
 # Run all unit tests
-docker exec aimm_yii vendor/bin/codecept run unit
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit
 
 # Run specific test file
-docker exec aimm_yii vendor/bin/codecept run unit tests/unit/path/FooTest.php
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit tests/unit/path/FooTest.php
+
+# Run test directory
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit tests/unit/handlers/foo/
 ```
+
+**Note:** Codeception accepts only one test path per command. Run separate commands for multiple paths.
 
 If tests fail, stop and report.
 

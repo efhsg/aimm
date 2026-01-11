@@ -44,8 +44,8 @@ See `.claude/config/project.md` for:
 
 **Quick reference:**
 ```bash
-docker exec aimm_yii vendor/bin/codecept run unit          # Run tests
-docker exec aimm_yii vendor/bin/php-cs-fixer fix           # Run linter
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit  # Run tests
+docker exec aimm_yii vendor/bin/php-cs-fixer fix                                # Run linter
 ```
 
 ## Architecture

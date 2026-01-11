@@ -25,16 +25,23 @@ docker exec aimm_yii vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php $(gi
 
 ### Tests
 
+Codeception requires `register_argc_argv=1` (not set in container's php.ini).
+
 ```bash
 # Run all unit tests
-docker exec aimm_yii vendor/bin/codecept run unit
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit
 
 # Run single test file
-docker exec aimm_yii vendor/bin/codecept run unit tests/unit/path/FooTest.php
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit tests/unit/path/FooTest.php
 
 # Run single test method
-docker exec aimm_yii vendor/bin/codecept run unit tests/unit/path/FooTest.php:testMethodName
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit tests/unit/path/FooTest.php:testMethodName
+
+# Run test directory
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit tests/unit/handlers/foo/
 ```
+
+**Note:** Codeception accepts only one test path per command. To run multiple paths, execute separate commands.
 
 ### Database
 
