@@ -1,0 +1,443 @@
+/**
+ * AIMM VitePress Theme
+ * Applies AIMM design system to documentation site
+ * Reference: /docs/design/frontend/style/tokens.css
+ */
+
+/* ============================================
+   1. CSS CUSTOM PROPERTIES (Design Tokens)
+   ============================================ */
+
+:root {
+  /* Brand Colors */
+  --vp-c-brand-1: #1a4a55;
+  --vp-c-brand-2: #2a6a78;
+  --vp-c-brand-3: #153d47;
+  --vp-c-brand-soft: rgba(26, 74, 85, 0.14);
+
+  /* Accent (for special highlights) */
+  --vp-c-tip-1: #1a4a55;
+  --vp-c-tip-2: rgba(26, 74, 85, 0.14);
+  --vp-c-tip-3: rgba(26, 74, 85, 0.08);
+
+  /* Warning */
+  --vp-c-warning-1: #b8860b;
+  --vp-c-warning-2: rgba(184, 134, 11, 0.14);
+  --vp-c-warning-3: rgba(184, 134, 11, 0.08);
+
+  /* Danger */
+  --vp-c-danger-1: #a5443f;
+  --vp-c-danger-2: rgba(165, 68, 63, 0.14);
+  --vp-c-danger-3: rgba(165, 68, 63, 0.08);
+
+  /* Info */
+  --vp-c-info-1: #1a4a55;
+  --vp-c-info-2: rgba(26, 74, 85, 0.14);
+  --vp-c-info-3: rgba(26, 74, 85, 0.08);
+
+  /* Success */
+  --vp-c-success: #3b755f;
+
+  /* Gold accent for special elements */
+  --aimm-accent: #A68248;
+
+  /* Typography */
+  --vp-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --vp-font-family-mono: 'IBM Plex Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* Backgrounds - Light Mode */
+  --vp-c-bg: #f0f4f5;
+  --vp-c-bg-soft: #ffffff;
+  --vp-c-bg-mute: #e6eef0;
+  --vp-c-bg-alt: #f8fafa;
+
+  /* Text - Light Mode (WCAG AA compliant) */
+  --vp-c-text-1: #1a3540;   /* 12.4:1 contrast on white */
+  --vp-c-text-2: #4a6a78;   /* 5.2:1 contrast - improved from #5a7a88 */
+  --vp-c-text-3: #6a8a98;   /* 3.5:1 - decorative only */
+
+  /* Borders */
+  --vp-c-border: #d0dce0;
+  --vp-c-divider: #e6eef0;
+  --vp-c-gutter: #e6eef0;
+
+  /* Shadows */
+  --vp-shadow-1: 0 1px 2px rgba(26, 53, 64, 0.05);
+  --vp-shadow-2: 0 4px 6px rgba(26, 53, 64, 0.07), 0 1px 3px rgba(26, 53, 64, 0.05);
+  --vp-shadow-3: 0 10px 20px rgba(26, 53, 64, 0.1), 0 3px 6px rgba(26, 53, 64, 0.05);
+
+  /* Radius */
+  --vp-radius-small: 4px;
+  --vp-radius-medium: 8px;
+  --vp-radius-large: 12px;
+
+  /* Focus ring for accessibility */
+  --vp-focus-ring: 0 0 0 3px rgba(26, 74, 85, 0.4);
+}
+
+/* ============================================
+   2. DARK MODE OVERRIDES
+   ============================================ */
+
+.dark {
+  --vp-c-bg: #0d1a1f;
+  --vp-c-bg-soft: #152328;
+  --vp-c-bg-mute: #1a3038;
+  --vp-c-bg-alt: #1a3540;
+
+  --vp-c-text-1: #e8eef0;
+  --vp-c-text-2: #a0b4bc;
+  --vp-c-text-3: #6a8490;
+
+  --vp-c-border: #2a4a55;
+  --vp-c-divider: #1a3540;
+  --vp-c-gutter: #1a3540;
+
+  /* Lighter brand for dark mode visibility */
+  --vp-c-brand-1: #4ab8d5;
+  --vp-c-brand-2: #2a6a78;
+  --vp-c-brand-3: #6ccce6;
+}
+
+/* ============================================
+   3. LAYOUT COMPONENTS
+   ============================================ */
+
+/* Navigation Bar */
+.VPNav {
+  background-color: var(--vp-c-bg-soft) !important;
+  border-bottom: 1px solid var(--vp-c-border);
+}
+
+.VPNavBar .title {
+  font-weight: 600;
+  color: var(--vp-c-brand-1);
+}
+
+/* Nav link hover states */
+.VPNavBarMenuLink {
+  transition: color 150ms ease;
+}
+
+.VPNavBarMenuLink:hover {
+  color: var(--vp-c-brand-1);
+}
+
+/* Ensure theme toggle always visible on smaller screens */
+.VPNavBarAppearance {
+  display: flex !important;
+}
+
+/* Sidebar */
+.VPSidebar {
+  background-color: var(--vp-c-bg-soft) !important;
+  border-right: 1px solid var(--vp-c-border);
+}
+
+/* Sidebar hover states */
+.VPSidebarItem .item {
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.VPSidebarItem .item:hover {
+  background-color: var(--vp-c-bg-mute);
+}
+
+.VPSidebarItem.is-active > .item {
+  border-left: 3px solid var(--vp-c-brand-1);
+  padding-left: 12px;
+  margin-left: -15px;
+  background-color: var(--vp-c-brand-soft);
+}
+
+.VPSidebarItem.is-active > .item .text {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+
+/* Footer */
+.VPFooter {
+  background-color: var(--vp-c-brand-3);
+  border-top: none;
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ============================================
+   4. CONTENT STYLING
+   ============================================ */
+
+/* Homepage feature cards spacing */
+.VPFeatures {
+  margin-bottom: 3rem !important;
+}
+
+/* Body text line-height for readability */
+.vp-doc p,
+.vp-doc li {
+  line-height: 1.7;
+}
+
+/* Headings */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4 {
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+
+.vp-doc h1 {
+  font-size: 2rem;
+  line-height: 1.1;
+  border-bottom: 2px solid var(--vp-c-brand-1);
+  padding-bottom: 0.5rem;
+}
+
+.vp-doc h2 {
+  border-top: none;
+  padding-top: 1.5rem;
+  margin-top: 2rem;
+}
+
+/* Links */
+.vp-doc a {
+  color: var(--vp-c-brand-1);
+  text-decoration: underline;
+  text-decoration-color: rgba(26, 74, 85, 0.3);
+  text-underline-offset: 2px;
+  transition: text-decoration-color 150ms ease;
+}
+
+.vp-doc a:hover {
+  text-decoration-color: var(--vp-c-brand-1);
+}
+
+/* Inline Code */
+.vp-doc :not(pre) > code {
+  background-color: var(--vp-c-bg-mute);
+  border: 1px solid var(--vp-c-border);
+  border-radius: var(--vp-radius-small);
+  padding: 0.15em 0.35em;
+  font-size: 0.9em;
+  color: var(--vp-c-brand-1);
+}
+
+/* Code Blocks */
+.vp-doc div[class*='language-'] {
+  border-radius: var(--vp-radius-medium);
+  border: 1px solid var(--vp-c-border);
+  box-shadow: var(--vp-shadow-1);
+}
+
+/* Tables */
+.vp-doc table {
+  border-collapse: collapse;
+  width: 100%;
+  border-radius: var(--vp-radius-medium);
+  overflow: hidden;
+  box-shadow: var(--vp-shadow-1);
+}
+
+.vp-doc th {
+  background-color: var(--vp-c-brand-1);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.vp-doc td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--vp-c-border);
+}
+
+.vp-doc tr:nth-child(even) {
+  background-color: var(--vp-c-bg-alt);
+}
+
+.vp-doc tr:hover {
+  background-color: var(--vp-c-bg-mute);
+}
+
+/* Blockquotes */
+.vp-doc blockquote {
+  border-left: 4px solid var(--vp-c-brand-1);
+  background-color: var(--vp-c-bg-mute);
+  padding: 1rem 1.5rem;
+  border-radius: 0 var(--vp-radius-medium) var(--vp-radius-medium) 0;
+  color: var(--vp-c-text-2);
+}
+
+/* ============================================
+   5. CUSTOM CONTAINERS (Tip, Warning, Danger, Info)
+   ============================================ */
+
+.custom-block.info {
+  background-color: var(--vp-c-info-3);
+  border-color: var(--vp-c-info-1);
+}
+
+.custom-block.info .custom-block-title {
+  color: var(--vp-c-info-1);
+}
+
+.custom-block.tip {
+  background-color: var(--vp-c-tip-3);
+  border-color: var(--vp-c-brand-1);
+}
+
+.custom-block.tip .custom-block-title {
+  color: var(--vp-c-brand-1);
+}
+
+.custom-block.warning {
+  background-color: var(--vp-c-warning-3);
+  border-color: var(--vp-c-warning-1);
+}
+
+.custom-block.warning .custom-block-title {
+  color: var(--vp-c-warning-1);
+}
+
+.custom-block.danger {
+  background-color: var(--vp-c-danger-3);
+  border-color: var(--vp-c-danger-1);
+}
+
+.custom-block.danger .custom-block-title {
+  color: var(--vp-c-danger-1);
+}
+
+/* ============================================
+   6. HOMEPAGE HERO (if used)
+   ============================================ */
+
+.VPHero .name {
+  background: linear-gradient(135deg, var(--vp-c-brand-1), var(--aimm-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.VPHero .tagline {
+  color: var(--vp-c-text-1);  /* Improved contrast from text-2 */
+}
+
+/* Unified button style - all use same treatment for equal hierarchy */
+.VPButton.brand,
+.VPButton.alt {
+  background-color: var(--vp-c-brand-1);
+  border-color: var(--vp-c-brand-1);
+  color: white;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.VPButton.brand:hover,
+.VPButton.alt:hover {
+  background-color: var(--vp-c-brand-3);
+  border-color: var(--vp-c-brand-3);
+}
+
+/* Feature cards - unified styling */
+.VPFeature {
+  margin-bottom: 1rem;
+  border: 1px solid var(--vp-c-border);
+  border-radius: var(--vp-radius-medium);
+  transition: box-shadow 150ms ease, border-color 150ms ease;
+}
+
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: var(--vp-shadow-2);
+}
+
+.VPFeature .title {
+  color: var(--vp-c-brand-1);
+}
+
+.VPFeature .details {
+  color: var(--vp-c-text-2);
+}
+
+/* ============================================
+   7. SEARCH BOX
+   ============================================ */
+
+.VPLocalSearchBox .search-input {
+  border-color: var(--vp-c-border);
+  border-radius: var(--vp-radius-medium);
+}
+
+.VPLocalSearchBox .search-input:focus {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 0 0 3px rgba(26, 74, 85, 0.2);
+}
+
+/* ============================================
+   8. ACCESSIBILITY
+   ============================================ */
+
+/* Focus states for all interactive elements */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--vp-focus-ring);
+}
+
+/* Skip link (VitePress includes one) */
+.VPSkipLink:focus {
+  box-shadow: var(--vp-focus-ring);
+}
+
+/* ============================================
+   9. RESPONSIVE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+  .vp-doc h1 {
+    font-size: 1.75rem;
+  }
+
+  .vp-doc table {
+    font-size: 0.875rem;
+  }
+
+  .vp-doc th,
+  .vp-doc td {
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+/* ============================================
+   10. PRINT STYLES
+   ============================================ */
+
+@media print {
+  .VPNav,
+  .VPSidebar,
+  .VPFooter {
+    display: none !important;
+  }
+
+  .vp-doc {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .vp-doc a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .vp-doc a::after {
+    content: ' (' attr(href) ')';
+    font-size: 0.8em;
+    color: #666;
+  }
+}
