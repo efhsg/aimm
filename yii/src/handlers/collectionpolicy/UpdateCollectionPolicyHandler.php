@@ -68,6 +68,7 @@ final class UpdateCollectionPolicyHandler implements UpdateCollectionPolicyInter
                 'sector_index' => $request->sectorIndex,
                 'required_indicators' => $request->requiredIndicatorsJson,
                 'optional_indicators' => $request->optionalIndicatorsJson,
+                'source_priorities' => $request->sourcePrioritiesJson,
                 'updated_by' => $request->actorUsername,
             ]);
 
@@ -117,6 +118,7 @@ final class UpdateCollectionPolicyHandler implements UpdateCollectionPolicyInter
             'operationalMetricsJson' => 'Operational metrics',
             'requiredIndicatorsJson' => 'Required indicators',
             'optionalIndicatorsJson' => 'Optional indicators',
+            'sourcePrioritiesJson' => 'Source priorities',
         ];
 
         foreach ($jsonFields as $field => $label) {

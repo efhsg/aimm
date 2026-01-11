@@ -285,6 +285,12 @@ body {
     padding: var(--space-6);
 }
 
+.card__footer {
+    padding: var(--space-4) var(--space-6);
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-secondary);
+}
+
 /* Tables */
 .table-container {
     overflow-x: auto;
@@ -477,6 +483,45 @@ body {
 
 .form-select--inline {
     margin-left: var(--space-3);
+}
+
+/* Source Priority Selector */
+.source-priority-select {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.source-priority-select .form-select {
+    width: auto;
+    min-width: 160px;
+}
+
+.source-priority-arrow {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
+/* Source Priority Display (view mode) */
+.source-priority-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.source-priority-list .badge {
+    text-decoration: none;
+}
+
+.source-priority-list__arrow {
+    color: var(--text-muted);
+    margin: 0 var(--space-1);
+}
+
+.source-priority-list__note {
+    margin-top: var(--space-4);
 }
 
 .form-help {

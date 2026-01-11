@@ -20,9 +20,19 @@ use yii\helpers\Html;
  * @var string $sectorIndex
  * @var string $requiredIndicators
  * @var string $optionalIndicators
+ * @var array<string, string[]> $sourcePriorities
+ * @var array<string, mixed>[] $dataSources
  * @var string[] $errors
  * @var bool $isUpdate
  */
+
+$categoryLabels = [
+    'valuation' => 'Valuation',
+    'financials' => 'Financials',
+    'quarters' => 'Quarterly Data',
+    'macro' => 'Macro Indicators',
+    'benchmarks' => 'Benchmarks',
+];
 ?>
 
 <?php if (!empty($errors)): ?>
@@ -162,6 +172,41 @@ use yii\helpers\Html;
                               placeholder='["VIX"]'><?= Html::encode($optionalIndicators) ?></textarea>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="card card--spaced">
+        <div class="card__header">
+            <div>
+                <h2 class="card__title">Source Priorities</h2>
+                <p class="card__subtitle">Select data sources in priority order (first source is tried first).</p>
+            </div>
+        </div>
+        <div class="card__body">
+            <?php foreach ($categoryLabels as $category => $label): ?>
+                <?php $selectedSources = $sourcePriorities[$category] ?? []; ?>
+                <div class="form-group">
+                    <label class="form-label"><?= Html::encode($label) ?></label>
+                    <div class="source-priority-select" data-category="<?= $category ?>">
+                        <?php for ($i = 0; $i < 4; $i++): ?>
+                            <select name="source_priorities_<?= $category ?>[]" class="form-select form-select--inline">
+                                <option value="">— Select source —</option>
+                                <?php foreach ($dataSources as $ds): ?>
+                                    <option value="<?= Html::encode($ds['id']) ?>"
+                                        <?= isset($selectedSources[$i]) && $selectedSources[$i] === $ds['id'] ? 'selected' : '' ?>
+                                        <?= !$ds['is_active'] ? 'disabled' : '' ?>>
+                                        <?= Html::encode($ds['name']) ?>
+                                        <?= !$ds['is_active'] ? ' (inactive)' : '' ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <?php if ($i < 3): ?>
+                                <span class="source-priority-arrow">&rarr;</span>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
         </div>
     </div>
 

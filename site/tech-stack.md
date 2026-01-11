@@ -110,7 +110,7 @@ For hot reload during editing:
 npm run docs:dev
 ```
 
-This starts a dev server at `http://localhost:5173` with instant updates.
+This starts a dev server at `http://localhost:5173/docs/` with instant updates.
 
 ### Building Documentation
 

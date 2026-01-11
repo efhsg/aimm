@@ -134,6 +134,58 @@ $formatJson = function (mixed $value): string {
     </div>
 </div>
 
+<?php
+$sourcePriorities = null;
+if (!empty($policy['source_priorities'])) {
+    $sourcePriorities = is_string($policy['source_priorities'])
+        ? json_decode($policy['source_priorities'], true)
+        : $policy['source_priorities'];
+}
+$categoryLabels = [
+    'valuation' => 'Valuation',
+    'financials' => 'Financials',
+    'quarters' => 'Quarterly Data',
+    'macro' => 'Macro Indicators',
+    'benchmarks' => 'Benchmarks',
+];
+?>
+<div class="card card--spaced">
+    <div class="card__header">
+        <h2 class="card__title">Source Priorities</h2>
+    </div>
+    <div class="card__body">
+        <?php if (empty($sourcePriorities)): ?>
+            <p class="text-muted">No source priorities configured.</p>
+        <?php else: ?>
+            <div class="detail-grid">
+                <?php foreach ($sourcePriorities as $category => $sources): ?>
+                    <div class="detail-label"><?= Html::encode($categoryLabels[$category] ?? ucfirst($category)) ?></div>
+                    <div class="detail-value">
+                        <?php if (empty($sources)): ?>
+                            <span class="text-muted">-</span>
+                        <?php else: ?>
+                            <div class="source-priority-list">
+                                <?php foreach ($sources as $index => $sourceId): ?>
+                                    <a href="<?= Url::to(['/data-source/view', 'id' => $sourceId]) ?>"
+                                       class="badge badge--info">
+                                        <?= Html::encode($sourceId) ?>
+                                    </a>
+                                    <?php if ($index < count($sources) - 1): ?>
+                                        <span class="source-priority-list__arrow">&rarr;</span>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <p class="text-muted text-sm source-priority-list__note">
+                Sources are tried in order (left to right) until data is found.
+            </p>
+        <?php endif; ?>
+    </div>
+</div>
+
 <div class="card card--spaced">
     <div class="card__header">
         <h2 class="card__title">Data Requirements</h2>

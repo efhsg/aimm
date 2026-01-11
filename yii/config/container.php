@@ -67,6 +67,14 @@ use app\handlers\collectionpolicy\SetDefaultPolicyHandler;
 use app\handlers\collectionpolicy\SetDefaultPolicyInterface;
 use app\handlers\collectionpolicy\UpdateCollectionPolicyHandler;
 use app\handlers\collectionpolicy\UpdateCollectionPolicyInterface;
+use app\handlers\datasource\CreateDataSourceHandler;
+use app\handlers\datasource\CreateDataSourceInterface;
+use app\handlers\datasource\DeleteDataSourceHandler;
+use app\handlers\datasource\DeleteDataSourceInterface;
+use app\handlers\datasource\ToggleDataSourceHandler;
+use app\handlers\datasource\ToggleDataSourceInterface;
+use app\handlers\datasource\UpdateDataSourceHandler;
+use app\handlers\datasource\UpdateDataSourceInterface;
 use app\handlers\industry\AddMembersHandler;
 use app\handlers\industry\AddMembersInterface;
 use app\handlers\industry\CollectIndustryHandler as IndustryCollectHandler;
@@ -85,6 +93,7 @@ use app\handlers\pdf\ViewRenderer;
 use app\queries\AnalysisReportReader;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
+use app\queries\DataSourceQuery;
 use app\queries\IndustryListQuery;
 use app\queries\IndustryMemberQuery;
 use app\queries\IndustryQuery;
@@ -317,6 +326,32 @@ return [
             );
         },
 
+        // Data Source Handlers (use raw SQL to avoid Yii2 ActiveRecord bug with PHP 8.1+)
+        CreateDataSourceInterface::class => static function (Container $container): CreateDataSourceInterface {
+            return new CreateDataSourceHandler(
+                Yii::$app->db,
+                $container->get(DataSourceQuery::class),
+            );
+        },
+        UpdateDataSourceInterface::class => static function (Container $container): UpdateDataSourceInterface {
+            return new UpdateDataSourceHandler(
+                Yii::$app->db,
+                $container->get(DataSourceQuery::class),
+            );
+        },
+        ToggleDataSourceInterface::class => static function (Container $container): ToggleDataSourceInterface {
+            return new ToggleDataSourceHandler(
+                Yii::$app->db,
+                $container->get(DataSourceQuery::class),
+            );
+        },
+        DeleteDataSourceInterface::class => static function (Container $container): DeleteDataSourceInterface {
+            return new DeleteDataSourceHandler(
+                Yii::$app->db,
+                $container->get(DataSourceQuery::class),
+            );
+        },
+
         SetDefaultPolicyInterface::class => static function (Container $container): SetDefaultPolicyInterface {
             return new SetDefaultPolicyHandler(
                 $container->get(CollectionPolicyQuery::class),
@@ -409,6 +444,9 @@ return [
         },
         IndustryMemberQuery::class => static function (): IndustryMemberQuery {
             return new IndustryMemberQuery(Yii::$app->db);
+        },
+        DataSourceQuery::class => static function (): DataSourceQuery {
+            return new DataSourceQuery(Yii::$app->db);
         },
 
         // Industry Member Handlers

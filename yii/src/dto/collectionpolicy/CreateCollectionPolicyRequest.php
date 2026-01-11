@@ -25,6 +25,7 @@ final readonly class CreateCollectionPolicyRequest
         public ?string $sectorIndex = null,
         public ?string $requiredIndicatorsJson = null,
         public ?string $optionalIndicatorsJson = null,
+        public ?string $sourcePrioritiesJson = null,
     ) {
     }
 }

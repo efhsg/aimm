@@ -81,6 +81,7 @@ final class CreateCollectionPolicyHandler implements CreateCollectionPolicyInter
                 'sector_index' => $request->sectorIndex,
                 'required_indicators' => $request->requiredIndicatorsJson,
                 'optional_indicators' => $request->optionalIndicatorsJson,
+                'source_priorities' => $request->sourcePrioritiesJson,
                 'created_by' => $request->actorUsername,
                 'created_at' => $now->format('Y-m-d H:i:s'),
                 'updated_at' => $now->format('Y-m-d H:i:s'),
@@ -133,6 +134,7 @@ final class CreateCollectionPolicyHandler implements CreateCollectionPolicyInter
             'operationalMetricsJson' => 'Operational metrics',
             'requiredIndicatorsJson' => 'Required indicators',
             'optionalIndicatorsJson' => 'Optional indicators',
+            'sourcePrioritiesJson' => 'Source priorities',
         ];
 
         foreach ($jsonFields as $field => $label) {

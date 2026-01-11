@@ -21,6 +21,8 @@ use yii\helpers\Url;
  * @var string $sectorIndex
  * @var string $requiredIndicators
  * @var string $optionalIndicators
+ * @var array<string, string[]> $sourcePriorities
+ * @var array<string, mixed>[] $dataSources
  * @var string[] $errors
  */
 
@@ -51,6 +53,8 @@ $this->title = 'Edit: ' . $policy['name'];
     'sectorIndex' => $sectorIndex,
     'requiredIndicators' => $requiredIndicators,
     'optionalIndicators' => $optionalIndicators,
+    'sourcePriorities' => $sourcePriorities,
+    'dataSources' => $dataSources,
     'errors' => $errors,
     'isUpdate' => true,
 ]) ?>

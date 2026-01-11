@@ -52,7 +52,8 @@ export default defineConfig({
           { text: 'Rating Logic', link: '/rating-logic' },
           { text: 'Outputs', link: '/outputs' },
           { text: 'Directory Structure', link: '/directory-structure' },
-          { text: 'Squash Migrations', link: '/squash-migrations' }
+          { text: 'Squash Migrations', link: '/squash-migrations' },
+          { text: 'Docs Site', link: '/docs-site' }
         ]
       },
       {

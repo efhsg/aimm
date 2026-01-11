@@ -58,6 +58,10 @@ $currentController = Yii::$app->controller->id;
                class="admin-nav__link<?= $currentController === 'collection-run' ? ' admin-nav__link--active' : '' ?>">
                 Runs
             </a>
+            <a href="<?= Url::to(['/data-source/index']) ?>"
+               class="admin-nav__link<?= $currentController === 'data-source' ? ' admin-nav__link--active' : '' ?>">
+                Sources
+            </a>
             <a href="/docs/" target="_blank" class="admin-nav__link">
                 Docs
             </a>

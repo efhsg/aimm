@@ -14,9 +14,11 @@ use app\handlers\collectionpolicy\DeleteCollectionPolicyInterface;
 use app\handlers\collectionpolicy\SetDefaultPolicyInterface;
 use app\handlers\collectionpolicy\UpdateCollectionPolicyInterface;
 use app\queries\CollectionPolicyQuery;
+use app\queries\DataSourceQuery;
 use Yii;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
+use yii\web\Request;
 use yii\web\Response;
 
 /**
@@ -33,6 +35,7 @@ final class CollectionPolicyController extends Controller
         $id,
         $module,
         private readonly CollectionPolicyQuery $policyQuery,
+        private readonly DataSourceQuery $dataSourceQuery,
         private readonly CreateCollectionPolicyInterface $createHandler,
         private readonly UpdateCollectionPolicyInterface $updateHandler,
         private readonly DeleteCollectionPolicyInterface $deleteHandler,
@@ -76,6 +79,7 @@ final class CollectionPolicyController extends Controller
     public function actionCreate(): Response|string
     {
         $request = Yii::$app->request;
+        $dataSources = $this->dataSourceQuery->findAll();
 
         if ($request->isPost) {
             $slug = trim((string) $request->post('slug', ''));
@@ -86,6 +90,8 @@ final class CollectionPolicyController extends Controller
             if ($slug === '' && $name !== '') {
                 $slug = $this->generateSlug($name);
             }
+
+            $sourcePriorities = $this->buildSourcePrioritiesFromPost($request);
 
             $result = $this->createHandler->create(new CreateCollectionPolicyRequest(
                 slug: $slug,
@@ -103,6 +109,7 @@ final class CollectionPolicyController extends Controller
                 sectorIndex: $this->normalizeString($request->post('sector_index')),
                 requiredIndicatorsJson: $this->normalizeJson($request->post('required_indicators')),
                 optionalIndicatorsJson: $this->normalizeJson($request->post('optional_indicators')),
+                sourcePrioritiesJson: $sourcePriorities !== null ? json_encode($sourcePriorities) : null,
             ));
 
             if ($result->success) {
@@ -125,6 +132,8 @@ final class CollectionPolicyController extends Controller
                 'sectorIndex' => $request->post('sector_index', ''),
                 'requiredIndicators' => $request->post('required_indicators', ''),
                 'optionalIndicators' => $request->post('optional_indicators', ''),
+                'sourcePriorities' => $sourcePriorities ?? [],
+                'dataSources' => $dataSources,
                 'errors' => $result->errors,
             ]);
         }
@@ -144,6 +153,8 @@ final class CollectionPolicyController extends Controller
             'sectorIndex' => '',
             'requiredIndicators' => '',
             'optionalIndicators' => '',
+            'sourcePriorities' => [],
+            'dataSources' => $dataSources,
             'errors' => [],
         ]);
     }
@@ -157,10 +168,12 @@ final class CollectionPolicyController extends Controller
         }
 
         $request = Yii::$app->request;
+        $dataSources = $this->dataSourceQuery->findAll();
 
         if ($request->isPost) {
             $name = trim((string) $request->post('name', ''));
             $description = trim((string) $request->post('description', ''));
+            $sourcePriorities = $this->buildSourcePrioritiesFromPost($request);
 
             $result = $this->updateHandler->update(new UpdateCollectionPolicyRequest(
                 id: (int) $policy['id'],
@@ -178,6 +191,7 @@ final class CollectionPolicyController extends Controller
                 sectorIndex: $this->normalizeString($request->post('sector_index')),
                 requiredIndicatorsJson: $this->normalizeJson($request->post('required_indicators')),
                 optionalIndicatorsJson: $this->normalizeJson($request->post('optional_indicators')),
+                sourcePrioritiesJson: $sourcePriorities !== null ? json_encode($sourcePriorities) : null,
             ));
 
             if ($result->success) {
@@ -200,8 +214,18 @@ final class CollectionPolicyController extends Controller
                 'sectorIndex' => $request->post('sector_index', ''),
                 'requiredIndicators' => $request->post('required_indicators', ''),
                 'optionalIndicators' => $request->post('optional_indicators', ''),
+                'sourcePriorities' => $sourcePriorities ?? [],
+                'dataSources' => $dataSources,
                 'errors' => $result->errors,
             ]);
+        }
+
+        // Parse existing source priorities
+        $existingPriorities = [];
+        if (!empty($policy['source_priorities'])) {
+            $existingPriorities = is_string($policy['source_priorities'])
+                ? json_decode($policy['source_priorities'], true) ?? []
+                : $policy['source_priorities'];
         }
 
         return $this->render('update', [
@@ -219,6 +243,8 @@ final class CollectionPolicyController extends Controller
             'sectorIndex' => $policy['sector_index'] ?? '',
             'requiredIndicators' => $this->formatJson($policy['required_indicators']),
             'optionalIndicators' => $this->formatJson($policy['optional_indicators']),
+            'sourcePriorities' => $existingPriorities,
+            'dataSources' => $dataSources,
             'errors' => [],
         ]);
     }
@@ -366,5 +392,33 @@ final class CollectionPolicyController extends Controller
                 'required_scope' => 'all',
             ],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Build source priorities array from POST data.
+     *
+     * @return array<string, string[]>|null
+     */
+    private function buildSourcePrioritiesFromPost(Request $request): ?array
+    {
+        $categories = ['valuation', 'financials', 'quarters', 'macro', 'benchmarks'];
+        $priorities = [];
+        $hasData = false;
+
+        foreach ($categories as $category) {
+            $sources = $request->post("source_priorities_{$category}", []);
+            if (is_array($sources)) {
+                // Filter out empty values and re-index
+                $sources = array_values(array_filter($sources, fn ($s) => $s !== ''));
+                if (!empty($sources)) {
+                    $hasData = true;
+                }
+                $priorities[$category] = $sources;
+            } else {
+                $priorities[$category] = [];
+            }
+        }
+
+        return $hasData ? $priorities : null;
     }
 }

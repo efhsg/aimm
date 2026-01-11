@@ -11,6 +11,7 @@ For commands, paths, and environment: `.claude/config/project.md`
 | Skill | File | Use When |
 |-------|------|----------|
 | Access Database | `access-database-from-host.md` | Querying DB from host without docker exec |
+| Commit and Push | `../commands/cp.md` | Committing and pushing finalized changes |
 | Create Migration | `create-migration.md` | Adding/modifying database schema |
 | Finalize Changes | `../commands/finalize-changes.md` | Validating changes, running linter/tests, preparing commit |
 | Frontend Design | `frontend-design.md` | Building/modifying UI across admin, docs, or PDF reports |
