@@ -7,7 +7,6 @@ namespace app\controllers;
 use app\dto\analysis\AnalysisThresholds;
 use app\dto\analysis\AnalyzeReportRequest;
 use app\dto\industry\AddMembersRequest;
-use app\dto\industry\CollectIndustryRequest;
 use app\dto\industry\CreateIndustryRequest;
 use app\dto\industry\RemoveMemberRequest;
 use app\dto\industry\ToggleIndustryRequest;
@@ -20,6 +19,7 @@ use app\handlers\industry\CreateIndustryInterface;
 use app\handlers\industry\RemoveMemberInterface;
 use app\handlers\industry\ToggleIndustryInterface;
 use app\handlers\industry\UpdateIndustryInterface;
+use app\models\CollectionRun;
 use app\queries\AnalysisReportRepository;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
@@ -28,6 +28,7 @@ use app\queries\IndustryAnalysisQuery;
 use app\queries\IndustryListQuery;
 use app\queries\IndustryMemberQuery;
 use app\queries\SectorQuery;
+use Ramsey\Uuid\Uuid;
 use Yii;
 use yii\helpers\Json;
 use yii\web\Controller;
@@ -386,23 +387,60 @@ final class IndustryController extends Controller
             throw new NotFoundHttpException('Industry not found.');
         }
 
-        $result = $this->collectHandler->collect(new CollectIndustryRequest(
-            industryId: $industry->id,
-            actorUsername: AdminAuthFilter::getAuthenticatedUsername() ?? 'unknown',
-        ));
-
-        if ($result->success) {
-            Yii::$app->session->setFlash(
-                'success',
-                'Collection started. Run ID: ' . $result->runId
-            );
-
-            // Redirect to collection run view
-            return $this->redirect(['collection-run/view', 'id' => $result->runId]);
+        if ($this->runRepository->hasRunningCollection($industry->id)) {
+            $message = 'A collection is already running for this industry.';
+            if ($request->isAjax) {
+                return $this->asJson(['success' => false, 'errors' => [$message]]);
+            }
+            Yii::$app->session->setFlash('error', $message);
+            return $this->redirect(['view', 'slug' => $slug]);
         }
 
-        Yii::$app->session->setFlash('error', implode(' ', $result->errors));
-        return $this->redirect(['view', 'slug' => $slug]);
+        // 1. Create CollectionRun
+        $datapackId = Uuid::uuid4()->toString();
+        $run = new CollectionRun();
+        $run->industry_id = $industry->id;
+        $run->datapack_id = $datapackId;
+        $run->status = CollectionRun::STATUS_PENDING;
+        $run->save(false);
+
+        // 2. Launch background process
+        $consolePath = Yii::$app->basePath . '/yii';
+        if (!file_exists($consolePath)) {
+            $run->markFailed();
+            $message = 'Console script not found.';
+            Yii::error($message, 'collection');
+            if ($request->isAjax) {
+                return $this->asJson(['success' => false, 'errors' => [$message]]);
+            }
+            Yii::$app->session->setFlash('error', $message);
+            return $this->redirect(['view', 'slug' => $slug]);
+        }
+
+        $cmd = sprintf(
+            'php %s collect/industry %s --run-id=%d > /dev/null 2>&1 &',
+            escapeshellarg($consolePath),
+            escapeshellarg($slug),
+            $run->id
+        );
+        exec($cmd);
+        Yii::info("Spawned collection process: run_id={$run->id}, industry={$slug}", 'collection');
+
+        if ($request->isAjax) {
+            return $this->asJson([
+                'success' => true,
+                'runId' => $run->id,
+                'errors' => [],
+            ]);
+        }
+
+        Yii::$app->session->setFlash(
+            'success',
+            'Collection started in background. Run ID: ' . $run->id
+        );
+
+        // Redirect to collection run view
+        return $this->redirect(['collection-run/view', 'id' => $run->id]);
     }
 
     /**

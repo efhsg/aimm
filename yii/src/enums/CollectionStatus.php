@@ -12,4 +12,5 @@ enum CollectionStatus: string
     case Complete = 'complete';
     case Partial = 'partial';
     case Failed = 'failed';
+    case Cancelled = 'cancelled';
 }

@@ -14,6 +14,7 @@ final readonly class CollectIndustryRequest
         public string $actorUsername,
         public int $batchSize = 10,
         public bool $enableMemoryManagement = true,
+        public ?int $runId = null,
     ) {
     }
 }

@@ -68,6 +68,7 @@ return [
                 'admin/collection-run' => 'collection-run/index',
                 'admin/collection-run/<id:\d+>' => 'collection-run/view',
                 'admin/collection-run/<id:\d+>/status' => 'collection-run/status',
+                'POST admin/collection-run/<id:\d+>/cancel' => 'collection-run/cancel',
 
                 // Admin: Collection Policy
                 'admin/collection-policy' => 'collection-policy/index',

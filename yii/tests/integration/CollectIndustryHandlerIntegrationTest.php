@@ -20,6 +20,7 @@ use app\dto\MetricDefinition;
 use app\enums\CollectionStatus;
 use app\factories\DataPointFactory;
 use app\factories\SourceCandidateFactory;
+use app\handlers\collection\CollectBatchHandler;
 use app\handlers\collection\CollectCompanyHandler;
 use app\handlers\collection\CollectDatapointHandler;
 use app\handlers\collection\CollectIndustryHandler;
@@ -34,8 +35,6 @@ use app\queries\PriceHistoryQuery;
 use app\queries\QuarterlyFinancialQuery;
 use app\queries\ValuationSnapshotQuery;
 use app\validators\CollectionGateValidator;
-use app\validators\SchemaValidator;
-use app\validators\SemanticValidator;
 use Codeception\Test\Unit;
 use DateTimeImmutable;
 use RuntimeException;
@@ -129,7 +128,7 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         // Verify collection run was recorded
         $run = CollectionRun::findOne(['datapack_id' => $result->datapackId]);
         $this->assertNotNull($run, 'Collection run should be recorded in database');
-        $this->assertSame(1, (int) $run->industry_id); // industry_id is now an integer FK
+        $this->assertSame($this->getIndustryId(), (int) $run->industry_id); // industry_id is now an integer FK
         $this->assertNotNull($run->completed_at);
         $this->assertSame(1, (int) $run->companies_total);
     }
@@ -189,14 +188,68 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         $this->assertArrayHasKey('AAPL', $result->companyStatuses);
         $this->assertArrayHasKey('MSFT', $result->companyStatuses);
 
-        // Gate should pass with at least one successful company
-        $this->assertTrue($result->gateResult->passed);
+        // Gate should fail because of MSFT failure
+        $this->assertFalse($result->gateResult->passed);
 
         // But there should be warnings about the failed company
-        $this->assertNotEmpty($result->gateResult->warnings);
+        $this->assertNotEmpty($result->gateResult->errors);
     }
 
-    private function createHandler(array $fixtures): CollectIndustryHandler
+    public function testCollectionCancellation(): void
+    {
+        $config = $this->createIndustryConfigWithMultipleCompanies(); // AAPL and MSFT
+
+        $fixtures = [
+            'https://finance.yahoo.com/quote/AAPL' => [
+                'path' => $this->fixturePath('yahoo-finance/AAPL-quote.html'),
+                'contentType' => 'text/html',
+            ],
+        ];
+
+        // Callback to cancel the run during the first fetch
+        $onFetch = function () {
+            $run = CollectionRun::find()
+                ->orderBy(['id' => SORT_DESC])
+                ->limit(1)
+                ->one();
+
+            if ($run) {
+                $run->cancel_requested = true;
+                $run->save(false, ['cancel_requested']);
+            }
+        };
+
+        $handler = $this->createHandler($fixtures, $onFetch);
+
+        // Use batchSize 1 so cancellation check happens between AAPL and MSFT
+        $request = new CollectIndustryRequest(
+            config: $config,
+            batchSize: 1,
+            enableMemoryManagement: false,
+        );
+
+        $result = $handler->collect($request);
+
+        // Should be cancelled
+        $this->assertSame(CollectionStatus::Cancelled, $result->overallStatus);
+
+        // AAPL should be processed (status could be Complete or Failed depending on when cancellation happened relative to status update)
+        // In our handler, company status is set after collection.
+        // But if cancellation happens during fetch, AAPL collection finishes, then status is recorded.
+        // Then loop checks cancellation before MSFT.
+
+        $this->assertArrayHasKey('AAPL', $result->companyStatuses);
+        $this->assertSame(CollectionStatus::Complete, $result->companyStatuses['AAPL']);
+
+        // MSFT should NOT be processed
+        $this->assertArrayNotHasKey('MSFT', $result->companyStatuses);
+
+        // Verify run status in DB
+        $run = CollectionRun::findOne(['datapack_id' => $result->datapackId]);
+        $this->assertSame(CollectionRun::STATUS_CANCELLED, $run->status);
+    }
+
+    private function createHandler(array $fixtures, ?callable $onFetch = null): CollectIndustryHandler
     {
         $blockedPath = $this->tempDir . '/blocked-sources.json';
         $adapterChain = new AdapterChain(
@@ -205,7 +258,7 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
             Yii::getLogger(),
         );
 
-        $fetchClient = new FixtureWebFetchClient($fixtures);
+        $fetchClient = new FixtureWebFetchClient($fixtures, $onFetch);
         $dataPointFactory = new DataPointFactory();
         $sourceCandidateFactory = new SourceCandidateFactory();
 
@@ -213,6 +266,12 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
             $fetchClient,
             $adapterChain,
             $dataPointFactory,
+            Yii::getLogger(),
+        );
+
+        $batchHandler = new CollectBatchHandler(
+            $fetchClient,
+            $adapterChain,
             Yii::getLogger(),
         );
 
@@ -229,6 +288,7 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
 
         $companyHandler = new CollectCompanyHandler(
             $datapointHandler,
+            $batchHandler,
             $sourceCandidateFactory,
             $dataPointFactory,
             Yii::getLogger(),
@@ -240,6 +300,7 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
 
         $macroHandler = new CollectMacroHandler(
             $datapointHandler,
+            $batchHandler,
             $sourceCandidateFactory,
             $dataPointFactory,
             Yii::getLogger(),
@@ -247,9 +308,7 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
             $priceQuery,
         );
 
-        $schemaValidator = new SchemaValidator(Yii::$app->basePath . '/config/schemas');
-        $semanticValidator = new SemanticValidator();
-        $gateValidator = new CollectionGateValidator($schemaValidator, $semanticValidator);
+        $gateValidator = new CollectionGateValidator();
 
         return new CollectIndustryHandler(
             companyCollector: $companyHandler,
@@ -268,6 +327,13 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
             batchSize: 1,
             enableMemoryManagement: false,
         );
+    }
+
+    private function getIndustryId(): int
+    {
+        return (int) Yii::$app->db->createCommand('SELECT id FROM industry WHERE slug = :slug')
+            ->bindValue(':slug', 'tech')
+            ->queryScalar();
     }
 
     private function createIndustryConfig(): IndustryConfig
@@ -293,7 +359,7 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         );
 
         return new IndustryConfig(
-            industryId: 1,
+            industryId: $this->getIndustryId(),
             id: 'tech',
             name: 'Technology',
             sector: 'Software',
@@ -336,7 +402,7 @@ final class CollectIndustryHandlerIntegrationTest extends Unit
         );
 
         return new IndustryConfig(
-            industryId: 1,
+            industryId: $this->getIndustryId(),
             id: 'tech',
             name: 'Technology',
             sector: 'Software',
@@ -386,11 +452,16 @@ final class FixtureWebFetchClient implements WebFetchClientInterface
      */
     public function __construct(
         private readonly array $fixtures,
+        private readonly mixed $onFetch = null,
     ) {
     }
 
     public function fetch(FetchRequest $request): FetchResult
     {
+        if ($this->onFetch) {
+            ($this->onFetch)($request);
+        }
+
         $fixture = $this->fixtures[$request->url] ?? null;
         if ($fixture === null) {
             return new FetchResult(

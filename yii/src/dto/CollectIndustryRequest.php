@@ -13,6 +13,7 @@ final readonly class CollectIndustryRequest
         public IndustryConfig $config,
         public int $batchSize = 10,
         public bool $enableMemoryManagement = true,
+        public ?int $runId = null,
     ) {
     }
 }

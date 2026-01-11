@@ -9,8 +9,10 @@ use app\dto\CollectCompanyRequest;
 use app\dto\CollectIndustryRequest;
 use app\dto\CollectIndustryResult;
 use app\dto\CollectMacroRequest;
+use app\dto\GateResult;
 use app\enums\CollectionStatus;
 use app\exceptions\CollectionException;
+use app\models\CollectionRun;
 use app\queries\CollectionRunRepository;
 use app\validators\CollectionGateValidatorInterface;
 use DateTimeImmutable;
@@ -42,7 +44,28 @@ final class CollectIndustryHandler implements CollectIndustryInterface
         $datapackId = Uuid::uuid4()->toString();
         $startTime = new DateTimeImmutable();
         $companyCount = count($request->config->companies);
-        $runId = $this->runRepository->create($request->config->industryId, $datapackId);
+
+        if ($request->runId !== null) {
+            $runId = $request->runId;
+            $run = CollectionRun::findOne($runId);
+            if ($run) {
+                // Check if cancelled while pending
+                if ($run->cancel_requested) {
+                    return $this->handleCancellation(
+                        $runId,
+                        $request->config->industryId,
+                        $datapackId,
+                        [],
+                        $startTime
+                    );
+                }
+                $run->datapack_id = $datapackId;
+                $run->started_at = $startTime->format('Y-m-d H:i:s');
+                $run->markRunning();
+            }
+        } else {
+            $runId = $this->runRepository->create($request->config->industryId, $datapackId);
+        }
 
         $this->logger->log(
             [
@@ -71,6 +94,17 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             $batchNumber = 0;
 
             foreach ($batches as $batch) {
+                // Check cancellation before processing batch
+                if ($this->isCancellationRequested($runId)) {
+                    return $this->handleCancellation(
+                        $runId,
+                        $request->config->industryId,
+                        $datapackId,
+                        $companyStatuses,
+                        $startTime
+                    );
+                }
+
                 $batchNumber++;
                 $this->logger->log(
                     [
@@ -112,19 +146,42 @@ final class CollectIndustryHandler implements CollectIndustryInterface
 
                         $companyStatuses[$companyConfig->ticker] = CollectionStatus::Failed;
                     }
-                }
 
-                $this->runRepository->updateProgress(
-                    $runId,
-                    $companyCount,
-                    $this->countByStatus($companyStatuses, CollectionStatus::Complete),
-                    $this->countByStatus($companyStatuses, CollectionStatus::Failed)
-                    + $this->countByStatus($companyStatuses, CollectionStatus::Partial)
-                );
+                    // Update progress after each company for responsive UI
+                    $this->runRepository->updateProgress(
+                        $runId,
+                        $companyCount,
+                        $this->countByStatus($companyStatuses, CollectionStatus::Complete),
+                        $this->countByStatus($companyStatuses, CollectionStatus::Failed)
+                        + $this->countByStatus($companyStatuses, CollectionStatus::Partial)
+                    );
+
+                    // Check cancellation after each company
+                    if ($this->isCancellationRequested($runId)) {
+                        return $this->handleCancellation(
+                            $runId,
+                            $request->config->industryId,
+                            $datapackId,
+                            $companyStatuses,
+                            $startTime
+                        );
+                    }
+                }
 
                 if ($request->enableMemoryManagement) {
                     $this->manageMemory();
                 }
+            }
+
+            // Check cancellation after last batch (just in case)
+            if ($this->isCancellationRequested($runId)) {
+                return $this->handleCancellation(
+                    $runId,
+                    $request->config->industryId,
+                    $datapackId,
+                    $companyStatuses,
+                    $startTime
+                );
             }
 
             $overallStatus = $this->determineOverallStatus(
@@ -177,7 +234,8 @@ final class CollectIndustryHandler implements CollectIndustryInterface
             );
 
             return new CollectIndustryResult(
-                industryId: $request->config->id,
+                runId: $runId,
+                industryId: (string) $request->config->id,
                 datapackId: $datapackId,
                 gateResult: $gateResult,
                 overallStatus: $overallStatus,
@@ -199,6 +257,50 @@ final class CollectIndustryHandler implements CollectIndustryInterface
 
             throw $exception;
         }
+    }
+
+    private function isCancellationRequested(int $runId): bool
+    {
+        return (bool) CollectionRun::find()
+            ->where(['id' => $runId, 'cancel_requested' => 1])
+            ->exists();
+    }
+
+    private function handleCancellation(
+        int $runId,
+        int $industryId,
+        string $datapackId,
+        array $companyStatuses,
+        DateTimeImmutable $startTime
+    ): CollectIndustryResult {
+        $run = CollectionRun::findOne($runId);
+        if ($run) {
+            $run->markCancelled();
+            // Calculate duration
+            $durationSeconds = (new DateTimeImmutable())->getTimestamp() - $startTime->getTimestamp();
+            $run->duration_seconds = $durationSeconds;
+            $run->save(false, ['duration_seconds']);
+        }
+
+        $this->logger->log(
+            [
+                'message' => 'Industry collection cancelled by user',
+                'industry' => $industryId,
+                'datapack_id' => $datapackId,
+                'companies_processed' => count($companyStatuses),
+            ],
+            Logger::LEVEL_INFO,
+            'collection'
+        );
+
+        return new CollectIndustryResult(
+            runId: $runId,
+            industryId: (string) $industryId,
+            datapackId: $datapackId,
+            gateResult: new GateResult(false, [], []), // Empty gate result for cancellation
+            overallStatus: CollectionStatus::Cancelled,
+            companyStatuses: $companyStatuses
+        );
     }
 
     private function manageMemory(): void

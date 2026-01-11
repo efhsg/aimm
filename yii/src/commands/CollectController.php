@@ -24,6 +24,8 @@ final class CollectController extends Controller
     private const HEADER_DURATION = 'Duration';
     private const DURATION_FORMAT = '%.2fs';
 
+    public $runId;
+
     public function __construct(
         string $id,
         Module $module,
@@ -33,6 +35,11 @@ final class CollectController extends Controller
         array $config = []
     ) {
         parent::__construct($id, $module, $config);
+    }
+
+    public function options($actionID): array
+    {
+        return array_merge(parent::options($actionID), ['runId']);
     }
 
     /**
@@ -73,6 +80,8 @@ final class CollectController extends Controller
      */
     public function actionIndustry(string $slug): int
     {
+        $runId = $this->runId !== null ? (int) $this->runId : null;
+
         $startedAt = microtime(true);
         $industry = $this->industryQuery->findBySlug($slug);
 
@@ -96,6 +105,7 @@ final class CollectController extends Controller
                 new CollectIndustryRequest(
                     industryId: (int) $industry['id'],
                     actorUsername: 'cli',
+                    runId: $runId,
                 )
             );
         } catch (Throwable $exception) {

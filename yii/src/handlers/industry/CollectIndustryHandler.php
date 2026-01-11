@@ -91,6 +91,7 @@ final class CollectIndustryHandler implements CollectIndustryInterface
                 config: $industryConfig,
                 batchSize: $request->batchSize,
                 enableMemoryManagement: $request->enableMemoryManagement,
+                runId: $request->runId,
             ));
 
             // 7. Get run ID from datapack

@@ -26,6 +26,7 @@ use yii\db\ActiveRecord;
  * @property string|null $file_path
  * @property int|null $file_size_bytes
  * @property int|null $duration_seconds
+ * @property bool $cancel_requested
  *
  * @property-read CollectionError[] $collectionErrors
  */
@@ -36,6 +37,7 @@ final class CollectionRun extends ActiveRecord
     public const STATUS_COMPLETE = 'complete';
     public const STATUS_PARTIAL = 'partial';
     public const STATUS_FAILED = 'failed';
+    public const STATUS_CANCELLED = 'cancelled';
 
     public static function tableName(): string
     {
@@ -57,10 +59,12 @@ final class CollectionRun extends ActiveRecord
                 self::STATUS_COMPLETE,
                 self::STATUS_PARTIAL,
                 self::STATUS_FAILED,
+                self::STATUS_CANCELLED,
             ]],
             [['companies_total', 'companies_success', 'companies_failed', 'error_count', 'warning_count'], 'integer'],
             [['companies_total', 'companies_success', 'companies_failed', 'error_count', 'warning_count'], 'default', 'value' => 0],
-            [['gate_passed'], 'boolean'],
+            [['gate_passed', 'cancel_requested'], 'boolean'],
+            [['cancel_requested'], 'default', 'value' => false],
             [['file_path'], 'string', 'max' => 512],
             [['file_size_bytes', 'duration_seconds'], 'integer'],
             [['started_at', 'completed_at'], 'safe'],
@@ -85,6 +89,7 @@ final class CollectionRun extends ActiveRecord
             'file_path' => 'File Path',
             'file_size_bytes' => 'File Size (bytes)',
             'duration_seconds' => 'Duration (seconds)',
+            'cancel_requested' => 'Cancel Requested',
         ];
     }
 
@@ -122,6 +127,13 @@ final class CollectionRun extends ActiveRecord
     public function markFailed(): void
     {
         $this->status = self::STATUS_FAILED;
+        $this->completed_at = date('Y-m-d H:i:s');
+        $this->save(false, ['status', 'completed_at']);
+    }
+
+    public function markCancelled(): void
+    {
+        $this->status = self::STATUS_CANCELLED;
         $this->completed_at = date('Y-m-d H:i:s');
         $this->save(false, ['status', 'completed_at']);
     }

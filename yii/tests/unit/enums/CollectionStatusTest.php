@@ -17,6 +17,7 @@ final class CollectionStatusTest extends Unit
         $this->assertSame('complete', CollectionStatus::Complete->value);
         $this->assertSame('partial', CollectionStatus::Partial->value);
         $this->assertSame('failed', CollectionStatus::Failed->value);
+        $this->assertSame('cancelled', CollectionStatus::Cancelled->value);
     }
 
     public function testFromStringCreatesEnum(): void
@@ -29,6 +30,6 @@ final class CollectionStatusTest extends Unit
     {
         $cases = CollectionStatus::cases();
 
-        $this->assertCount(3, $cases);
+        $this->assertCount(4, $cases);
     }
 }

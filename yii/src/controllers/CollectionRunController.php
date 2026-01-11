@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace app\controllers;
 
 use app\filters\AdminAuthFilter;
+use app\models\CollectionRun;
 use app\queries\CollectionRunRepository;
 use app\queries\IndustryMemberQuery;
 use app\queries\IndustryQuery;
@@ -26,6 +27,7 @@ final class CollectionRunController extends Controller
         'running' => 'Running',
         'complete' => 'Complete',
         'failed' => 'Failed',
+        'cancelled' => 'Cancelled',
     ];
 
     public $layout = 'main';
@@ -48,6 +50,24 @@ final class CollectionRunController extends Controller
                 'class' => AdminAuthFilter::class,
             ],
         ];
+    }
+
+    /**
+     * Cancel a running collection.
+     */
+    public function actionCancel(int $id): Response
+    {
+        $run = CollectionRun::findOne($id);
+        $cancellableStatuses = [
+            CollectionRun::STATUS_PENDING,
+            CollectionRun::STATUS_RUNNING,
+        ];
+        if ($run && in_array($run->status, $cancellableStatuses, true)) {
+            $run->cancel_requested = true;
+            $run->save(false, ['cancel_requested']);
+            return $this->asJson(['success' => true]);
+        }
+        return $this->asJson(['success' => false, 'error' => 'Cannot cancel']);
     }
 
     /**
@@ -385,6 +405,7 @@ final class CollectionRunController extends Controller
             'error_count' => (int) ($run['error_count'] ?? 0),
             'warning_count' => (int) ($run['warning_count'] ?? 0),
             'duration_seconds' => (int) ($run['duration_seconds'] ?? 0),
+            'cancel_requested' => (bool) ($run['cancel_requested'] ?? false),
         ]);
     }
 }

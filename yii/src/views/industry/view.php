@@ -159,8 +159,8 @@ $this->title = $industry->name;
             <?php endif; ?>
             <?php if ($industry->isActive && count($companies) > 0): ?>
                 <form method="post"
-                      action="<?= Url::to(['collect', 'slug' => $industry->slug]) ?>"
-                      onsubmit="return confirm('Start data collection for this industry?');">
+                      id="collect-form"
+                      action="<?= Url::to(['collect', 'slug' => $industry->slug]) ?>">
                     <?= Html::hiddenInput(
                         Yii::$app->request->csrfParam,
                         Yii::$app->request->csrfToken
@@ -292,7 +292,50 @@ $this->title = $industry->name;
     </div>
 </div>
 
+<!-- Collection Progress Modal -->
+<div id="collect-modal" class="modal modal--hidden">
+    <div class="modal__backdrop"></div>
+    <div class="modal__content modal__content--narrow">
+        <div class="modal__header">
+            <h3 class="modal__title">Data Collection</h3>
+        </div>
+        <div class="modal__body">
+            <div class="collect-phase">
+                <span class="collect-phase__label">Initializing...</span>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-bar__fill" style="width: 0%"></div>
+            </div>
+            <div class="progress-bar__text">
+                <span class="progress-bar__count">0 of 0 companies</span>
+                <span class="progress-bar__time">Elapsed: 0s</span>
+            </div>
+
+            <div class="collect-result collect-result--hidden">
+                <div class="collect-result__status">
+                    <span class="badge"></span>
+                </div>
+                <div class="collect-result__summary"></div>
+            </div>
+        </div>
+        <div class="modal__footer">
+            <button type="button" class="btn btn--danger" id="cancel-collect-btn">
+                Cancel
+            </button>
+
+            <a href="#" class="btn btn--primary btn--hidden" id="view-run-btn">
+                View Results
+            </a>
+            <button type="button" class="btn btn--secondary btn--hidden" id="close-collect-btn">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
+// Add Members Modal Logic
 document.getElementById('add-members-btn').addEventListener('click', function() {
     document.getElementById('add-members-modal').classList.remove('modal--hidden');
 });
@@ -301,9 +344,184 @@ function closeModal() {
     document.getElementById('add-members-modal').classList.add('modal--hidden');
 }
 
+// Collection Modal Logic
+const collectForm = document.getElementById('collect-form');
+const collectModal = document.getElementById('collect-modal');
+let pollInterval = null;
+let currentRunId = null;
+let isCollecting = false;
+
+if (collectForm) {
+    collectForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (isCollecting) return;
+        
+        if (confirm('Start data collection for this industry?')) {
+            startCollection();
+        }
+    });
+}
+
+async function startCollection() {
+    isCollecting = true;
+    showCollectModal();
+    updatePhase('Initializing collection...');
+    
+    // Reset UI
+    document.querySelector('.progress-bar__fill').style.width = '0%';
+    document.querySelector('.collect-result').classList.add('collect-result--hidden');
+    document.getElementById('cancel-collect-btn').classList.remove('btn--hidden');
+    document.getElementById('view-run-btn').classList.add('btn--hidden');
+    document.getElementById('close-collect-btn').classList.add('btn--hidden');
+
+    try {
+        const formData = new FormData(collectForm);
+        const response = await fetch(collectForm.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.runId) {
+            currentRunId = data.runId;
+            startPolling();
+        } else {
+            alert('Failed to start collection: ' + (data.errors ? data.errors.join(', ') : 'Unknown error'));
+            closeCollectModal();
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Network error starting collection');
+        closeCollectModal();
+    }
+}
+
+function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(pollStatus, 2000);
+}
+
+async function pollStatus() {
+    try {
+        const response = await fetch(`/admin/collection-run/${currentRunId}/status`);
+        const status = await response.json();
+
+        updateProgress(status);
+
+        if (['complete', 'failed', 'cancelled'].includes(status.status)) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+            isCollecting = false;
+            showResult(status);
+        }
+    } catch (e) {
+        console.error('Polling error', e);
+    }
+}
+
+async function cancelCollection() {
+    if (!confirm('Cancel data collection? Progress will be lost.')) return;
+
+    try {
+        // Optimistic UI update
+        document.getElementById('cancel-collect-btn').disabled = true;
+        updatePhase('Cancelling...');
+        
+        await fetch(`/admin/collection-run/${currentRunId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': document.querySelector('[name="<?= Yii::$app->request->csrfParam ?>"]').value
+            }
+        });
+    } catch (e) {
+        console.error('Cancel error', e);
+        document.getElementById('cancel-collect-btn').disabled = false;
+    }
+}
+
+function updateProgress(status) {
+    const total = status.companies_total || 1;
+    const done = status.companies_success + status.companies_failed;
+    const pct = Math.min(100, Math.round((done / total) * 100));
+
+    document.querySelector('.progress-bar__fill').style.width = pct + '%';
+    document.querySelector('.progress-bar__count').textContent = `${done} of ${total} companies`;
+    document.querySelector('.progress-bar__time').textContent = `Elapsed: ${status.duration_seconds || 0}s`;
+
+    if (status.cancel_requested) {
+         updatePhase('Cancellation requested...');
+    } else if (done < total) {
+        updatePhase(`Collecting company ${done + 1} of ${total}...`);
+    } else {
+        updatePhase('Validating results...');
+    }
+}
+
+function updatePhase(text) {
+    document.querySelector('.collect-phase__label').textContent = text;
+}
+
+function showResult(status) {
+    // Hide progress, show result
+    document.querySelector('.collect-result').classList.remove('collect-result--hidden');
+    document.getElementById('cancel-collect-btn').classList.add('btn--hidden');
+    document.getElementById('cancel-collect-btn').disabled = false;
+    
+    document.getElementById('view-run-btn').href = `/admin/collection-run/${currentRunId}`;
+    document.getElementById('view-run-btn').classList.remove('btn--hidden');
+    document.getElementById('close-collect-btn').classList.remove('btn--hidden');
+
+    // Set status badge
+    const badge = document.querySelector('.collect-result__status .badge');
+    const statusText = status.status.charAt(0).toUpperCase() + status.status.slice(1);
+    badge.textContent = statusText;
+    
+    let badgeClass = 'badge--inactive';
+    if (status.status === 'complete') {
+        badgeClass = status.gate_passed ? 'badge--success' : 'badge--warning';
+    } else if (status.status === 'failed') {
+        badgeClass = 'badge--danger';
+    } else if (status.status === 'cancelled') {
+        badgeClass = 'badge--warning';
+    }
+    badge.className = 'badge ' + badgeClass;
+
+    // Set summary
+    const summary = document.querySelector('.collect-result__summary');
+    summary.innerHTML = `
+        <div>Companies: ${status.companies_success} success, ${status.companies_failed} failed</div>
+        <div>Gate: ${status.gate_passed ? 'Passed' : 'Failed'}</div>
+        <div>Duration: ${status.duration_seconds}s</div>
+    `;
+}
+
+function showCollectModal() {
+    collectModal.classList.remove('modal--hidden');
+}
+
+function closeCollectModal() {
+    collectModal.classList.add('modal--hidden');
+    isCollecting = false;
+    if (pollInterval) clearInterval(pollInterval);
+    location.reload();
+}
+
+document.getElementById('cancel-collect-btn')?.addEventListener('click', cancelCollection);
+document.getElementById('close-collect-btn')?.addEventListener('click', closeCollectModal);
+
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-        closeModal();
+        if (collectModal && !collectModal.classList.contains('modal--hidden')) {
+            if (!isCollecting) {
+                 closeCollectModal();
+            }
+        } else {
+            closeModal();
+        }
     }
 });
 </script>
