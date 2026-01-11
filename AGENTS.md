@@ -2,6 +2,10 @@
 
 This file configures **OpenAI Codex** for this repository.
 
+## Critical Rules
+
+- **Never use local PHP.** All PHP commands MUST use: `docker exec aimm_yii <command>`
+
 ## Single Source of Truth
 
 All project rules, architecture, and configuration are defined in `CLAUDE.md`.

@@ -13,6 +13,8 @@ Single source of truth for project-specific operations.
 
 ## Commands
 
+**CRITICAL: Never use local PHP. All PHP commands MUST run inside Docker via `docker exec aimm_yii`.**
+
 ### Linter
 
 ```bash
