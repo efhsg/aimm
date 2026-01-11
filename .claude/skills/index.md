@@ -13,6 +13,7 @@ For commands, paths, and environment: `.claude/config/project.md`
 | Access Database | `access-database-from-host.md` | Querying DB from host without docker exec |
 | Create Migration | `create-migration.md` | Adding/modifying database schema |
 | Finalize Changes | `../commands/finalize-changes.md` | Validating changes, running linter/tests, preparing commit |
+| Frontend Design | `frontend-design.md` | Building/modifying UI across admin, docs, or PDF reports |
 | New Branch | `new-branch.md` | Starting work on a new feature or fix branch |
 | Review Changes | `review-changes.md` | Code review, PRs, pre-commit checks |
 | Squash Migrations | `squash-migrations.md` | Consolidating migrations with backup and verification |
