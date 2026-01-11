@@ -148,7 +148,7 @@ final class CollectMacroHandler implements CollectMacroInterface
                         'price_date' => $dateStr,
                         'close' => $commodity->value,
                         'currency' => $commodity->currency,
-                        'source_adapter' => 'web_fetch',
+                        'source_adapter' => $commodity->providerId ?? 'web_fetch',
                         'collected_at' => $now->format('Y-m-d H:i:s'),
                         'provider_id' => $commodity->providerId,
                     ]);
@@ -165,7 +165,7 @@ final class CollectMacroHandler implements CollectMacroInterface
                         'price_date' => $dateStr,
                         'close' => $margin->value,
                         'currency' => $margin->currency,
-                        'source_adapter' => 'web_fetch',
+                        'source_adapter' => $margin->providerId ?? 'web_fetch',
                         'collected_at' => $now->format('Y-m-d H:i:s'),
                         'provider_id' => $margin->providerId,
                     ]);
@@ -183,7 +183,7 @@ final class CollectMacroHandler implements CollectMacroInterface
                         'price_date' => $dateStr,
                         'close' => $index->value,
                         'currency' => 'XXX',
-                        'source_adapter' => 'web_fetch',
+                        'source_adapter' => $index->providerId ?? 'web_fetch',
                         'collected_at' => $now->format('Y-m-d H:i:s'),
                         'provider_id' => $index->providerId,
                     ]);
@@ -207,7 +207,7 @@ final class CollectMacroHandler implements CollectMacroInterface
                             'indicator_date' => $dateStr,
                             'value' => $datapoint->value,
                             'unit' => $unit,
-                            'source_adapter' => 'web_fetch',
+                            'source_adapter' => $datapoint->providerId ?? 'web_fetch',
                             'source_url' => $datapoint->sourceUrl,
                             'collected_at' => $now->format('Y-m-d H:i:s'),
                             'provider_id' => $datapoint->providerId,

@@ -48,7 +48,11 @@ final class SourceCandidateFactory
     // FMP API URL templates (stable API, key passed as query param)
     private const FMP_QUOTE_URL = 'https://financialmodelingprep.com/stable/quote?symbol={ticker}';
     private const FMP_KEY_METRICS_URL = 'https://financialmodelingprep.com/stable/key-metrics?symbol={ticker}';
+    private const FMP_KEY_METRICS_TTM_URL = 'https://financialmodelingprep.com/stable/key-metrics-ttm?symbol={ticker}';
     private const FMP_RATIOS_URL = 'https://financialmodelingprep.com/stable/ratios?symbol={ticker}';
+    private const FMP_RATIOS_TTM_URL = 'https://financialmodelingprep.com/stable/ratios-ttm?symbol={ticker}';
+    private const FMP_PROFILE_URL = 'https://financialmodelingprep.com/stable/profile?symbol={ticker}';
+    private const FMP_HISTORICAL_PRICE_URL = 'https://financialmodelingprep.com/stable/historical-price-full?symbol={ticker}';
     private const FMP_INCOME_STATEMENT_URL = 'https://financialmodelingprep.com/stable/income-statement?symbol={ticker}&period={period}';
     private const FMP_CASH_FLOW_URL = 'https://financialmodelingprep.com/stable/cash-flow-statement?symbol={ticker}&period={period}';
     private const FMP_BALANCE_SHEET_URL = 'https://financialmodelingprep.com/stable/balance-sheet-statement?symbol={ticker}&period={period}';
@@ -79,18 +83,53 @@ final class SourceCandidateFactory
         'financials.cash_and_equivalents' => ['balance-sheet-statement'],
         'financials.shares_outstanding' => ['income-statement'],
         'financials.net_debt' => ['balance-sheet-statement'],
+        'financials.cost_of_revenue' => ['income-statement'],
+        'financials.sga_expense' => ['income-statement'],
+        'financials.rd_expense' => ['income-statement'],
         'quarters.revenue' => ['income-statement'],
         'quarters.gross_profit' => ['income-statement'],
         'quarters.operating_income' => ['income-statement'],
         'quarters.ebitda' => ['income-statement'],
         'quarters.net_income' => ['income-statement'],
         'quarters.free_cash_flow' => ['cash-flow-statement'],
+        'quarters.cost_of_revenue' => ['income-statement'],
+        'quarters.sga_expense' => ['income-statement'],
     ];
     private const LOG_UNKNOWN_STATEMENT_METRIC =
         'Unknown financials metric for statement mapping, defaulting to all statements';
 
     // ECB FX rate URL
     private const ECB_FX_RATES_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml';
+
+    // EODHD API URL templates
+    private const EODHD_DIVIDENDS_URL = 'https://eodhd.com/api/div/{ticker}.{exchange}?fmt=json';
+    private const EODHD_SPLITS_URL = 'https://eodhd.com/api/splits/{ticker}.{exchange}?fmt=json';
+    private const EODHD_DOMAIN = 'eodhd.com';
+
+    /**
+     * Ticker to EODHD exchange suffix mapping.
+     */
+    private const EODHD_EXCHANGE_MAP = [
+        'NYSE' => 'US',
+        'NASDAQ' => 'US',
+        'AMEX' => 'US',
+        'LSE' => 'LSE',
+        'XLON' => 'LSE',
+        'AMS' => 'AS',
+        'XAMS' => 'AS',
+        'PAR' => 'PA',
+        'XPAR' => 'PA',
+        'FRA' => 'XETRA',
+        'XFRA' => 'XETRA',
+        'TYO' => 'TSE',
+        'XTKS' => 'TSE',
+        'HKG' => 'HK',
+        'XHKG' => 'HK',
+        'TSX' => 'TO',
+        'XTSE' => 'TO',
+        'ASX' => 'AU',
+        'XASX' => 'AU',
+    ];
 
     // FMP commodity/index symbols
     private const FMP_SYMBOL_BRENT = 'BZUSD';
@@ -247,6 +286,7 @@ final class SourceCandidateFactory
         private readonly ?string $eiaApiKey = null,
         private readonly ?string $eiaInventorySeriesId = null,
         private readonly ?string $fmpApiKey = null,
+        private readonly ?string $eodhdApiKey = null,
         private readonly ?Logger $logger = null,
     ) {
     }
@@ -348,6 +388,170 @@ final class SourceCandidateFactory
         }
 
         return $candidates;
+    }
+
+    /**
+     * Build FMP candidates for TTM (trailing twelve months) metrics.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forTtmMetrics(string $ticker): array
+    {
+        if ($this->fmpApiKey === null || $this->fmpApiKey === '') {
+            return [];
+        }
+
+        $candidates = [];
+        $upperTicker = strtoupper($ticker);
+
+        // Key-metrics-ttm endpoint
+        $keyMetricsTtmUrl = $this->buildFmpUrl(self::FMP_KEY_METRICS_TTM_URL, $upperTicker);
+        if ($keyMetricsTtmUrl !== null) {
+            $candidates[] = new SourceCandidate(
+                url: $keyMetricsTtmUrl,
+                adapterId: 'fmp',
+                priority: 1,
+                domain: self::FMP_DOMAIN,
+            );
+        }
+
+        // Ratios-ttm endpoint
+        $ratiosTtmUrl = $this->buildFmpUrl(self::FMP_RATIOS_TTM_URL, $upperTicker);
+        if ($ratiosTtmUrl !== null) {
+            $candidates[] = new SourceCandidate(
+                url: $ratiosTtmUrl,
+                adapterId: 'fmp',
+                priority: 2,
+                domain: self::FMP_DOMAIN,
+            );
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * Build FMP candidates for company profile data.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forProfile(string $ticker): array
+    {
+        if ($this->fmpApiKey === null || $this->fmpApiKey === '') {
+            return [];
+        }
+
+        $upperTicker = strtoupper($ticker);
+        $profileUrl = $this->buildFmpUrl(self::FMP_PROFILE_URL, $upperTicker);
+
+        if ($profileUrl === null) {
+            return [];
+        }
+
+        return [
+            new SourceCandidate(
+                url: $profileUrl,
+                adapterId: 'fmp',
+                priority: 1,
+                domain: self::FMP_DOMAIN,
+            ),
+        ];
+    }
+
+    /**
+     * Build FMP candidates for historical price data.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forHistoricalPrice(string $ticker): array
+    {
+        if ($this->fmpApiKey === null || $this->fmpApiKey === '') {
+            return [];
+        }
+
+        $upperTicker = strtoupper($ticker);
+        $historyUrl = $this->buildFmpUrl(self::FMP_HISTORICAL_PRICE_URL, $upperTicker);
+
+        if ($historyUrl === null) {
+            return [];
+        }
+
+        return [
+            new SourceCandidate(
+                url: $historyUrl,
+                adapterId: 'fmp',
+                priority: 1,
+                domain: self::FMP_DOMAIN,
+            ),
+        ];
+    }
+
+    /**
+     * Build EODHD candidates for dividend history data.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forDividends(string $ticker, ?string $exchange = null): array
+    {
+        if ($this->eodhdApiKey === null || $this->eodhdApiKey === '') {
+            return [];
+        }
+
+        $eodhdExchange = $this->toEodhdExchange($exchange);
+        $url = $this->buildEodhdUrl(self::EODHD_DIVIDENDS_URL, $ticker, $eodhdExchange);
+
+        if ($url === null) {
+            return [];
+        }
+
+        return [
+            new SourceCandidate(
+                url: $url,
+                adapterId: 'eodhd',
+                priority: 1,
+                domain: self::EODHD_DOMAIN,
+            ),
+        ];
+    }
+
+    /**
+     * Build EODHD candidates for stock splits history data.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forSplits(string $ticker, ?string $exchange = null): array
+    {
+        if ($this->eodhdApiKey === null || $this->eodhdApiKey === '') {
+            return [];
+        }
+
+        $eodhdExchange = $this->toEodhdExchange($exchange);
+        $url = $this->buildEodhdUrl(self::EODHD_SPLITS_URL, $ticker, $eodhdExchange);
+
+        if ($url === null) {
+            return [];
+        }
+
+        return [
+            new SourceCandidate(
+                url: $url,
+                adapterId: 'eodhd',
+                priority: 1,
+                domain: self::EODHD_DOMAIN,
+            ),
+        ];
+    }
+
+    /**
+     * Build EODHD candidates for both dividends and splits.
+     *
+     * @return list<SourceCandidate>
+     */
+    public function forCorporateActions(string $ticker, ?string $exchange = null): array
+    {
+        return array_merge(
+            $this->forDividends($ticker, $exchange),
+            $this->forSplits($ticker, $exchange),
+        );
     }
 
     /**
@@ -1014,6 +1218,38 @@ final class SourceCandidateFactory
         $url = str_replace('{ticker}', urlencode($ticker), $template);
 
         return $url . '&apikey=' . urlencode($this->fmpApiKey);
+    }
+
+    /**
+     * Build EODHD URL with API token as query parameter.
+     */
+    private function buildEodhdUrl(string $template, string $ticker, string $exchange): ?string
+    {
+        if ($this->eodhdApiKey === null || $this->eodhdApiKey === '') {
+            return null;
+        }
+
+        $url = str_replace(
+            ['{ticker}', '{exchange}'],
+            [urlencode(strtoupper($ticker)), urlencode($exchange)],
+            $template
+        );
+
+        return $url . '&api_token=' . urlencode($this->eodhdApiKey);
+    }
+
+    /**
+     * Convert exchange code to EODHD exchange suffix.
+     *
+     * Defaults to 'US' for US stocks.
+     */
+    private function toEodhdExchange(?string $exchange): string
+    {
+        if ($exchange === null || $exchange === '') {
+            return 'US';
+        }
+
+        return self::EODHD_EXCHANGE_MAP[strtoupper($exchange)] ?? 'US';
     }
 
     /**

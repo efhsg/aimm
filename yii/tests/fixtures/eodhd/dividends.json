@@ -1,0 +1,38 @@
+[
+  {
+    "date": "2024-11-08",
+    "declarationDate": "2024-10-25",
+    "recordDate": "2024-11-11",
+    "paymentDate": "2024-12-10",
+    "value": 0.99,
+    "unadjustedValue": 0.99,
+    "currency": "USD"
+  },
+  {
+    "date": "2024-08-12",
+    "declarationDate": "2024-07-26",
+    "recordDate": "2024-08-13",
+    "paymentDate": "2024-09-10",
+    "value": 0.99,
+    "unadjustedValue": 0.99,
+    "currency": "USD"
+  },
+  {
+    "date": "2024-05-10",
+    "declarationDate": "2024-04-26",
+    "recordDate": "2024-05-13",
+    "paymentDate": "2024-06-10",
+    "value": 0.95,
+    "unadjustedValue": 0.95,
+    "currency": "USD"
+  },
+  {
+    "date": "2024-02-13",
+    "declarationDate": "2024-01-26",
+    "recordDate": "2024-02-14",
+    "paymentDate": "2024-03-11",
+    "value": 0.95,
+    "unadjustedValue": 0.95,
+    "currency": "USD"
+  }
+]

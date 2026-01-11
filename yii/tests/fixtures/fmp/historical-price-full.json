@@ -1,0 +1,50 @@
+{
+  "symbol": "XOM",
+  "historical": [
+    {
+      "date": "2024-01-05",
+      "open": 104.50,
+      "high": 106.20,
+      "low": 103.80,
+      "close": 105.42,
+      "adjClose": 105.42,
+      "volume": 15234567,
+      "unadjustedVolume": 15234567,
+      "change": 0.92,
+      "changePercent": 0.88,
+      "vwap": 105.14,
+      "label": "January 05, 24",
+      "changeOverTime": 0.0088
+    },
+    {
+      "date": "2024-01-04",
+      "open": 103.20,
+      "high": 105.10,
+      "low": 102.50,
+      "close": 104.50,
+      "adjClose": 104.50,
+      "volume": 14523456,
+      "unadjustedVolume": 14523456,
+      "change": 1.30,
+      "changePercent": 1.26,
+      "vwap": 104.03,
+      "label": "January 04, 24",
+      "changeOverTime": 0.0126
+    },
+    {
+      "date": "2024-01-03",
+      "open": 102.80,
+      "high": 104.00,
+      "low": 101.90,
+      "close": 103.20,
+      "adjClose": 103.20,
+      "volume": 13456789,
+      "unadjustedVolume": 13456789,
+      "change": 0.40,
+      "changePercent": 0.39,
+      "vwap": 103.03,
+      "label": "January 03, 24",
+      "changeOverTime": 0.0039
+    }
+  ]
+}

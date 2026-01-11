@@ -26,8 +26,12 @@ final class FmpAdapter implements SourceAdapterInterface
      */
     private const ENDPOINT_SEGMENTS = [
         'quote' => 'quote',
+        'key-metrics-ttm' => 'key-metrics-ttm',
         'key-metrics' => 'key-metrics',
+        'ratios-ttm' => 'ratios-ttm',
         'ratios' => 'ratios',
+        'profile' => 'profile',
+        'historical-price-full' => 'historical-price-full',
         'income-statement' => 'income-statement',
         'cash-flow-statement' => 'cash-flow-statement',
         'balance-sheet-statement' => 'balance-sheet-statement',
@@ -66,6 +70,22 @@ final class FmpAdapter implements SourceAdapterInterface
     ];
 
     /**
+     * Ticker suffix to currency mapping for international stocks.
+     */
+    private const TICKER_SUFFIX_CURRENCY_MAP = [
+        '.AS' => 'EUR',  // Amsterdam
+        '.PA' => 'EUR',  // Paris
+        '.DE' => 'EUR',  // Germany/Xetra
+        '.F' => 'EUR',   // Frankfurt
+        '.L' => 'GBP',   // London
+        '.T' => 'JPY',   // Tokyo
+        '.HK' => 'HKD',  // Hong Kong
+        '.TO' => 'CAD',  // Toronto
+        '.AX' => 'AUD',  // Australia
+        '.SW' => 'CHF',  // Swiss
+    ];
+
+    /**
      * Key-metrics endpoint field mappings (scalar values, uses index 0).
      * Field names match FMP stable API key-metrics endpoint response.
      */
@@ -76,6 +96,8 @@ final class FmpAdapter implements SourceAdapterInterface
         'valuation.net_debt_ebitda' => ['field' => 'netDebtToEBITDA', 'unit' => 'ratio'],
         'valuation.market_cap' => ['field' => 'marketCap', 'unit' => 'currency'],
         'valuation.enterprise_value' => ['field' => 'enterpriseValue', 'unit' => 'currency'],
+        'operational.roe' => ['field' => 'roe', 'unit' => 'percent'],
+        'operational.roic' => ['field' => 'roic', 'unit' => 'percent'],
     ];
 
     /**
@@ -83,6 +105,61 @@ final class FmpAdapter implements SourceAdapterInterface
      */
     private const RATIOS_FIELDS = [
         'valuation.fwd_pe' => ['field' => 'priceEarningsRatio', 'unit' => 'ratio'],
+        'operational.gross_margin' => ['field' => 'grossProfitMargin', 'unit' => 'percent'],
+        'operational.operating_margin' => ['field' => 'operatingProfitMargin', 'unit' => 'percent'],
+        'operational.net_margin' => ['field' => 'netProfitMargin', 'unit' => 'percent'],
+        'operational.current_ratio' => ['field' => 'currentRatio', 'unit' => 'ratio'],
+        'operational.debt_to_equity' => ['field' => 'debtEquityRatio', 'unit' => 'ratio'],
+        'operational.roa' => ['field' => 'returnOnAssets', 'unit' => 'percent'],
+    ];
+
+    /**
+     * TTM key-metrics endpoint field mappings (scalar values from key-metrics-ttm).
+     * These provide trailing twelve month values directly from FMP.
+     */
+    private const KEY_METRICS_TTM_FIELDS = [
+        'valuation.revenue_per_share_ttm' => ['field' => 'revenuePerShareTTM', 'unit' => 'currency'],
+        'valuation.ev_ebitda_ttm' => ['field' => 'enterpriseValueOverEBITDATTM', 'unit' => 'ratio'],
+        'valuation.pe_ttm' => ['field' => 'peRatioTTM', 'unit' => 'ratio'],
+        'valuation.pb_ttm' => ['field' => 'pbRatioTTM', 'unit' => 'ratio'],
+        'valuation.fcf_yield_ttm' => ['field' => 'freeCashFlowYieldTTM', 'unit' => 'percent'],
+        'valuation.div_yield_ttm' => ['field' => 'dividendYieldTTM', 'unit' => 'percent'],
+        'operational.roe_ttm' => ['field' => 'roeTTM', 'unit' => 'percent'],
+        'operational.roic_ttm' => ['field' => 'roicTTM', 'unit' => 'percent'],
+    ];
+
+    /**
+     * TTM ratios endpoint field mappings (scalar values from ratios-ttm).
+     */
+    private const RATIOS_TTM_FIELDS = [
+        'operational.gross_margin_ttm' => ['field' => 'grossProfitMarginTTM', 'unit' => 'percent'],
+        'operational.operating_margin_ttm' => ['field' => 'operatingProfitMarginTTM', 'unit' => 'percent'],
+        'operational.net_margin_ttm' => ['field' => 'netProfitMarginTTM', 'unit' => 'percent'],
+        'operational.roa_ttm' => ['field' => 'returnOnAssetsTTM', 'unit' => 'percent'],
+    ];
+
+    /**
+     * Company profile endpoint field mappings.
+     */
+    private const PROFILE_FIELDS = [
+        'profile.sector' => ['field' => 'sector', 'unit' => 'string'],
+        'profile.industry' => ['field' => 'industry', 'unit' => 'string'],
+        'profile.country' => ['field' => 'country', 'unit' => 'string'],
+        'profile.exchange' => ['field' => 'exchangeShortName', 'unit' => 'string'],
+        'profile.currency' => ['field' => 'currency', 'unit' => 'string'],
+        'profile.employees' => ['field' => 'fullTimeEmployees', 'unit' => 'number'],
+        'profile.description' => ['field' => 'description', 'unit' => 'string'],
+        'profile.ceo' => ['field' => 'ceo', 'unit' => 'string'],
+        'profile.website' => ['field' => 'website', 'unit' => 'string'],
+        'profile.ipo_date' => ['field' => 'ipoDate', 'unit' => 'date'],
+    ];
+
+    /**
+     * Historical price endpoint field mappings.
+     */
+    private const HISTORICAL_PRICE_FIELDS = [
+        'benchmark.price' => ['field' => 'close', 'unit' => 'currency'],
+        'benchmark.price_history' => ['field' => 'close', 'unit' => 'currency', 'historical' => true],
     ];
 
     /**
@@ -95,11 +172,16 @@ final class FmpAdapter implements SourceAdapterInterface
         'financials.ebitda' => ['field' => 'ebitda', 'unit' => 'currency'],
         'financials.net_income' => ['field' => 'netIncome', 'unit' => 'currency'],
         'financials.shares_outstanding' => ['field' => 'weightedAverageShsOut', 'unit' => 'number'],
+        'financials.cost_of_revenue' => ['field' => 'costOfRevenue', 'unit' => 'currency'],
+        'financials.sga_expense' => ['field' => 'sellingGeneralAndAdministrativeExpenses', 'unit' => 'currency'],
+        'financials.rd_expense' => ['field' => 'researchAndDevelopmentExpenses', 'unit' => 'currency'],
         'quarters.revenue' => ['field' => 'revenue', 'unit' => 'currency'],
         'quarters.gross_profit' => ['field' => 'grossProfit', 'unit' => 'currency'],
         'quarters.operating_income' => ['field' => 'operatingIncome', 'unit' => 'currency'],
         'quarters.ebitda' => ['field' => 'ebitda', 'unit' => 'currency'],
         'quarters.net_income' => ['field' => 'netIncome', 'unit' => 'currency'],
+        'quarters.cost_of_revenue' => ['field' => 'costOfRevenue', 'unit' => 'currency'],
+        'quarters.sga_expense' => ['field' => 'sellingGeneralAndAdministrativeExpenses', 'unit' => 'currency'],
     ];
 
     /**
@@ -137,7 +219,11 @@ final class FmpAdapter implements SourceAdapterInterface
         return array_unique(array_merge(
             array_keys(self::QUOTE_FIELDS),
             array_keys(self::KEY_METRICS_FIELDS),
+            array_keys(self::KEY_METRICS_TTM_FIELDS),
             array_keys(self::RATIOS_FIELDS),
+            array_keys(self::RATIOS_TTM_FIELDS),
+            array_keys(self::PROFILE_FIELDS),
+            array_keys(self::HISTORICAL_PRICE_FIELDS),
             array_keys(self::INCOME_STATEMENT_FIELDS),
             array_keys(self::CASH_FLOW_FIELDS),
             array_keys(self::BALANCE_SHEET_FIELDS),
@@ -181,7 +267,11 @@ final class FmpAdapter implements SourceAdapterInterface
         return match ($endpointType) {
             'quote' => $this->adaptQuote($decoded, $request->datapointKeys),
             'key-metrics' => $this->adaptKeyMetrics($decoded, $request->datapointKeys),
+            'key-metrics-ttm' => $this->adaptKeyMetricsTtm($decoded, $request->datapointKeys),
             'ratios' => $this->adaptRatios($decoded, $request->datapointKeys),
+            'ratios-ttm' => $this->adaptRatiosTtm($decoded, $request->datapointKeys),
+            'profile' => $this->adaptProfile($decoded, $request->datapointKeys),
+            'historical-price-full' => $this->adaptHistoricalPrice($decoded, $request->datapointKeys, $request->ticker),
             'income-statement' => $this->adaptIncomeStatement($decoded, $request->datapointKeys),
             'cash-flow-statement' => $this->adaptCashFlow($decoded, $request->datapointKeys),
             'balance-sheet-statement' => $this->adaptBalanceSheet($decoded, $request->datapointKeys),
@@ -257,6 +347,7 @@ final class FmpAdapter implements SourceAdapterInterface
                 scale: 'units',
                 asOf: null,
                 locator: SourceLocator::json("\$[0].{$field}", (string) $value),
+                providerId: self::ADAPTER_ID,
             );
         }
 
@@ -281,6 +372,26 @@ final class FmpAdapter implements SourceAdapterInterface
         $normalizedExchange = strtoupper(trim($exchange));
 
         return self::EXCHANGE_CURRENCY_MAP[$normalizedExchange] ?? 'USD';
+    }
+
+    /**
+     * Resolve currency from ticker suffix for international stocks.
+     *
+     * Returns USD as default for US tickers (no suffix or unrecognized suffix).
+     */
+    private function resolveCurrencyFromTicker(?string $ticker): string
+    {
+        if ($ticker === null || $ticker === '') {
+            return 'USD';
+        }
+
+        foreach (self::TICKER_SUFFIX_CURRENCY_MAP as $suffix => $currency) {
+            if (str_ends_with(strtoupper($ticker), strtoupper($suffix))) {
+                return $currency;
+            }
+        }
+
+        return 'USD';
     }
 
     /**
@@ -317,7 +428,9 @@ final class FmpAdapter implements SourceAdapterInterface
                 continue;
             }
 
-            // Convert decimal to percent for percent unit
+            // FMP returns percentages as decimals (e.g., 0.32 for 32%).
+            // The abs($value) < 1 heuristic converts these to percent form.
+            // Values >= 1 are assumed to already be in percent form.
             if ($config['unit'] === 'percent' && abs($value) < 1) {
                 $value *= 100;
             }
@@ -330,6 +443,7 @@ final class FmpAdapter implements SourceAdapterInterface
                 scale: null,
                 asOf: $asOf,
                 locator: SourceLocator::json("\$[0].{$field}", (string) $value),
+                providerId: self::ADAPTER_ID,
             );
         }
 
@@ -374,6 +488,13 @@ final class FmpAdapter implements SourceAdapterInterface
                 continue;
             }
 
+            // FMP returns percentages as decimals (e.g., 0.32 for 32%).
+            // The abs($value) < 1 heuristic converts these to percent form.
+            // Values >= 1 are assumed to already be in percent form.
+            if ($config['unit'] === 'percent' && abs($value) < 1) {
+                $value *= 100;
+            }
+
             $extractions[$key] = new Extraction(
                 datapointKey: $key,
                 rawValue: $value,
@@ -382,6 +503,7 @@ final class FmpAdapter implements SourceAdapterInterface
                 scale: null,
                 asOf: $asOf,
                 locator: SourceLocator::json("\$[0].{$field}", (string) $value),
+                providerId: self::ADAPTER_ID,
             );
         }
 
@@ -389,6 +511,306 @@ final class FmpAdapter implements SourceAdapterInterface
             adapterId: self::ADAPTER_ID,
             extractions: $extractions,
             notFound: $notFound,
+        );
+    }
+
+    /**
+     * Adapt TTM key-metrics endpoint response.
+     *
+     * @param list<string> $requestedKeys
+     */
+    private function adaptKeyMetricsTtm(array $data, array $requestedKeys): AdaptResult
+    {
+        if (empty($data) || !isset($data[0])) {
+            return new AdaptResult(
+                adapterId: self::ADAPTER_ID,
+                extractions: [],
+                notFound: $requestedKeys,
+                parseError: 'Empty key-metrics-ttm response',
+            );
+        }
+
+        $record = $data[0];
+        $extractions = [];
+        $notFound = [];
+
+        foreach ($requestedKeys as $key) {
+            if (!isset(self::KEY_METRICS_TTM_FIELDS[$key])) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            $config = self::KEY_METRICS_TTM_FIELDS[$key];
+            $field = $config['field'];
+            $value = $this->extractNumericValue($record, $field);
+
+            if ($value === null) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            // FMP returns percentages as decimals (e.g., 0.32 for 32%).
+            // The abs($value) < 1 heuristic converts these to percent form.
+            // Values >= 1 are assumed to already be in percent form.
+            if ($config['unit'] === 'percent' && abs($value) < 1) {
+                $value *= 100;
+            }
+
+            $extractions[$key] = new Extraction(
+                datapointKey: $key,
+                rawValue: $value,
+                unit: $config['unit'],
+                currency: null,
+                scale: null,
+                asOf: null,
+                locator: SourceLocator::json("\$[0].{$field}", (string) $value),
+                providerId: self::ADAPTER_ID,
+            );
+        }
+
+        return new AdaptResult(
+            adapterId: self::ADAPTER_ID,
+            extractions: $extractions,
+            notFound: $notFound,
+        );
+    }
+
+    /**
+     * Adapt TTM ratios endpoint response.
+     *
+     * @param list<string> $requestedKeys
+     */
+    private function adaptRatiosTtm(array $data, array $requestedKeys): AdaptResult
+    {
+        if (empty($data) || !isset($data[0])) {
+            return new AdaptResult(
+                adapterId: self::ADAPTER_ID,
+                extractions: [],
+                notFound: $requestedKeys,
+                parseError: 'Empty ratios-ttm response',
+            );
+        }
+
+        $record = $data[0];
+        $extractions = [];
+        $notFound = [];
+
+        foreach ($requestedKeys as $key) {
+            if (!isset(self::RATIOS_TTM_FIELDS[$key])) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            $config = self::RATIOS_TTM_FIELDS[$key];
+            $field = $config['field'];
+            $value = $this->extractNumericValue($record, $field);
+
+            if ($value === null) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            // FMP returns percentages as decimals (e.g., 0.32 for 32%).
+            // The abs($value) < 1 heuristic converts these to percent form.
+            // Values >= 1 are assumed to already be in percent form.
+            if ($config['unit'] === 'percent' && abs($value) < 1) {
+                $value *= 100;
+            }
+
+            $extractions[$key] = new Extraction(
+                datapointKey: $key,
+                rawValue: $value,
+                unit: $config['unit'],
+                currency: null,
+                scale: null,
+                asOf: null,
+                locator: SourceLocator::json("\$[0].{$field}", (string) $value),
+                providerId: self::ADAPTER_ID,
+            );
+        }
+
+        return new AdaptResult(
+            adapterId: self::ADAPTER_ID,
+            extractions: $extractions,
+            notFound: $notFound,
+        );
+    }
+
+    /**
+     * Adapt company profile endpoint response.
+     *
+     * @param list<string> $requestedKeys
+     */
+    private function adaptProfile(array $data, array $requestedKeys): AdaptResult
+    {
+        if (empty($data) || !isset($data[0])) {
+            return new AdaptResult(
+                adapterId: self::ADAPTER_ID,
+                extractions: [],
+                notFound: $requestedKeys,
+                parseError: 'Empty profile response',
+            );
+        }
+
+        $record = $data[0];
+        $extractions = [];
+        $notFound = [];
+
+        foreach ($requestedKeys as $key) {
+            if (!isset(self::PROFILE_FIELDS[$key])) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            $config = self::PROFILE_FIELDS[$key];
+            $field = $config['field'];
+
+            if (!isset($record[$field])) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            $value = $record[$field];
+
+            // Handle different unit types
+            if ($config['unit'] === 'number') {
+                $value = is_numeric($value) ? (float) $value : null;
+                if ($value === null) {
+                    $notFound[] = $key;
+                    continue;
+                }
+            } elseif ($config['unit'] === 'string' || $config['unit'] === 'date') {
+                $value = (string) $value;
+                if ($value === '') {
+                    $notFound[] = $key;
+                    continue;
+                }
+            }
+
+            $extractions[$key] = new Extraction(
+                datapointKey: $key,
+                rawValue: $value,
+                unit: $config['unit'],
+                currency: null,
+                scale: null,
+                asOf: null,
+                locator: SourceLocator::json("\$[0].{$field}", (string) $value),
+                providerId: self::ADAPTER_ID,
+            );
+        }
+
+        return new AdaptResult(
+            adapterId: self::ADAPTER_ID,
+            extractions: $extractions,
+            notFound: $notFound,
+        );
+    }
+
+    /**
+     * Adapt historical price endpoint response.
+     *
+     * @param list<string> $requestedKeys
+     */
+    private function adaptHistoricalPrice(array $data, array $requestedKeys, ?string $ticker): AdaptResult
+    {
+        // Historical price endpoint returns: {"symbol": "XOM", "historical": [...]}
+        $historical = $data['historical'] ?? [];
+        if (empty($historical)) {
+            return new AdaptResult(
+                adapterId: self::ADAPTER_ID,
+                extractions: [],
+                notFound: $requestedKeys,
+                parseError: 'Empty historical-price-full response',
+            );
+        }
+
+        // Use symbol from response if available, fall back to request ticker
+        $symbol = $data['symbol'] ?? $ticker;
+        $currency = $this->resolveCurrencyFromTicker($symbol);
+
+        $extractions = [];
+        $historicalExtractions = [];
+        $notFound = [];
+
+        foreach ($requestedKeys as $key) {
+            if (!isset(self::HISTORICAL_PRICE_FIELDS[$key])) {
+                $notFound[] = $key;
+                continue;
+            }
+
+            $config = self::HISTORICAL_PRICE_FIELDS[$key];
+            $field = $config['field'];
+
+            // Handle historical data (returns time series)
+            if ($config['historical'] ?? false) {
+                $periods = [];
+                foreach ($historical as $record) {
+                    $date = $this->parseDate($record['date'] ?? null);
+                    if ($date === null) {
+                        continue;
+                    }
+                    $value = $this->extractNumericValue($record, $field);
+                    if ($value === null) {
+                        continue;
+                    }
+                    $periods[] = new PeriodValue(endDate: $date, value: $value);
+                }
+
+                if (empty($periods)) {
+                    $notFound[] = $key;
+                    continue;
+                }
+
+                // Sort by date descending (newest first)
+                usort(
+                    $periods,
+                    static fn (PeriodValue $a, PeriodValue $b): int =>
+                    $b->endDate->getTimestamp() <=> $a->endDate->getTimestamp()
+                );
+
+                $historicalExtractions[$key] = new HistoricalExtraction(
+                    datapointKey: $key,
+                    periods: $periods,
+                    unit: $config['unit'],
+                    locator: SourceLocator::json("\$.historical[*].{$field}", "periods: " . count($periods)),
+                    currency: $currency,
+                    scale: 'units',
+                    providerId: self::ADAPTER_ID,
+                );
+            } else {
+                // Scalar value: most recent price
+                $latestRecord = $historical[0] ?? null;
+                if ($latestRecord === null) {
+                    $notFound[] = $key;
+                    continue;
+                }
+
+                $value = $this->extractNumericValue($latestRecord, $field);
+                if ($value === null) {
+                    $notFound[] = $key;
+                    continue;
+                }
+
+                $asOf = $this->parseDate($latestRecord['date'] ?? null);
+
+                $extractions[$key] = new Extraction(
+                    datapointKey: $key,
+                    rawValue: $value,
+                    unit: $config['unit'],
+                    currency: $currency,
+                    scale: 'units',
+                    asOf: $asOf,
+                    locator: SourceLocator::json("\$.historical[0].{$field}", (string) $value),
+                    providerId: self::ADAPTER_ID,
+                );
+            }
+        }
+
+        return new AdaptResult(
+            adapterId: self::ADAPTER_ID,
+            extractions: $extractions,
+            notFound: $notFound,
+            historicalExtractions: $historicalExtractions,
         );
     }
 
@@ -432,6 +854,7 @@ final class FmpAdapter implements SourceAdapterInterface
                 locator: SourceLocator::json("\$[*].{$field}", "periods: " . count($periods)),
                 currency: $currency,
                 scale: 'units',
+                providerId: self::ADAPTER_ID,
             );
         }
 
@@ -483,6 +906,7 @@ final class FmpAdapter implements SourceAdapterInterface
                         scale: 'units',
                         asOf: $this->parseDate($data[0]['date'] ?? null),
                         locator: SourceLocator::json("\$[0..3].{$field}", "TTM: {$ttmValue}"),
+                        providerId: self::ADAPTER_ID,
                     );
                 } else {
                     $notFound[] = $key;
@@ -505,6 +929,7 @@ final class FmpAdapter implements SourceAdapterInterface
                 locator: SourceLocator::json("\$[*].{$field}", "periods: " . count($periods)),
                 currency: $currency,
                 scale: 'units',
+                providerId: self::ADAPTER_ID,
             );
         }
 
@@ -561,6 +986,7 @@ final class FmpAdapter implements SourceAdapterInterface
                     ),
                     currency: $currency,
                     scale: 'units',
+                    providerId: self::ADAPTER_ID,
                 );
                 continue;
             }
@@ -581,6 +1007,7 @@ final class FmpAdapter implements SourceAdapterInterface
                 locator: SourceLocator::json("\$[*].{$field}", "periods: " . count($periods)),
                 currency: $config['unit'] === 'currency' ? $currency : null,
                 scale: 'units',
+                providerId: self::ADAPTER_ID,
             );
         }
 
