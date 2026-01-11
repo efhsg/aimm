@@ -47,7 +47,21 @@ docker exec aimm_yii vendor/bin/codecept run unit tests/unit/path/FooTest.php
 
 If tests fail, stop and report.
 
-### 5. Prepare commit
+### 5. Check documentation
+
+Review changes and determine if site documentation (`site/`) needs updating:
+
+- New features → document in relevant page
+- New CLI commands → update `cli-usage.md`
+- Configuration changes → update `configuration.md`
+- Architecture changes → update `architecture.md`
+- New dependencies → update `tech-stack.md`
+
+If documentation updates are needed:
+1. Make the updates
+2. Rebuild docs: `npm run docs:build`
+
+### 6. Prepare commit
 
 ```bash
 git add -A

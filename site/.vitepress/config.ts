@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
+  base: '/docs/',
   title: 'AIMM',
   description: 'Equity intelligence pipeline for smarter investment decisions',
 

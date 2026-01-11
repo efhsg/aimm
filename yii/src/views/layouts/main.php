@@ -58,6 +58,9 @@ $currentController = Yii::$app->controller->id;
                class="admin-nav__link<?= $currentController === 'collection-run' ? ' admin-nav__link--active' : '' ?>">
                 Runs
             </a>
+            <a href="/docs/" class="admin-nav__link">
+                Docs
+            </a>
         </nav>
     </div>
 </header>

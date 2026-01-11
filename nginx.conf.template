@@ -20,6 +20,16 @@ http {
         root /var/www/html/yii/web;
         index index.php index.html;
 
+        location = /docs {
+            return 301 $scheme://$http_host$uri/;
+        }
+
+        location /docs/ {
+            alias /var/www/html/site/.vitepress/dist/;
+            index index.html;
+            try_files $uri $uri/ $uri.html =404;
+        }
+
         location / {
             try_files $uri $uri/ /index.php?$query_string;
         }

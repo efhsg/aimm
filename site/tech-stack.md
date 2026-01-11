@@ -89,3 +89,35 @@ docker exec aimm_yii vendor/bin/php-cs-fixer fix
 - Docker with PHP 8.2+ image
 - Gotenberg 8.x container
 - MySQL 8.0+ (for dossier storage)
+
+## Documentation
+
+This documentation site is built with [VitePress](https://vitepress.dev/) and served via nginx.
+
+### Viewing Documentation
+
+Documentation is served by the nginx container at `/docs`:
+
+```
+http://localhost:8510/docs/
+```
+
+### Editing Documentation
+
+For hot reload during editing:
+
+```bash
+npm run docs:dev
+```
+
+This starts a dev server at `http://localhost:5173` with instant updates.
+
+### Building Documentation
+
+To update the production build served by nginx:
+
+```bash
+npm run docs:build
+```
+
+The build output goes to `site/.vitepress/dist/` and is immediately available at `/docs`.
