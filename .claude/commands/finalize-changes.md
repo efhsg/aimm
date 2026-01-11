@@ -14,6 +14,7 @@ git status --porcelain
 ```
 
 - Ignore unrelated file changes. Leave these files unchanged.
+- Always ignore `.claude/screenshots/` and never stage or commit it.
 
 ### 2. Check rules compliance
 
