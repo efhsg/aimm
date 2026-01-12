@@ -422,9 +422,6 @@ return [
         app\queries\MacroIndicatorQuery::class => static function () {
             return new app\queries\MacroIndicatorQuery(Yii::$app->db);
         },
-        app\queries\CollectionAttemptQuery::class => static function () {
-            return new app\queries\CollectionAttemptQuery(Yii::$app->db);
-        },
         app\queries\DataGapQuery::class => static function () {
             return new app\queries\DataGapQuery(Yii::$app->db);
         },
