@@ -347,6 +347,51 @@ final class CollectionRunRepositoryTest extends Unit
         $this->assertNull($result);
     }
 
+    public function testGetLatestCompletedReturnsRow(): void
+    {
+        $expectedRow = [
+            'id' => 42,
+            'industry_id' => 1,
+            'status' => 'complete',
+            'gate_passed' => 0,
+        ];
+
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')->willReturnSelf();
+        $command->method('queryOne')->willReturn($expectedRow);
+
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('createCommand')
+            ->with($this->callback(function (string $sql): bool {
+                return str_contains($sql, 'status = :status')
+                    && str_contains($sql, 'ORDER BY completed_at DESC')
+                    && str_contains($sql, 'LIMIT 1')
+                    && !str_contains($sql, 'gate_passed');
+            }))
+            ->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $result = $repository->getLatestCompleted(1);
+
+        $this->assertSame($expectedRow, $result);
+    }
+
+    public function testGetLatestCompletedReturnsNullWhenNotFound(): void
+    {
+        $command = $this->createMock(Command::class);
+        $command->method('bindValue')->willReturnSelf();
+        $command->method('queryOne')->willReturn(false);
+
+        $db = $this->createMock(Connection::class);
+        $db->method('createCommand')->willReturn($command);
+
+        $repository = new CollectionRunRepository($db);
+        $result = $repository->getLatestCompleted(1);
+
+        $this->assertNull($result);
+    }
+
     public function testExtractTickerExtractsFromCompanyPath(): void
     {
         $db = $this->createMock(Connection::class);

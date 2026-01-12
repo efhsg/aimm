@@ -11,7 +11,7 @@ use yii\db\Connection;
 /**
  * Repository for collection run persistence.
  */
-final class CollectionRunRepository
+class CollectionRunRepository
 {
     public function __construct(
         private readonly Connection $db,
@@ -146,6 +146,23 @@ final class CollectionRunRepository
              WHERE industry_id = :industry_id
                AND status = :status
                AND gate_passed = 1
+             ORDER BY completed_at DESC
+             LIMIT 1',
+        )
+            ->bindValue(':industry_id', $industryId)
+            ->bindValue(':status', 'complete')
+            ->queryOne() ?: null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getLatestCompleted(int $industryId): ?array
+    {
+        return $this->db->createCommand(
+            'SELECT * FROM {{%collection_run}}
+             WHERE industry_id = :industry_id
+               AND status = :status
              ORDER BY completed_at DESC
              LIMIT 1',
         )
