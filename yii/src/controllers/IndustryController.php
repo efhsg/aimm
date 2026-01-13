@@ -23,6 +23,7 @@ use app\queries\AnalysisReportRepository;
 use app\queries\CollectionPolicyQuery;
 use app\queries\CollectionRunRepository;
 use app\queries\CompanyQuery;
+use app\queries\IndustryAnalysisEligibilityQuery;
 use app\queries\IndustryAnalysisQuery;
 use app\queries\IndustryListQuery;
 use app\queries\IndustryMemberQuery;
@@ -61,6 +62,7 @@ final class IndustryController extends Controller
         private readonly RemoveMemberInterface $removeMemberHandler,
         private readonly AnalyzeReportInterface $analyzeHandler,
         private readonly IndustryAnalysisQuery $analysisQuery,
+        private readonly IndustryAnalysisEligibilityQuery $eligibilityQuery,
         $config = []
     ) {
         parent::__construct($id, $module, $config);
@@ -131,11 +133,13 @@ final class IndustryController extends Controller
 
         $companies = $this->companyQuery->findByIndustry($industry->id);
         $runs = $this->runRepository->listByIndustry($industry->id);
+        $analysisEligibility = $this->eligibilityQuery->getEligibility($industry->id);
 
         return $this->render('view', [
             'industry' => $industry,
             'companies' => $companies,
             'runs' => $runs,
+            'analysisEligibility' => $analysisEligibility,
         ]);
     }
 

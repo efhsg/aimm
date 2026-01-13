@@ -8,9 +8,9 @@ use app\models\CollectionAttempt;
 use app\queries\CollectionAttemptQuery;
 use Codeception\Test\Unit;
 
-class CollectionAttemptQueryTest extends Unit
+final class CollectionAttemptQueryTest extends Unit
 {
-    public function testFindRecentByEntityConfiguration()
+    public function testFindRecentByEntityConfiguration(): void
     {
         $query = new CollectionAttemptQuery(CollectionAttempt::class);
         $query->findRecentByEntity('company', 1, 5);
