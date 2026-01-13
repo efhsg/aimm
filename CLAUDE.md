@@ -66,6 +66,20 @@ Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI 
 - `/finalize-changes` — Validate changes, run linter and tests, prepare commit
 - `/review-changes` — Review code changes for correctness, style, and project compliance
 - `/new-branch` — Create a new feature or fix branch
+- `/cp` — Commit staged changes and push to origin
+- `/squash-migrations` — Consolidate migrations with backup and verification
+
+## Skills
+
+Check `.claude/skills/index.md` for reusable task patterns. When working:
+- Load only needed skills to minimize context
+- Create new skills for recurring patterns not yet covered
+- Keep the skills index current
+
+## Code Review
+
+Before finalizing, run `/finalize-changes` which verifies rules compliance, linter, and tests.
+For detailed review criteria, see `.claude/skills/review-changes.md`.
 
 ## Definition of Done
 
@@ -73,5 +87,5 @@ Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI 
 - Checked skills index for applicable skills
 - Used approved folder taxonomy
 - Added tests for new logic
-- Ran linter before commit
+- Ran linter before commit (`/finalize-changes`)
 - Commit message follows format

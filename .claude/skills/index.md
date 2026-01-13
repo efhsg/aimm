@@ -18,7 +18,6 @@ For commands, paths, and environment: `.claude/config/project.md`
 | New Branch | `new-branch.md` | Starting work on a new feature or fix branch |
 | Review Changes | `review-changes.md` | Code review, PRs, pre-commit checks |
 | Squash Migrations | `squash-migrations.md` | Consolidating migrations with backup and verification |
-| Upgrade PHP | `upgrade-php-version.md` | Upgrading PHP in Docker/Composer |
 
 ## Reference Documentation
 

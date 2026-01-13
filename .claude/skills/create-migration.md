@@ -18,7 +18,7 @@ AIMM primarily uses JSON files for datapacks and reports. Database migrations ar
 ## Interface
 
 ```bash
-./yii migrate/create <migration_name>
+docker exec aimm_yii vendor/bin/yii migrate/create <migration_name>
 ```
 
 Naming convention: `create_<table>_table` or `add_<column>_to_<table>`
@@ -164,18 +164,20 @@ public function safeUp(): bool
 
 ## Running Migrations
 
+See `.claude/config/project.md` for all database commands.
+
 ```bash
 # Run all pending migrations
-./yii migrate
+docker exec aimm_yii vendor/bin/yii migrate/up
 
 # Run specific migration
-./yii migrate/up 1
+docker exec aimm_yii vendor/bin/yii migrate/up 1
 
 # Rollback last migration
-./yii migrate/down 1
+docker exec aimm_yii vendor/bin/yii migrate/down 1
 
 # Check migration status
-./yii migrate/history
+docker exec aimm_yii vendor/bin/yii migrate/history
 ```
 
 ## Definition of Done
@@ -186,8 +188,8 @@ public function safeUp(): bool
 - [ ] Column types appropriate for data
 - [ ] Indexes on foreign keys and frequently queried columns
 - [ ] Table prefix `{{%` used for all table names
-- [ ] Migration runs without errors: `./yii migrate`
-- [ ] Migration rolls back without errors: `./yii migrate/down 1`
+- [ ] Migration runs without errors: `docker exec aimm_yii vendor/bin/yii migrate/up`
+- [ ] Migration rolls back without errors: `docker exec aimm_yii vendor/bin/yii migrate/down 1`
 
 ## Naming Conventions
 

@@ -40,23 +40,104 @@ Keep as-is (standard Yii2 structure):
 
 ## Banned for New Code
 
-| Folder | Why | Use Instead |
-|--------|-----|-------------|
-| `services/` | Too generic | Specific handler/factory/validator |
-| `helpers/` | Catch-all | transformers/, query methods |
-| `utils/` | Meaningless | Specific purpose folder |
-| `misc/` | Undefined | Named folder |
-| `components/` | Yii framework only | Proper namespaced classes |
+| Pattern | Why | Use Instead |
+|---------|-----|-------------|
+| `services/` folder | Too generic | Specific handler/factory/validator |
+| `helpers/` folder | Catch-all | transformers/, query methods |
+| `utils/` folder | Meaningless | Specific purpose folder |
+| `misc/` folder | Undefined | Named folder |
+| `components/` folder | Yii framework only | Proper namespaced classes |
+| Raw SQL Query classes | Bypasses ORM | `ModelNameQuery extends ActiveQuery` |
+| Tables without models | No type safety | Create `ModelName extends ActiveRecord` |
+
+**Exception:** Raw SQL is acceptable for read-only reporting queries with complex aggregations (e.g., `IndustryListQuery` with GROUP BY and multiple JOINs) when documented.
+
+## ActiveRecord Models
+
+**Every database table must have a corresponding ActiveRecord model.**
+
+### Rules
+
+1. **One model per table** — No table without a model, no raw SQL for CRUD operations
+2. **Naming:** `ModelName` matches table name in PascalCase (e.g., `company` → `Company`)
+3. **Location:** `models/` — All ActiveRecord models
+4. **Final classes:** Use `final class` to prevent unintended inheritance
+
+### Required Structure
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace app\models;
+
+use app\queries\CompanyQuery;
+use yii\db\ActiveQuery;
+use yii\db\ActiveRecord;
+
+/**
+ * ActiveRecord model for the company table.
+ *
+ * @property int $id
+ * @property string $ticker
+ * @property int|null $industry_id
+ *
+ * @property-read Industry|null $industry
+ */
+final class Company extends ActiveRecord
+{
+    public static function tableName(): string
+    {
+        return '{{%company}}';
+    }
+
+    public function rules(): array
+    {
+        return [
+            [['ticker'], 'required'],
+            [['ticker'], 'string', 'max' => 20],
+            [['ticker'], 'unique'],
+            [['industry_id'], 'integer'],
+        ];
+    }
+
+    public function getIndustry(): ActiveQuery
+    {
+        return $this->hasOne(Industry::class, ['id' => 'industry_id']);
+    }
+
+    public static function find(): CompanyQuery
+    {
+        return new CompanyQuery(static::class);
+    }
+}
+```
+
+### Checklist
+
+- [ ] `declare(strict_types=1)` at top
+- [ ] `final class` declaration
+- [ ] PHPDoc `@property` for all columns
+- [ ] PHPDoc `@property-read` for all relations
+- [ ] `tableName()` with `{{%}}` prefix
+- [ ] `rules()` with validation
+- [ ] `find()` returns typed Query class
+- [ ] Relations as `getRelationName(): ActiveQuery`
 
 ## Query Classes
 
-Use query class methods instead of inline `->andWhere()`. Add new methods to Query classes when needed.
+**Every ActiveRecord model must have a corresponding ActiveQuery class.**
 
-### Location
+### Rules
 
-- `queries/` — Domain query classes (CompanyQuery, IndustryQuery)
+1. **Naming pattern:** `ModelName` + `ModelNameQuery` (e.g., `Company` + `CompanyQuery`)
+2. **Extends ActiveQuery:** Never use raw SQL via `Connection` for domain entities
+3. **Location:** `queries/` — All ActiveQuery classes
+4. **Chainable methods:** All filter methods return `self`
+5. **Wired via Model:** Access through `Model::find()`, not DI container
 
-### Structure
+### Required Structure
 
 ```php
 <?php
@@ -68,14 +149,21 @@ namespace app\queries;
 use app\models\Company;
 use yii\db\ActiveQuery;
 
-class CompanyQuery extends ActiveQuery
+/**
+ * ActiveQuery for {@see Company}.
+ *
+ * @extends ActiveQuery<Company>
+ * @method Company[] all($db = null)
+ * @method Company|null one($db = null)
+ */
+final class CompanyQuery extends ActiveQuery
 {
     public function active(): self
     {
         return $this->andWhere(['status' => Company::STATUS_ACTIVE]);
     }
 
-    public function withIndustry(int $industryId): self
+    public function inIndustry(int $industryId): self
     {
         return $this->andWhere(['industry_id' => $industryId]);
     }
@@ -83,17 +171,6 @@ class CompanyQuery extends ActiveQuery
     public function hasTicker(): self
     {
         return $this->andWhere(['not', ['ticker' => null]]);
-    }
-
-    // Override for type hints
-    public function all($db = null): array
-    {
-        return parent::all($db);
-    }
-
-    public function one($db = null): Company|array|null
-    {
-        return parent::one($db);
     }
 }
 ```
