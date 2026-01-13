@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use app\dto\industry\AnalysisEligibility;
 use app\dto\industry\IndustryResponse;
 use yii\helpers\Html;
 use yii\helpers\Url;
@@ -11,6 +12,7 @@ use yii\helpers\Url;
  * @var IndustryResponse $industry
  * @var array{id: int, ticker: string, name: ?string}[] $companies
  * @var array{id: int, status: string, started_at: string, completed_at: ?string, companies_total: int, companies_success: int, companies_failed: int, gate_passed: ?int, error_count: int, warning_count: int}[] $runs
+ * @var AnalysisEligibility $analysisEligibility
  */
 
 $this->title = $industry->name;
@@ -145,16 +147,28 @@ $this->title = $industry->name;
         <h2 class="card__title">Collection & Analysis</h2>
         <div class="toolbar">
             <?php if ($industry->isActive && count($companies) >= 2): ?>
+                <?php $isEligible = $analysisEligibility->isEligible(); ?>
                 <form method="post"
                       action="<?= Url::to(['analyze', 'slug' => $industry->slug]) ?>"
-                      onsubmit="return confirm('Run analysis and ranking for all companies?');">
+                      <?= $isEligible ? 'onsubmit="return confirm(\'Run analysis and ranking for all companies?\');"' : '' ?>>
                     <?= Html::hiddenInput(
                         Yii::$app->request->csrfParam,
                         Yii::$app->request->csrfToken
                     ) ?>
-                    <button type="submit" class="btn btn--success btn--sm">
-                        Analyze All
-                    </button>
+                    <?php if ($isEligible): ?>
+                        <button type="submit" class="btn btn--success btn--sm">
+                            Analyse
+                        </button>
+                    <?php else: ?>
+                        <span title="<?= Html::encode($analysisEligibility->disabledReason) ?>" tabindex="0">
+                            <button type="button"
+                                    class="btn btn--success btn--sm btn--disabled"
+                                    disabled
+                                    aria-disabled="true">
+                                Analyse
+                            </button>
+                        </span>
+                    <?php endif; ?>
                 </form>
             <?php endif; ?>
             <?php if ($industry->isActive && count($companies) > 0): ?>
