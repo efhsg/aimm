@@ -14,7 +14,7 @@ The codebase currently implements a Repository pattern using raw SQL via `yii\db
 
 ## Refactoring Candidates
 
-The following classes have been identified for refactoring. They currently use raw SQL injection.
+The following classes have been identified for refactoring. They currently use raw SQL usage.
 
 ### 1. Core Domain Entities
 
@@ -66,7 +66,9 @@ For each entity (e.g., `Company`):
     -   Move `SELECT` logic from the old `Query` class to the new `ActiveQuery` class.
     -   Replace raw SQL with Query Builder syntax (e.g., `->where(...)`).
     -   Move `INSERT/UPDATE` logic to Model methods (e.g., `save()`, `updateAttributes()`) or keep in a specific Service if complex transaction logic exists.
-5.  **Refactor Consumers:** Update all usages in Controllers/Services to use `Company::find()->...` or `new Company(...)` for writes.
+5.  **Refactor Consumers & Cleanup:** 
+    -   Update all usages in Controllers/Services to use `Company::find()->...` or `new Company(...)` for writes.
+    -   **Remove DI container definitions** (`yii/config/container.php`) for the converted Query class, as `ActiveQuery` is instantiated via `Model::find()` and not injected as a singleton service.
 6.  **Delete Old Class:** Remove the raw SQL repository class if it becomes empty.
 
 ## Special Handling: `CollectionAttempt`
