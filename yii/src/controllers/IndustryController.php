@@ -134,12 +134,14 @@ final class IndustryController extends Controller
         $companies = $this->companyQuery->findByIndustry($industry->id);
         $runs = $this->runRepository->listByIndustry($industry->id);
         $analysisEligibility = $this->eligibilityQuery->getEligibility($industry->id);
+        $hasRankings = $this->reportRepository->hasRankings($industry->id);
 
         return $this->render('view', [
             'industry' => $industry,
             'companies' => $companies,
             'runs' => $runs,
             'analysisEligibility' => $analysisEligibility,
+            'hasRankings' => $hasRankings,
         ]);
     }
 

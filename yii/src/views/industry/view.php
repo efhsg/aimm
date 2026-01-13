@@ -13,6 +13,7 @@ use yii\helpers\Url;
  * @var array{id: int, ticker: string, name: ?string}[] $companies
  * @var array{id: int, status: string, started_at: string, completed_at: ?string, companies_total: int, companies_success: int, companies_failed: int, gate_passed: ?int, error_count: int, warning_count: int}[] $runs
  * @var AnalysisEligibility $analysisEligibility
+ * @var bool $hasRankings
  */
 
 $this->title = $industry->name;
@@ -184,9 +185,17 @@ $this->title = $industry->name;
                     <?php endif; ?>
                 </form>
             <?php endif; ?>
-            <a href="<?= Url::to(['ranking', 'slug' => $industry->slug]) ?>" class="btn btn--secondary btn--sm">
-                View Rankings
-            </a>
+            <?php if ($hasRankings): ?>
+                <a href="<?= Url::to(['ranking', 'slug' => $industry->slug]) ?>" class="btn btn--secondary btn--sm">
+                    View Rankings
+                </a>
+            <?php else: ?>
+                <span title="No rankings generated yet" tabindex="0">
+                    <span class="btn btn--secondary btn--sm btn--disabled" aria-disabled="true">
+                        View Rankings
+                    </span>
+                </span>
+            <?php endif; ?>
         </div>
     </div>
     <div class="card__body">

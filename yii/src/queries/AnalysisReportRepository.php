@@ -83,6 +83,20 @@ final class AnalysisReportRepository implements AnalysisReportReader
     }
 
     /**
+     * Check if an industry has any rankings.
+     */
+    public function hasRankings(int $industryId): bool
+    {
+        $count = $this->db->createCommand(
+            'SELECT COUNT(*) FROM {{%analysis_report}} WHERE industry_id = :industry_id'
+        )
+            ->bindValue(':industry_id', $industryId)
+            ->queryScalar();
+
+        return (int) $count > 0;
+    }
+
+    /**
      * List reports for an industry.
      *
      * @return list<array<string, mixed>>
