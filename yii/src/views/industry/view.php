@@ -146,6 +146,19 @@ $this->title = $industry->name;
     <div class="card__header">
         <h2 class="card__title">Collection & Analysis</h2>
         <div class="toolbar">
+            <?php if ($industry->isActive && count($companies) > 0): ?>
+                <form method="post"
+                      id="collect-form"
+                      action="<?= Url::to(['collect', 'slug' => $industry->slug]) ?>">
+                    <?= Html::hiddenInput(
+                        Yii::$app->request->csrfParam,
+                        Yii::$app->request->csrfToken
+                    ) ?>
+                    <button type="submit" class="btn btn--primary btn--sm">
+                        Collect Data
+                    </button>
+                </form>
+            <?php endif; ?>
             <?php if ($industry->isActive && count($companies) >= 2): ?>
                 <?php $isEligible = $analysisEligibility->isEligible(); ?>
                 <form method="post"
@@ -169,19 +182,6 @@ $this->title = $industry->name;
                             </button>
                         </span>
                     <?php endif; ?>
-                </form>
-            <?php endif; ?>
-            <?php if ($industry->isActive && count($companies) > 0): ?>
-                <form method="post"
-                      id="collect-form"
-                      action="<?= Url::to(['collect', 'slug' => $industry->slug]) ?>">
-                    <?= Html::hiddenInput(
-                        Yii::$app->request->csrfParam,
-                        Yii::$app->request->csrfToken
-                    ) ?>
-                    <button type="submit" class="btn btn--primary btn--sm">
-                        Collect Data
-                    </button>
                 </form>
             <?php endif; ?>
             <a href="<?= Url::to(['ranking', 'slug' => $industry->slug]) ?>" class="btn btn--secondary btn--sm">
