@@ -520,7 +520,7 @@ final class IndustryController extends Controller
         $this->reportRepository->saveRanked($industry->id, $result->report);
 
         $topRated = $result->report->companyAnalyses[0] ?? null;
-        $message = 'Analysis complete.';
+        $message = 'Re-run analysis complete.';
         if ($topRated !== null) {
             $message .= " Top rated: {$topRated->ticker} ({$topRated->rating->value})";
         }
