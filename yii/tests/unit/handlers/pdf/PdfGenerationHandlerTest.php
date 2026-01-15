@@ -6,12 +6,12 @@ namespace tests\unit\handlers\pdf;
 
 use app\adapters\StorageInterface;
 use app\clients\GotenbergClient;
-use app\dto\pdf\CompanyDto;
-use app\dto\pdf\FinancialsDto;
-use app\dto\pdf\PeerGroupDto;
+use app\dto\pdf\CompanyRankingDto;
+use app\dto\pdf\GroupAveragesDto;
+use app\dto\pdf\RankingMetadataDto;
+use app\dto\pdf\RankingReportData;
 use app\dto\pdf\RenderBundle;
 use app\dto\pdf\RenderedViews;
-use app\dto\pdf\ReportData;
 use app\enums\PdfJobStatus;
 use app\exceptions\GotenbergException;
 use app\factories\pdf\ReportDataFactory;
@@ -97,7 +97,7 @@ final class PdfGenerationHandlerTest extends Unit
             ->willReturn(null);
 
         $this->reportDataFactory->expects($this->never())
-            ->method('create');
+            ->method('createRanking');
 
         $this->handler->handle($jobId);
     }
@@ -114,7 +114,7 @@ final class PdfGenerationHandlerTest extends Unit
             ->willReturn($job);
 
         $this->reportDataFactory->expects($this->never())
-            ->method('create');
+            ->method('createRanking');
 
         $this->handler->handle($jobId);
     }
@@ -130,9 +130,9 @@ final class PdfGenerationHandlerTest extends Unit
         $renderedViews = new RenderedViews('<html>', '<header>', '<footer>');
         $bundle = $this->createBundle();
 
-        $this->reportDataFactory->method('create')->willReturn($reportData);
-        $this->viewRenderer->method('render')->willReturn($renderedViews);
-        $this->bundleAssembler->method('assemble')->willReturn($bundle);
+        $this->reportDataFactory->method('createRanking')->willReturn($reportData);
+        $this->viewRenderer->method('renderRanking')->willReturn($renderedViews);
+        $this->bundleAssembler->method('assembleRanking')->willReturn($bundle);
 
         $this->gotenbergClient->method('render')
             ->willThrowException(new GotenbergException('Render failed', statusCode: 500));
@@ -155,9 +155,9 @@ final class PdfGenerationHandlerTest extends Unit
         $renderedViews = new RenderedViews('<html>', '<header>', '<footer>');
         $bundle = $this->createBundle();
 
-        $this->reportDataFactory->method('create')->willReturn($reportData);
-        $this->viewRenderer->method('render')->willReturn($renderedViews);
-        $this->bundleAssembler->method('assemble')->willReturn($bundle);
+        $this->reportDataFactory->method('createRanking')->willReturn($reportData);
+        $this->viewRenderer->method('renderRanking')->willReturn($renderedViews);
+        $this->bundleAssembler->method('assembleRanking')->willReturn($bundle);
 
         $this->gotenbergClient->method('render')
             ->willThrowException(new GotenbergException('Bad request', statusCode: 400));
@@ -176,7 +176,7 @@ final class PdfGenerationHandlerTest extends Unit
 
         $this->setupSuccessfulAcquisition($jobId, $job);
 
-        $this->reportDataFactory->method('create')
+        $this->reportDataFactory->method('createRanking')
             ->willThrowException(new RuntimeException('Report not found: rpt_missing'));
 
         $this->jobRepository->expects($this->once())
@@ -215,15 +215,38 @@ final class PdfGenerationHandlerTest extends Unit
         };
     }
 
-    private function createReportData(): ReportData
+    private function createReportData(): RankingReportData
     {
-        return new ReportData(
+        return new RankingReportData(
             reportId: 'rpt_test',
             traceId: 'trace_123',
-            company: new CompanyDto('c1', 'Test Company', 'TEST', 'Technology'),
-            financials: new FinancialsDto([]),
-            peerGroup: new PeerGroupDto('Tech Peers', []),
-            charts: [],
+            industryName: 'Test Industry',
+            metadata: new RankingMetadataDto(
+                companyCount: 1,
+                generatedAt: '2026-01-15',
+                dataAsOf: '2026-01-14',
+                reportId: 'rpt_test'
+            ),
+            groupAverages: new GroupAveragesDto(
+                fwdPe: 15.5,
+                evEbitda: 10.2,
+                fcfYieldPercent: 5.5,
+                divYieldPercent: 2.1
+            ),
+            companyRankings: [
+                new CompanyRankingDto(
+                    rank: 1,
+                    ticker: 'TEST',
+                    name: 'Test Corp',
+                    rating: 'buy',
+                    fundamentalsAssessment: 'improving',
+                    fundamentalsScore: 8.5,
+                    riskAssessment: 'acceptable',
+                    valuationGapPercent: -10.5,
+                    valuationGapDirection: 'undervalued',
+                    marketCapBillions: 100.5
+                )
+            ],
             generatedAt: new DateTimeImmutable(),
         );
     }
@@ -266,15 +289,15 @@ final class PdfGenerationHandlerTest extends Unit
         $renderedViews = new RenderedViews('<html>', '<header>', '<footer>');
         $bundle = $this->createBundle();
 
-        $this->reportDataFactory->method('create')
+        $this->reportDataFactory->method('createRanking')
             ->with($job->report_id, $job->trace_id)
             ->willReturn($reportData);
 
-        $this->viewRenderer->method('render')
+        $this->viewRenderer->method('renderRanking')
             ->with($reportData)
             ->willReturn($renderedViews);
 
-        $this->bundleAssembler->method('assemble')
+        $this->bundleAssembler->method('assembleRanking')
             ->with($renderedViews, $reportData)
             ->willReturn($bundle);
 

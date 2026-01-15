@@ -334,3 +334,106 @@ body {
 .mb-0 {
   margin-bottom: 0;
 }
+
+// ========================================
+// BADGES
+// ========================================
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: tokens.$text-xs;
+  font-weight: tokens.$font-semibold;
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  &--success {
+    background: tokens.$color-success-light;
+    color: tokens.$color-success;
+  }
+
+  &--warning {
+    background: tokens.$color-warning-light;
+    color: #856404; // Dark amber for warning text
+  }
+
+  &--danger {
+    background: tokens.$color-error-light;
+    color: tokens.$color-error;
+  }
+}
+
+// ========================================
+// TEXT COLORS
+// ========================================
+.text-success {
+  color: tokens.$color-success;
+}
+
+.text-danger {
+  color: tokens.$color-error;
+}
+
+// ========================================
+// DETAIL GRID (Report Details, Industry Averages)
+// ========================================
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: tokens.$space-4;
+  margin-bottom: tokens.$space-4;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-label {
+  font-size: tokens.$text-xs;
+  color: tokens.$text-secondary;
+  margin-bottom: tokens.$space-1;
+}
+
+.detail-value {
+  font-size: tokens.$text-base;
+  font-weight: tokens.$font-semibold;
+
+  &--mono {
+    font-family: tokens.$font-mono;
+    font-size: tokens.$text-xs;
+  }
+}
+
+// ========================================
+// SUMMARY GRID (Rating Summary)
+// ========================================
+.summary-grid {
+  display: flex;
+  flex-direction: column;
+  gap: tokens.$space-3;
+}
+
+.summary-row {
+  display: grid;
+  grid-template-columns: 80px 120px 1fr;
+  align-items: center;
+  gap: tokens.$space-3;
+}
+
+.summary-count {
+  font-weight: tokens.$font-semibold;
+}
+
+.summary-tickers {
+  color: tokens.$text-secondary;
+  font-family: tokens.$font-mono;
+  font-size: tokens.$text-xs;
+}
+
+// ========================================
+// TABLE ENHANCEMENTS
+// ========================================
+.col-mono {
+  font-family: tokens.$font-mono;
+}

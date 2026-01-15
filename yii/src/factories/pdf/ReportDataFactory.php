@@ -6,9 +6,13 @@ namespace app\factories\pdf;
 
 use app\dto\pdf\ChartDto;
 use app\dto\pdf\CompanyDto;
+use app\dto\pdf\CompanyRankingDto;
 use app\dto\pdf\FinancialsDto;
+use app\dto\pdf\GroupAveragesDto;
 use app\dto\pdf\MetricRowDto;
 use app\dto\pdf\PeerGroupDto;
+use app\dto\pdf\RankingMetadataDto;
+use app\dto\pdf\RankingReportData;
 use app\dto\pdf\ReportData;
 use app\queries\AnalysisReportReader;
 use DateTimeImmutable;
@@ -237,5 +241,76 @@ class ReportDataFactory
             ChartDto::placeholder('valuation-comparison', 'bar', 'Valuation comparison chart coming in Phase 4'),
             ChartDto::placeholder('fundamentals-trend', 'line', 'Fundamentals trend chart coming in Phase 4'),
         ];
+    }
+
+    /**
+     * Create RankingReportData containing all companies ranked.
+     *
+     * @param string $reportId The analysis report ID
+     * @param string $traceId The trace ID for this PDF generation
+     */
+    public function createRanking(string $reportId, string $traceId): RankingReportData
+    {
+        $row = $this->reportRepository->findByReportId($reportId);
+
+        if ($row === null) {
+            throw new RuntimeException("Report not found: {$reportId}");
+        }
+
+        $data = $this->reportRepository->decodeReport($row);
+
+        return $this->buildRankingReportData($data, $traceId);
+    }
+
+    /**
+     * @param array<string, mixed> $data Decoded report JSON
+     */
+    private function buildRankingReportData(array $data, string $traceId): RankingReportData
+    {
+        $metadata = $data['metadata'] ?? [];
+        $companyAnalyses = $data['company_analyses'] ?? [];
+        $groupAverages = $data['group_averages'] ?? [];
+
+        return new RankingReportData(
+            reportId: $metadata['report_id'] ?? 'unknown',
+            traceId: $traceId,
+            industryName: $metadata['industry_name'] ?? 'Unknown Industry',
+            metadata: new RankingMetadataDto(
+                companyCount: $metadata['company_count'] ?? 0,
+                generatedAt: $metadata['generated_at'] ?? '',
+                dataAsOf: $metadata['data_as_of'] ?? '',
+                reportId: $metadata['report_id'] ?? '',
+            ),
+            groupAverages: new GroupAveragesDto(
+                fwdPe: $groupAverages['fwd_pe'] ?? null,
+                evEbitda: $groupAverages['ev_ebitda'] ?? null,
+                fcfYieldPercent: $groupAverages['fcf_yield_percent'] ?? null,
+                divYieldPercent: $groupAverages['div_yield_percent'] ?? null,
+            ),
+            companyRankings: array_map(
+                fn (array $analysis) => $this->buildCompanyRankingDto($analysis),
+                $companyAnalyses
+            ),
+            generatedAt: new DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $analysis
+     */
+    private function buildCompanyRankingDto(array $analysis): CompanyRankingDto
+    {
+        return new CompanyRankingDto(
+            rank: $analysis['rank'] ?? 0,
+            ticker: $analysis['ticker'] ?? '',
+            name: $analysis['name'] ?? '',
+            rating: $analysis['rating'] ?? 'hold',
+            fundamentalsAssessment: $analysis['fundamentals']['assessment'] ?? 'mixed',
+            fundamentalsScore: (float) ($analysis['fundamentals']['composite_score'] ?? 0.0),
+            riskAssessment: $analysis['risk']['assessment'] ?? 'elevated',
+            valuationGapPercent: $analysis['valuation_gap']['composite_gap'] ?? null,
+            valuationGapDirection: $analysis['valuation_gap']['direction'] ?? null,
+            marketCapBillions: $analysis['valuation']['market_cap_billions'] ?? null,
+        );
     }
 }

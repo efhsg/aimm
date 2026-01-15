@@ -127,14 +127,14 @@ final class PdfGenerationHandler
             'pdf',
         );
 
-        // 1. Load and transform report data
-        $reportData = $this->reportDataFactory->create($reportId, $traceId);
+        // 1. Load and transform report data (ranking format with all companies)
+        $reportData = $this->reportDataFactory->createRanking($reportId, $traceId);
 
         // 2. Render views to HTML
-        $renderedViews = $this->viewRenderer->render($reportData);
+        $renderedViews = $this->viewRenderer->renderRanking($reportData);
 
         // 3. Assemble bundle
-        $bundle = $this->bundleAssembler->assemble($renderedViews, $reportData);
+        $bundle = $this->bundleAssembler->assembleRanking($renderedViews, $reportData);
 
         // 4. Generate PDF via Gotenberg
         $pdfBytes = $this->gotenbergClient->render($bundle, PdfOptions::standard());

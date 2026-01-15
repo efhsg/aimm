@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace app\handlers\pdf;
 
+use app\dto\pdf\RankingReportData;
 use app\dto\pdf\RenderBundle;
 use app\dto\pdf\RenderedViews;
 use app\dto\pdf\ReportData;
@@ -43,6 +44,30 @@ class BundleAssembler
 
         // Add chart images (when available)
         $this->addChartAssets($factory, $data);
+
+        return $factory->build();
+    }
+
+    /**
+     * Assemble a render bundle for ranking report (no charts).
+     */
+    public function assembleRanking(RenderedViews $views, RankingReportData $data): RenderBundle
+    {
+        $factory = RenderBundle::factory($data->traceId)
+            ->withIndexHtml($views->indexHtml)
+            ->withHeaderHtml($views->headerHtml)
+            ->withFooterHtml($views->footerHtml);
+
+        // Add CSS
+        $this->addCssAssets($factory);
+
+        // Add fonts
+        $this->addFontAssets($factory);
+
+        // Add images
+        $this->addImageAssets($factory);
+
+        // No charts for ranking reports
 
         return $factory->build();
     }
