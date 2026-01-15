@@ -437,3 +437,73 @@ body {
 .col-mono {
   font-family: tokens.$font-mono;
 }
+
+// ========================================
+// PDF HEADER (Replaces standard header)
+// ========================================
+.pdf-header {
+  padding: 5mm 15mm;
+  border-bottom: 1px solid tokens.$border-default;
+  background-color: tokens.$bg-surface;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: tokens.$font-sans;
+  
+  &__left {
+    display: flex;
+    align-items: center;
+  }
+  
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: tokens.$space-3;
+    text-decoration: none;
+    color: tokens.$text-primary;
+  }
+  
+  &__logo {
+    height: 10mm;
+    width: auto;
+  }
+  
+  &__text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+  }
+  
+  &__name {
+    font-weight: tokens.$font-bold;
+    font-size: 14pt;
+    letter-spacing: -0.01em;
+    color: tokens.$text-primary;
+  }
+  
+  &__tagline {
+    font-size: 6pt;
+    color: tokens.$text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: tokens.$font-medium;
+  }
+  
+  &__right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1mm;
+  }
+  
+  &__title {
+    font-weight: tokens.$font-semibold;
+    font-size: 9pt;
+    color: tokens.$text-primary;
+  }
+  
+  &__page {
+    font-size: 8pt;
+    color: tokens.$text-secondary;
+  }
+}
