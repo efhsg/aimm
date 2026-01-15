@@ -444,11 +444,11 @@ body {
 .pdf-header {
   margin: 0 15mm;
   padding: 4mm 0 2mm 0;
-  border-bottom: 1px solid tokens.$border-default;
+  border-bottom: 2px solid tokens.$brand-primary;
   background-color: tokens.$bg-surface;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
   font-family: tokens.$font-sans;
   
   &__left {
