@@ -442,6 +442,11 @@ return [
         IndustryMemberQuery::class => static function (): IndustryMemberQuery {
             return new IndustryMemberQuery(Yii::$app->db);
         },
+        app\queries\IndustryPdfEligibilityQuery::class => static function (Container $container) {
+            return new app\queries\IndustryPdfEligibilityQuery(
+                $container->get(AnalysisReportReader::class),
+            );
+        },
         DataSourceQuery::class => static function (): DataSourceQuery {
             return new DataSourceQuery(Yii::$app->db);
         },

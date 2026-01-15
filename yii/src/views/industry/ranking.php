@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use app\dto\industry\IndustryResponse;
+use app\dto\industry\PdfEligibility;
 use yii\helpers\Html;
 use yii\helpers\Url;
 
@@ -11,6 +12,7 @@ use yii\helpers\Url;
  * @var IndustryResponse $industry
  * @var array<string, mixed> $reportRow
  * @var array<string, mixed> $report
+ * @var PdfEligibility $pdfEligibility
  */
 
 $this->title = "Rankings - {$industry->name}";
@@ -33,6 +35,17 @@ $groupAverages = $report['group_averages'];
                 Re-run Analysis
             </button>
         </form>
+        <?php if ($pdfEligibility->canView()): ?>
+            <a href="<?= Url::to(['view-pdf', 'slug' => $industry->slug]) ?>"
+               class="btn btn--secondary"
+               target="_blank">
+                View PDF
+            </a>
+        <?php else: ?>
+            <span title="<?= Html::encode($pdfEligibility->disabledReason ?? 'No analysis report') ?>" tabindex="0">
+                <span class="btn btn--secondary btn--disabled" aria-disabled="true">View PDF</span>
+            </span>
+        <?php endif; ?>
         <a href="<?= Url::to(['view', 'slug' => $industry->slug]) ?>" class="btn btn--secondary">
             Back to Industry
         </a>

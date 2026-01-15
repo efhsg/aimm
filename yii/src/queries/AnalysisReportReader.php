@@ -19,6 +19,13 @@ interface AnalysisReportReader
     public function findByReportId(string $reportId): ?array;
 
     /**
+     * Get the latest ranked report for an industry.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getLatestRanking(int $industryId): ?array;
+
+    /**
      * Decode the report JSON from a row.
      *
      * @param array<string, mixed> $row

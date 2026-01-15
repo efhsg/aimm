@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace app\controllers;
 
+use app\adapters\StorageInterface;
 use app\dto\analysis\AnalysisThresholds;
 use app\dto\analysis\AnalyzeReportRequest;
 use app\dto\industry\AddMembersRequest;
@@ -18,6 +19,7 @@ use app\handlers\industry\CreateIndustryInterface;
 use app\handlers\industry\RemoveMemberInterface;
 use app\handlers\industry\ToggleIndustryInterface;
 use app\handlers\industry\UpdateIndustryInterface;
+use app\handlers\pdf\PdfGenerationHandler;
 use app\models\CollectionRun;
 use app\queries\AnalysisReportRepository;
 use app\queries\CollectionPolicyQuery;
@@ -27,6 +29,8 @@ use app\queries\IndustryAnalysisEligibilityQuery;
 use app\queries\IndustryAnalysisQuery;
 use app\queries\IndustryListQuery;
 use app\queries\IndustryMemberQuery;
+use app\queries\IndustryPdfEligibilityQuery;
+use app\queries\PdfJobRepositoryInterface;
 use app\queries\SectorQuery;
 use Ramsey\Uuid\Uuid;
 use Yii;
@@ -63,6 +67,10 @@ final class IndustryController extends Controller
         private readonly AnalyzeReportInterface $analyzeHandler,
         private readonly IndustryAnalysisQuery $analysisQuery,
         private readonly IndustryAnalysisEligibilityQuery $eligibilityQuery,
+        private readonly IndustryPdfEligibilityQuery $pdfEligibilityQuery,
+        private readonly PdfJobRepositoryInterface $pdfJobRepository,
+        private readonly PdfGenerationHandler $pdfGenerationHandler,
+        private readonly StorageInterface $storage,
         $config = []
     ) {
         parent::__construct($id, $module, $config);
@@ -540,11 +548,13 @@ final class IndustryController extends Controller
         }
 
         $reportData = $this->reportRepository->decodeReport($reportRow);
+        $pdfEligibility = $this->pdfEligibilityQuery->getEligibility($industry->id);
 
         return $this->render('ranking', [
             'industry' => $industry,
             'reportRow' => $reportRow,
             'report' => $reportData,
+            'pdfEligibility' => $pdfEligibility,
         ]);
     }
 
@@ -572,6 +582,56 @@ final class IndustryController extends Controller
             'reportRow' => $reportRow,
             'report' => $reportData,
         ]);
+    }
+
+    /**
+     * View PDF for the latest analysis report.
+     *
+     * Generates the PDF on-the-fly if it doesn't exist or is stale.
+     */
+    public function actionViewPdf(string $slug): Response
+    {
+        $industry = $this->listQuery->findBySlug($slug);
+
+        if ($industry === null) {
+            throw new NotFoundHttpException('Industry not found.');
+        }
+
+        $reportRow = $this->reportRepository->getLatestRanking($industry->id);
+
+        if ($reportRow === null) {
+            throw new NotFoundHttpException('No analysis report found.');
+        }
+
+        $reportId = $reportRow['report_id'];
+        $reportGeneratedAt = $reportRow['generated_at'];
+
+        // Check if we have an up-to-date PDF
+        $job = $this->pdfJobRepository->findLatestCompleted($reportId);
+        $needsGeneration = $job === null
+            || !$this->storage->exists($job->output_uri)
+            || $job->finished_at < $reportGeneratedAt;
+
+        if ($needsGeneration) {
+            // Generate on-the-fly
+            $paramsHash = hash('sha256', 'default');
+            $traceId = Uuid::uuid4()->toString();
+            $newJob = $this->pdfJobRepository->findOrCreate($reportId, $paramsHash, $traceId);
+            $this->pdfGenerationHandler->handle((int) $newJob->id);
+
+            // Reload job to get output_uri
+            $job = $this->pdfJobRepository->findLatestCompleted($reportId);
+
+            if ($job === null) {
+                throw new NotFoundHttpException('PDF generation failed.');
+            }
+        }
+
+        return Yii::$app->response->sendFile(
+            $job->output_uri,
+            "{$industry->slug}-analysis-report.pdf",
+            ['mimeType' => 'application/pdf', 'inline' => true]
+        );
     }
 
     /**
