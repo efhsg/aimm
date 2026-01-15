@@ -442,7 +442,7 @@ body {
 // PDF HEADER (Replaces standard header)
 // ========================================
 .pdf-header {
-  padding: 5mm 15mm;
+  padding: 4mm 15mm 2mm 15mm;
   border-bottom: 1px solid tokens.$border-default;
   background-color: tokens.$bg-surface;
   display: flex;
@@ -493,17 +493,12 @@ body {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 1mm;
   }
   
   &__title {
     font-weight: tokens.$font-semibold;
     font-size: 9pt;
     color: tokens.$text-primary;
-  }
-  
-  &__page {
-    font-size: 8pt;
-    color: tokens.$text-secondary;
+    line-height: 1;
   }
 }
