@@ -25,8 +25,7 @@ $groupAverages = $report['group_averages'];
     <h1 class="page-header__title"><?= Html::encode($this->title) ?></h1>
     <div class="toolbar">
         <form method="post"
-              action="<?= Url::to(['analyze', 'slug' => $industry->slug]) ?>"
-              onsubmit="return confirm('Re-run analysis for all companies?');">
+              action="<?= Url::to(['analyze', 'slug' => $industry->slug]) ?>">
             <?= Html::hiddenInput(
                 Yii::$app->request->csrfParam,
                 Yii::$app->request->csrfToken
