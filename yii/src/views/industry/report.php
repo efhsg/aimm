@@ -40,11 +40,11 @@ $groupAverages = $report['group_averages'];
             <div class="detail-label">Companies Analyzed</div>
             <div class="detail-value"><?= $metadata['company_count'] ?></div>
 
-            <div class="detail-label">Generated At</div>
-            <div class="detail-value"><?= Html::encode($metadata['generated_at']) ?></div>
+            <div class="detail-label">Generated</div>
+            <div class="detail-value"><?= isset($metadata['generated_at']) ? (new DateTimeImmutable($metadata['generated_at']))->format('M j, Y H:i') : '-' ?></div>
 
             <div class="detail-label">Data As Of</div>
-            <div class="detail-value"><?= Html::encode($metadata['data_as_of']) ?></div>
+            <div class="detail-value"><?= isset($metadata['data_as_of']) ? (new DateTimeImmutable($metadata['data_as_of']))->format('M j, Y H:i') : '-' ?></div>
 
             <div class="detail-label">Report ID</div>
             <div class="detail-value table__cell--mono"><?= Html::encode($metadata['report_id']) ?></div>

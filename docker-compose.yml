@@ -85,3 +85,12 @@ services:
       retries: 5
     environment:
       LOG_LEVEL: info
+
+  npm:
+    container_name: aimm_npm
+    image: node:22-alpine
+    working_dir: /app/yii/web
+    volumes:
+      - .:/app
+    profiles:
+      - tools

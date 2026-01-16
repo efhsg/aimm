@@ -84,6 +84,26 @@ docker exec aimm_yii vendor/bin/codecept run unit
 docker exec aimm_yii vendor/bin/php-cs-fixer fix
 ```
 
+### SCSS Compilation
+
+PDF report styles are written in SCSS and compiled to CSS. The `npm` container (in the `tools` profile) handles Node.js tasks without bloating the PHP container.
+
+```bash
+# Compile SCSS once
+docker compose --profile tools run --rm npm npx sass scss/report.scss css/report.css --style=compressed
+
+# Watch for changes (runs in background)
+docker compose --profile tools run -d --rm --name aimm_sass_watch npm npx sass scss/report.scss css/report.css --watch
+
+# View watcher logs
+docker logs -f aimm_sass_watch
+
+# Stop the watcher
+docker stop aimm_sass_watch
+```
+
+Source: `yii/web/scss/report.scss` → Output: `yii/web/css/report.css`
+
 ### Requirements
 
 - Docker with PHP 8.2+ image

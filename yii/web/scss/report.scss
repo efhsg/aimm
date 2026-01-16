@@ -442,14 +442,26 @@ body {
 // PDF HEADER (Replaces standard header)
 // ========================================
 .pdf-header {
-  margin: 0 15mm;
-  padding: 4mm 0 2mm 0;
-  border-bottom: 2px solid tokens.$brand-primary;
+  width: tokens.$page-width;
+  margin: 0;
+  padding: 4mm tokens.$page-margin-right 1mm tokens.$page-margin-left;
   background-color: tokens.$bg-surface;
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   font-family: tokens.$font-sans;
+
+  // Custom separator matching content width
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: tokens.$page-margin-left;
+    right: tokens.$page-margin-right;
+    height: 2px;
+    background-color: tokens.$brand-primary;
+  }
   
   &__left {
     display: flex;
@@ -501,5 +513,33 @@ body {
     font-size: 9pt;
     color: tokens.$text-primary;
     line-height: 1;
+  }
+}
+
+// ========================================
+// PDF FOOTER (Page footer)
+// ========================================
+.pdf-footer {
+  width: tokens.$page-width;
+  margin: 0;
+  padding: 1mm tokens.$page-margin-right 4mm tokens.$page-margin-left;
+  background-color: tokens.$bg-surface;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: tokens.$font-sans;
+  font-size: tokens.$text-xs;
+  color: tokens.$text-tertiary;
+
+  // Custom separator matching content width (mirrors header)
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: tokens.$page-margin-left;
+    right: tokens.$page-margin-right;
+    height: 2px;
+    background-color: tokens.$brand-primary;
   }
 }
