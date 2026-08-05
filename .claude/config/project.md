@@ -7,23 +7,46 @@ Single source of truth for project-specific operations.
 | Setting | Value |
 |---------|-------|
 | Container | `aimm_yii` |
-| PHP | 8.x |
+| PHP | `>=8.5` |
 | Framework | Yii 2 |
-| Test Framework | Codeception |
+| Test Framework | Codeception 5 |
+| Host root | `/opt/dev/aim/aimm` |
+| PromptManager runner root | `/projects/aim/aimm` |
+| Host/runner mapping | `/opt/dev` → `/projects` |
+
+## Execution Environments
+
+### AIMM host agent
+
+The host agent may use the AIMM Docker services after confirming that the active
+worktree and container names match this project. Run application PHP inside
+`aimm_yii`; use the root PHP CS Fixer wrapper so it can select a compatible local
+PHP >=8.5 runtime or the container and fail closed otherwise.
+
+### PromptManager runner
+
+PromptManager project 33 resolves AIMM at `/projects/aim/aimm`. The runner does
+not provide Docker and its local PHP runtime is below AIMM's PHP >=8.5 boundary.
+It must not run local AIMM PHP commands or report skipped checks as successful.
+Use runtime-independent read-only checks where possible and provide the exact
+host maintainer commands for all remaining validation.
 
 ## Commands
 
-**CRITICAL: Never use local PHP. All PHP commands MUST run inside Docker via `docker exec aimm_yii`.**
+Commands below are host commands unless explicitly labelled runner-safe.
 
 ### Linter
 
 ```bash
-# Fix all files
-docker exec aimm_yii vendor/bin/php-cs-fixer fix
+# From the AIMM yii/ directory: check source without changing it
+../php-cs-fixer fix --dry-run --diff --using-cache=no --config=.php-cs-fixer.dist.php src
 
-# Fix staged files only
-docker exec aimm_yii vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php $(git diff --cached --name-only --diff-filter=ACMR | grep '\.php$' | xargs)
+# Apply formatting to source
+../php-cs-fixer fix --using-cache=no --config=.php-cs-fixer.dist.php src
 ```
+
+The wrapper refuses incompatible local PHP and falls back to the `aimm_yii`
+container only when Docker and that container are available.
 
 ### Tests
 
@@ -45,18 +68,32 @@ docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit te
 
 **Note:** Codeception accepts only one test path per command. To run multiple paths, execute separate commands.
 
+Run tests sequentially. Read the full output and exit code before starting the
+next test command.
+
 ### Database
 
 ```bash
-# Run migrations
-docker exec aimm_yii vendor/bin/yii migrate/up
+# Capture both histories before mutation
+docker exec aimm_yii vendor/bin/yii migrate/history
+docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history
+
+# Validate migrations on the isolated test schema first
+docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/up --interactive=0
+docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history
+
+# Apply only after test validation succeeds and the application target is approved
+docker exec aimm_yii vendor/bin/yii migrate/up --interactive=0
+docker exec aimm_yii vendor/bin/yii migrate/history
 
 # Create new migration
 docker exec aimm_yii vendor/bin/yii migrate/create migration_name
-
-# Migration status
-docker exec aimm_yii vendor/bin/yii migrate/history
 ```
+
+Before applying a migration, record the resolved application and test database
+names through the approved environment-management channel, verify that they are
+distinct, and capture a recovery anchor for each. Never apply to the application
+schema when test migration or readback fails.
 
 ### Other
 
@@ -69,7 +106,22 @@ docker logs aimm_yii
 
 # Restart container
 docker restart aimm_yii
+
+# Build the documentation site from the host
+npm run docs:build
 ```
+
+### PromptManager runner-safe checks
+
+```bash
+git status --short
+git diff --check
+jq empty .claude/settings.json
+```
+
+Do not use local PHP for AIMM in the PromptManager runner. Hand off the linter,
+Codeception, migrations, and documentation build to an AIMM maintainer with the
+host commands above.
 
 ## File Structure
 

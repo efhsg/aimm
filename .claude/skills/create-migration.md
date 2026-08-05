@@ -17,6 +17,10 @@ AIMM primarily uses JSON files for datapacks and reports. Database migrations ar
 
 ## Interface
 
+Run the command only from an AIMM host with the documented container. In the
+PromptManager runner, prepare the file and provide the exact maintainer handoff;
+never use the runner's incompatible local PHP.
+
 ```bash
 docker exec aimm_yii vendor/bin/yii migrate/create <migration_name>
 ```
@@ -27,6 +31,8 @@ Naming convention: `create_<table>_table` or `add_<column>_to_<table>`
 
 ```php
 <?php
+
+declare(strict_types=1);
 
 use yii\db\Migration;
 
@@ -167,29 +173,41 @@ public function safeUp(): bool
 See `.claude/config/project.md` for all database commands.
 
 ```bash
-# Run all pending migrations
-docker exec aimm_yii vendor/bin/yii migrate/up
+# Capture both histories before either schema is changed
+docker exec aimm_yii vendor/bin/yii migrate/history
+docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history
 
-# Run specific migration
-docker exec aimm_yii vendor/bin/yii migrate/up 1
+# Validate on the isolated test schema first
+docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/up --interactive=0
+docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history
 
-# Rollback last migration
-docker exec aimm_yii vendor/bin/yii migrate/down 1
-
-# Check migration status
+# Only after test validation succeeds, apply to the approved application schema
+docker exec aimm_yii vendor/bin/yii migrate/up --interactive=0
 docker exec aimm_yii vendor/bin/yii migrate/history
 ```
 
+Before the first command, record the resolved application and test database
+names through the maintainer's approved environment-management channel, verify
+that they are distinct, and record a recovery anchor for each. Stop before the
+application command if test migration or readback fails.
+
+Do not roll back a shared or production schema merely to test `safeDown()`.
+Exercise rollback only against an explicitly approved disposable test schema,
+then reapply and read back the final state.
+
 ## Definition of Done
 
-- [ ] Migration file created in `migrations/` directory
+- [ ] Migration file created in `yii/migrations/`
 - [ ] `safeUp()` creates table with all columns and indexes
 - [ ] `safeDown()` properly rolls back (drops table)
 - [ ] Column types appropriate for data
 - [ ] Indexes on foreign keys and frequently queried columns
 - [ ] Table prefix `{{%` used for all table names
-- [ ] Migration runs without errors: `docker exec aimm_yii vendor/bin/yii migrate/up`
-- [ ] Migration rolls back without errors: `docker exec aimm_yii vendor/bin/yii migrate/down 1`
+- [ ] Application and test schema targets captured before mutation
+- [ ] Migration runs without errors on the isolated test schema
+- [ ] Migration runs without errors on the application schema after test validation
+- [ ] `safeDown()` is validated only on an approved disposable schema
+- [ ] Both final migration histories are read back and recorded
 
 ## Naming Conventions
 
@@ -218,17 +236,7 @@ $this->decimal(10, 2)                  // Money/precise decimals
 
 ## Database Configuration
 
-**config/console.php** — add db component:
-
-```php
-'components' => [
-    'db' => [
-        'class' => 'yii\db\Connection',
-        'dsn' => 'mysql:host=localhost;dbname=aimm',
-        'username' => 'aimm',
-        'password' => 'aimm_secret',
-        'tablePrefix' => 'aimm_',
-    ],
-    // ... other components
-],
-```
+Use the existing `yii/config/db.php` environment-variable contract. Refer to
+`DB_HOST`, `DB_DATABASE`, `DB_DATABASE_TEST`, `DB_USER`, and `DB_PASSWORD` by
+name only; never place credential literals in tracked instructions, commands,
+logs, or evidence.

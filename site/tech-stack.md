@@ -6,10 +6,10 @@ AIMM uses PHP for orchestration and Gotenberg for PDF rendering.
 
 | Component | Technology | Version |
 |-----------|------------|---------|
-| Orchestration | Yii 2 Framework | PHP 8.2+ |
+| Orchestration | Yii 2 Framework | PHP >=8.5 |
 | PDF Rendering | Gotenberg (Chromium) | 8.x |
 | Schema Validation | opis/json-schema | JSON Schema draft-07 |
-| Process Management | Symfony Process | ^6.4 |
+| Process Management | Symfony Process | ^5.4, ^6.4, or ^7.0 |
 | Queue (optional) | yii2-queue | ^2.3 |
 
 ## PHP Dependencies
@@ -17,7 +17,7 @@ AIMM uses PHP for orchestration and Gotenberg for PDF rendering.
 ```json
 {
   "require": {
-    "php": ">=8.2",
+    "php": ">=8.5",
     "yiisoft/yii2": "~2.0.49",
     "opis/json-schema": "^2.3",
     "symfony/process": "^5.4 || ^6.4 || ^7.0",
@@ -78,10 +78,10 @@ The project runs in Docker containers:
 
 ```bash
 # Run unit tests
-docker exec aimm_yii vendor/bin/codecept run unit
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit
 
-# Run linter
-docker exec aimm_yii vendor/bin/php-cs-fixer fix
+# From yii/: run the canonical linter wrapper
+../php-cs-fixer fix --dry-run --diff --using-cache=no --config=.php-cs-fixer.dist.php src
 ```
 
 ### SCSS Compilation
@@ -106,7 +106,7 @@ Source: `yii/web/scss/report.scss` → Output: `yii/web/css/report.css`
 
 ### Requirements
 
-- Docker with PHP 8.2+ image
+- Docker with PHP >=8.5 image
 - Gotenberg 8.x container
 - MySQL 8.0+ (for dossier storage)
 

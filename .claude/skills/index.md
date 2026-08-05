@@ -2,6 +2,9 @@
 
 Project-specific skills for Claude Code. Check this index to find relevant skills to load into context.
 
+`CLAUDE.md` remains the canonical AIMM instruction source. Skills add bounded
+task contracts and cannot override its workflow or safety rules.
+
 ## Project Configuration
 
 For commands, paths, and environment: `.claude/config/project.md`
@@ -10,14 +13,14 @@ For commands, paths, and environment: `.claude/config/project.md`
 
 | Skill | File | Use When |
 |-------|------|----------|
-| Access Database | `access-database-from-host.md` | Querying DB from host without docker exec |
-| Commit and Push | `../commands/cp.md` | Committing and pushing finalized changes |
-| Create Migration | `create-migration.md` | Adding/modifying database schema |
-| Finalize Changes | `../commands/finalize-changes.md` | Validating changes, running linter/tests, preparing commit |
+| Access Database | `access-database-from-host.md` | Read-only host query with maintainer-injected credentials |
+| Commit and Push | `../commands/cp.md` | Explicitly approved scoped commit and optional push |
+| Create Migration | `create-migration.md` | Schema change validated on application and test schemas |
+| Finalize Changes | `../commands/finalize-changes.md` | Environment-aware validation, handoff, and scoped staging |
 | Frontend Design | `frontend-design.md` | Building/modifying UI across admin, docs, or PDF reports |
 | New Branch | `new-branch.md` | Starting work on a new feature or fix branch |
 | Review Changes | `review-changes.md` | Code review, PRs, pre-commit checks |
-| Squash Migrations | `squash-migrations.md` | Consolidating migrations with backup and verification |
+| Squash Migrations | `squash-migrations.md` | Exceptional, separately approved squash with restore proof |
 
 ## Reference Documentation
 

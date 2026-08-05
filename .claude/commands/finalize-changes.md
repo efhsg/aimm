@@ -5,6 +5,11 @@ description: Validate changes, run linter and tests, prepare commit (project)
 
 # Finalize Changes
 
+Read `CLAUDE.md`, `.claude/rules/workflow.md`, and
+`.claude/config/project.md` first. Determine whether the active environment is
+an AIMM host agent or the PromptManager runner; never substitute one
+environment's commands for the other.
+
 ## Steps
 
 ### 1. Identify changed files
@@ -15,6 +20,7 @@ git status --porcelain
 
 - Ignore unrelated file changes. Leave these files unchanged.
 - Always ignore `.claude/screenshots/` and never stage or commit it.
+- Record the active root, branch, and approved file scope.
 
 ### 2. Check rules compliance
 
@@ -56,15 +62,18 @@ Report any violations found.
 
 ### 3. Run linter
 
-See `.claude/config/project.md` for linter command.
+On an AIMM host, use the canonical wrapper from `yii/`:
 
 ```bash
-docker exec aimm_yii vendor/bin/php-cs-fixer fix
+../php-cs-fixer fix --dry-run --diff --using-cache=no --config=.php-cs-fixer.dist.php src
 ```
+
+In the PromptManager runner, do not run AIMM PHP. Record the missing PHP >=8.5
+and Docker capabilities and add the command above to the maintainer handoff.
 
 ### 4. Run relevant tests
 
-See `.claude/config/project.md` for test path mappings.
+On an AIMM host, use `.claude/config/project.md` for test path mappings.
 
 Map changed source files to test files by replacing `src` with `tests/unit`.
 
@@ -83,6 +92,10 @@ docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit te
 
 If tests fail, stop and report.
 
+In the PromptManager runner, do not call local Codeception and do not simulate a
+passing result. Add the exact relevant command or full unit command to the
+maintainer handoff and mark runtime validation pending.
+
 ### 5. Check documentation
 
 Review changes and determine if site documentation (`site/`) needs updating:
@@ -95,17 +108,29 @@ Review changes and determine if site documentation (`site/`) needs updating:
 
 If documentation updates are needed:
 1. Make the updates
-2. Rebuild docs: `npm run docs:build`
+2. On the host, rebuild docs: `npm run docs:build`
+3. In the PromptManager runner, hand off that command without claiming it ran
 
 ### 6. Prepare commit
 
 ```bash
-git add -A
+git add -- <approved-paths>
 git status
 git diff --staged
 ```
 
+Never use `git add -A`. Leave unrelated tracked, untracked, staged, and unstaged
+changes untouched. If the staged diff contains an unapproved path, stop before
+suggesting a commit.
+
 Suggest commit message per `.claude/rules/commits.md`.
+
+Report validation as:
+
+- `pass` only when every applicable command ran successfully;
+- `fail` when a check ran and failed;
+- `maintainer handoff required` when the PromptManager runner lacks the required
+  runtime, including exact commands and no success claim.
 
 **STOP.** Display the suggested commit message and ask for confirmation.
 **DO NOT** run `git commit` until the user approves.

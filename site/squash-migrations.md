@@ -1,143 +1,72 @@
 # Squash Migrations
 
-Consolidate all database migrations into two files: one for schema structure, one for seed data.
+Migration squashing is exceptional maintenance that replaces an established
+migration history with a generated schema migration and an approved
+reference-data seed migration. A large migration count or a new environment is
+not sufficient reason to run it.
 
-## When to Use
+## Safety Boundary
 
-- Migration count has grown large (10+ migrations)
-- Setting up a new environment and want clean migrations
-- Before major releases to simplify deployment history
-- After stabilizing schema changes from a development cycle
+Only an AIMM maintainer may execute a squash, in an explicitly named host
+environment and maintenance window. Do not run it from the PromptManager runner.
 
-## Quick Start
+Before generation, record and approve:
 
-```bash
-docker exec aimm_yii php yii squash-migrations --archive --with-seed
-docker exec aimm_yii php yii migrate/fresh --interactive=0
-```
+- the worktree, branch, HEAD, and complete repository status;
+- the application and test database identities and migration histories;
+- every migration file that will be archived;
+- a full schema-and-data backup, checksum, retention policy, and successful
+  restore test on a disposable target;
+- the schema fingerprint and reference-data counts;
+- the recovery owner and exact recovery action.
 
-## Output
+Never include database credentials in commands, logs, or review artifacts. Use
+the approved runtime secret mechanism.
 
-Two migrations are generated:
+## Generation
 
-1. **Schema migration** (`m{date}_squashed_schema.php`) - Database structure only (tables, indexes, foreign keys)
-2. **Seed migration** (`m{date}_initial_seed.php`) - Reference data for `data_source` table
-
-## Command Options
-
-```bash
-docker exec aimm_yii php yii squash-migrations [options]
-```
-
-| Option | Alias | Description |
-|--------|-------|-------------|
-| `--archive` | `-a` | Move old migrations to `archived/` directory |
-| `--with-seed` | `-s` | Auto-generate seed migration from reference tables |
-| `--seed-tables` | | Comma-separated list of tables to seed (default: `data_source`) |
-
-## Seeding Multiple Tables
-
-To include additional reference data in the seed migration:
-
-```bash
-docker exec aimm_yii php yii squash-migrations --archive --with-seed --seed-tables=data_source,sector,industry,collection_policy,company
-```
-
-**Table order matters** - list tables in FK dependency order (parent tables first):
-
-| Table | Dependencies |
-|-------|--------------|
-| `data_source` | none |
-| `sector` | none |
-| `industry` | `sector` |
-| `collection_policy` | `industry` |
-| `company` | `industry` |
-
-## Full Process
-
-### 1. Backup Current State
-
-The squash command reads from the current database schema. Ensure your database is up-to-date:
-
-```bash
-docker exec aimm_yii php yii migrate --interactive=0
-```
-
-### 2. Run Squash Command
+After the first approval gate, the maintainer may generate and archive the
+migration set:
 
 ```bash
 docker exec aimm_yii php yii squash-migrations --archive --with-seed
 ```
 
-This will:
-- Generate a schema migration from the current database structure
-- Generate a seed migration with `data_source` entries
-- Move existing migrations to `yii/migrations/archived/`
+Expected generated files:
 
-### 3. Reset Database
+1. `m{timestamp}_squashed_schema.php` — database structure.
+2. `m{timestamp}_initial_seed.php` — approved reference data, with
+   `data_source` as the default seed table.
 
-Apply the new migrations:
+The command also moves existing migrations into `yii/migrations/archived/`.
+Stop immediately after generation. Read every generated and archived file,
+record hashes, and confirm that the exact file set matches the approval.
 
-```bash
-docker exec aimm_yii php yii migrate/fresh --interactive=0
-```
+## Validation
 
-> [!WARNING]
-> Use `migrate/fresh`, not `db/reset`. The `db/reset` command tries to revert archived migrations which no longer exist in the migrations folder.
+Restore the pre-state backup to separate disposable application and test
+targets. Apply only the generated migration set there, then compare the result
+with the captured pre-state:
 
-### 4. Verify
+- tables, columns, types, defaults, collations, and expressions;
+- indexes and foreign keys;
+- migration history;
+- approved reference-data rows and counts.
 
-Compare table counts:
+Any unexplained difference or partial command failure stops the workflow.
+Schema introspection may not reproduce vendor-specific expressions, triggers,
+or `ON UPDATE` behavior, so those details require explicit comparison.
 
-```bash
-docker exec aimm_mysql mysql -u aimm -paimm_secret aimm -N -e "SHOW TABLES" 2>/dev/null | wc -l
-```
+## Apply Approval
 
-Verify seed data:
+Before applying anywhere else, obtain a second approval that identifies the
+exact target, validation evidence, remaining risks, and recovery action.
 
-```bash
-docker exec aimm_mysql mysql -u aimm -paimm_secret aimm -N -e "SELECT COUNT(*) FROM data_source" 2>/dev/null
-```
+Do not use `migrate/fresh`, a database reset, wildcard deletion, or recursive
+cleanup as part of this workflow. Do not apply generated migrations to the
+source database used to derive them. Keep the original migrations and backup
+until validation, owner review, and the approved retention point are complete.
 
-### 5. Cleanup
-
-On success, remove the archived migrations:
-
-```bash
-rm -rf yii/migrations/archived
-```
-
-On failure, rollback:
-
-```bash
-mv yii/migrations/archived/m*.php yii/migrations/
-rm yii/migrations/m*_squashed_schema.php yii/migrations/m*_initial_seed.php
-docker exec aimm_yii php yii migrate/fresh --interactive=0
-```
-
-## Known Limitations
-
-1. **`ON UPDATE CURRENT_TIMESTAMP`** - Not detected from schema introspection; columns lose this behavior after squash
-2. **Excluded columns** - `created_at` and `updated_at` are excluded from seed data (auto-populated by application)
-
-## Troubleshooting
-
-### "Seed table not found" warning
-
-The specified table doesn't exist in the database. Check the table name spelling and ensure the database is migrated.
-
-### Foreign key constraint errors on migrate/fresh
-
-Tables in `--seed-tables` are inserted in the order specified. Ensure parent tables come before child tables.
-
-### Schema differences after squash
-
-Minor differences are acceptable:
-- `AUTO_INCREMENT` values
-- Index ordering within `CREATE TABLE`
-- `tinyint(1)` vs `tinyint`
-
-Critical differences requiring rollback:
-- Missing tables or columns
-- Changed column types
-- Missing foreign keys
+After apply or recovery, read back the final schema, migration history,
+reference-data counts, repository status, and backup availability. Report the
+outcome as `SUCCESS`, `FAILED`, or `RECOVERED`, with the associated evidence.

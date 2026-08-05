@@ -1,135 +1,124 @@
 ---
 name: squash-migrations
-description: Squash all database migrations into a schema migration plus a seed migration. Use when migration count becomes unwieldy or for clean deployment setup.
+description: Plan an exceptional migration squash with explicit environment, backup, readback, and recovery approval. Never use as a routine implementation step.
 area: database
 ---
 
 # SquashMigrations
 
-Consolidate all database migrations into two files: one for structure, one for seed data.
+Plan and, only after separate approvals, consolidate existing migrations into a
+schema migration and a reference-data seed migration. A large migration count
+alone is not authorization to run this workflow.
 
-## When to Use
+## Environment Boundary
 
-- Migration count has grown large (10+ migrations)
-- Setting up a new environment and want clean migrations
-- Before major releases to simplify deployment history
-- After stabilizing schema changes from a development cycle
+- Execute only from an explicitly named AIMM host environment with working
+  Docker and the documented PHP >=8.5 container.
+- The PromptManager runner may inspect repository files and prepare a maintainer
+  plan, but must not run Docker, local PHP, database commands, archive cleanup,
+  or migration deletion.
+- Treat production as a separate change boundary with an owner-approved
+  maintenance window, backup, restore proof, and rollback decision.
 
-## Output
+## Required Inputs and Approvals
 
-Two migrations:
-1. **Schema migration** (`m{date}_000001_squashed_schema.php`) - Database structure only
-2. **Seed migration** (`m{date}_000002_initial_seed.php`) - Reference data for `data_source` table
+Record and obtain explicit approval for all of the following before generation:
 
-## Inputs
+1. Active worktree, branch, HEAD, and clean or fully explained status.
+2. Exact environment, application database, test database, containers, and
+   `yii/migrations/` directory.
+3. Exact migration files to archive and exact two files expected as output.
+4. A full schema-and-data backup created through the approved runtime secret
+   mechanism, including storage target, timestamp, checksum, retention, and a
+   tested restore result.
+5. Pre-state schema fingerprint, migration history, table/column/index/foreign
+   key inventory, and reference-data counts.
+6. The validation plan for a disposable restored copy and the recovery owner.
+7. A second approval after readback, before any apply, reset, archive removal,
+   or production action.
 
-- Docker containers: `aimm_yii` (app), `aimm_mysql` (database)
-- Migration path: `yii/migrations/`
-- Database credentials: `aimm` / `aimm_secret` / `aimm`
+Never place database usernames, passwords, tokens, connection strings, or other
+credential literals in this skill, shell history, logs, or evidence. Use named
+runtime variables and the approved secret manager.
 
 ## Safety Invariants
 
-- **Never run on production** without a full database backup
-- Schema structure must be identical before and after squash
-- Original migrations are archived first, then deleted after verification
-- Process is reversible: restore from git if needed
+- Do not use `migrate/fresh`, database reset, wildcard deletion, recursive
+  cleanup, or destructive Git reset as a default step.
+- Do not apply generated migrations to the source database used to derive them.
+- Keep original migrations and backups until validation, owner review, and the
+  retention decision are complete.
+- Validate application and isolated test schemas separately.
+- Any missing backup field, stale pre-state, schema mismatch, seed mismatch, or
+  partial command failure stops the workflow.
 
-## Algorithm
+## Approved Workflow
 
-### 1. Backup Current State
+### 1. Read-only preflight
 
-Dump schema structure (no data) via MySQL container:
+- Capture Git and database identities, migration history, schema fingerprint,
+  reference-data counts, and exact restore anchor.
+- Confirm that the approved backup completed and that restoration succeeded on
+  a disposable target.
+- Stop if another actor changed HEAD, migration files, schema, or data counts.
 
-```bash
-docker exec aimm_mysql mysqldump -u aimm -paimm_secret --no-data --skip-comments aimm 2>/dev/null > /tmp/schema_before.sql
-```
+### 2. Generate only
 
-Backup seed data:
-
-```bash
-docker exec aimm_mysql mysqldump -u aimm -paimm_secret --no-create-info --skip-comments aimm data_source 2>/dev/null > /tmp/seed_data.sql
-```
-
-### 2. Run Squash Command
-
-Generate both migrations with a single command (use local `php yii`, not `vendor/bin/yii`):
+After the first approval gate, an AIMM maintainer may run:
 
 ```bash
 docker exec aimm_yii php yii squash-migrations --archive --with-seed
 ```
 
-Options:
-- `--archive` (`-a`): Move old migrations to `archived/` directory
-- `--with-seed` (`-s`): Auto-generate seed migration from `data_source` table
-- `--seed-tables`: Customize which tables to seed (default: `data_source`)
+Expected repository output:
 
-This creates:
-1. Schema migration: `m{timestamp}_squashed_schema.php`
-2. Seed migration: `m{timestamp}_initial_seed.php` (1 second later)
+1. `m{timestamp}_squashed_schema.php`
+2. `m{timestamp}_initial_seed.php`
 
-### 3. Reset Database
+Stop immediately after generation. Read every generated and archived file,
+record their hashes, and compare the exact file set with the approved target.
 
-Apply both migrations:
+### 3. Validate on disposable restored targets
 
-```bash
-docker exec aimm_yii php yii migrate/fresh --interactive=0
-```
+- Restore the pre-state backup to a disposable application target and a
+  separate disposable test target.
+- Apply the generated migration set only there.
+- Compare normalized tables, columns, types, indexes, foreign keys, migration
+  history, and approved reference-data counts with the pre-state.
+- Record complete command output and exit codes. Any unexplained difference is
+  a failure; formatting or ordering differences require explicit review rather
+  than silent acceptance.
 
-### 4. Verify
+### 4. Second approval gate
 
-Compare schemas:
+Present the generation diff, schema comparison, reference-data comparison,
+restore proof, remaining risks, exact apply target, and exact recovery action.
+Do not proceed without a separate explicit owner decision.
 
-```bash
-diff /tmp/schema_before.sql /tmp/schema_after.sql
-```
+### 5. Apply or recover
 
-**Acceptable differences:**
-- AUTO_INCREMENT values
-- Index ordering within CREATE TABLE
-- `tinyint(1)` vs `tinyint`
-- `ON UPDATE CURRENT_TIMESTAMP`
-
-**Critical differences (require rollback):**
-- Missing tables or columns
-- Changed column types
-- Missing foreign keys
-
-Verify seed data:
-
-```bash
-docker exec aimm_mysql mysql -u aimm -paimm_secret aimm -N -e "SELECT COUNT(*) FROM data_source" 2>/dev/null
-```
-
-### 5. Cleanup
-
-On success, remove archived migrations:
-
-```bash
-rm -rf yii/migrations/archived
-```
-
-On failure, rollback:
-
-```bash
-mv yii/migrations/archived/m*.php yii/migrations/
-rm yii/migrations/m*_squashed_schema.php yii/migrations/m*_initial_seed.php
-docker exec aimm_yii php yii migrate/fresh --interactive=0
-```
+- Apply only to the exact approved target through the maintainer's controlled
+  deployment flow.
+- On failure, stop all later actions and restore through the pre-approved backup
+  path. Do not improvise a fresh migration or destructive cleanup.
+- Read the final schema, migration history, reference-data counts, repository
+  status, and backup availability back after apply or recovery.
 
 ## Known Limitations
 
-1. **`ON UPDATE CURRENT_TIMESTAMP`**: Not detected from schema, columns lose this behavior
-2. **Seed data scope**: Only `data_source` is seeded; other reference tables (sector, industry, collection_policy) are populated via application seeders
+- Schema introspection may not reproduce every vendor-specific expression,
+  default, collation, trigger, or `ON UPDATE` behavior.
+- Seed generation covers only explicitly approved reference tables; never infer
+  that other business data may be discarded or regenerated.
 
 ## Definition of Done
 
-- [ ] Schema backed up before squash
-- [ ] Squash command with `--archive --with-seed` completed without errors
-- [ ] Schema migration generated
-- [ ] Seed migration auto-generated with `data_source` entries
-- [ ] Database reset with both migrations
-- [ ] Table list matches before/after
-- [ ] No critical schema differences
-- [ ] Seed data verified (data_source count matches)
-- [ ] Archived migrations removed
-- [ ] Result reported: SUCCESS or ROLLBACK
+- [ ] Exact environment, targets, files, owner, and maintenance boundary approved
+- [ ] Full backup recorded with checksum and successful disposable restore proof
+- [ ] Pre-state schema, history, reference counts, HEAD, and worktree captured
+- [ ] Generated and archived files read back with hashes
+- [ ] Application and test disposable targets validate without unexplained drift
+- [ ] Second approval obtained before any apply or cleanup
+- [ ] Final apply or recovery read back completely
+- [ ] Original migrations and backup retained until the approved retention point
+- [ ] Result reported as `SUCCESS`, `FAILED`, or `RECOVERED`, with evidence

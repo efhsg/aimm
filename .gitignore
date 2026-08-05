@@ -18,3 +18,12 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# Local AI workflow memory; durable .ai artifacts remain trackable
+/.ai/**/implementation/
+/.ai/**/review/
+/.ai/**/review_[0-9]*/
+/.ai/**/code-review/
+/.ai/**/code-review_[0-9]*/
+/.ai/features/**/proposals/
+/.ai/bugfix/**/proposals/

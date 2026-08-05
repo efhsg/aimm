@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status --short)",
+      "Bash(git diff --check)"
+    ],
+    "deny": [
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fd:*)",
+      "Bash(git clean -fdx:*)",
+      "Bash(git pull --rebase:*)",
+      "Bash(git push --force:*)",
+      "Bash(docker exec aimm_yii php yii migrate/fresh:*)",
+      "Bash(docker exec aimm_yii php yii squash-migrations:*)"
+    ]
+  }
+}
