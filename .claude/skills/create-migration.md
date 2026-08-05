@@ -1,33 +1,44 @@
 ---
 name: create-migration
-description: Create Yii2 database migrations for AIMM modules. Use when adding new tables or modifying schema. Follows Yii2 migration conventions with proper naming and rollback support. Do NOT use for runtime data (datapacks are JSON files, not database records).
+description: Create or modify Yii2 schema migrations with reversible changes, complete ActiveRecord coverage, and isolated test-schema validation. Use for database schema work, not runtime datapacks or report artifacts.
 ---
 
-# CreateMigration
+# Create Migration
 
-Generate Yii2 database migrations with proper structure and rollback.
+Create the smallest migration that implements the approved schema change and
+keep the application model layer synchronized with it.
 
-## When to Use
+## Environment Boundary
 
-AIMM primarily uses JSON files for datapacks and reports. Database migrations are needed for:
+- Use only the environment-specific database commands in
+  `.claude/config/project.md`; that file owns command syntax and runtime facts.
+- In the PromptManager runner, edit and review files only. Hand the exact
+  applicable commands from project configuration to an AIMM maintainer.
+- Before any database mutation, record the resolved application and test
+  database names, prove that they are distinct, and capture a recovery anchor
+  for each.
 
-- **Collection module:** Source attempt logs, rate limit state, collection job queue
-- **Analysis module:** Report metadata, cached calculations
-- **Audit:** User actions, access logs
+## Decide Whether a Migration Is Appropriate
 
-## Interface
+AIMM stores datapacks and reports as runtime JSON artifacts. Do not introduce a
+database table merely to persist those files. Use a migration only for an
+approved relational schema requirement such as domain records, audit history,
+or operational state.
 
-Run the command only from an AIMM host with the documented container. In the
-PromptManager runner, prepare the file and provide the exact maintainer handoff;
-never use the runner's incompatible local PHP.
+## Naming
 
-```bash
-docker exec aimm_yii vendor/bin/yii migrate/create <migration_name>
-```
+| Change | Name pattern |
+|--------|--------------|
+| Create table | `create_<table>_table` |
+| Add column | `add_<column>_to_<table>` |
+| Add index | `add_<index>_index_to_<table>` |
+| Drop table | `drop_<table>_table` |
 
-Naming convention: `create_<table>_table` or `add_<column>_to_<table>`
+Generate the timestamped file with the canonical create command in
+`.claude/config/project.md`, or prepare the file manually when the active
+environment cannot run Yii.
 
-## Migration Structure
+## Migration Contract
 
 ```php
 <?php
@@ -36,207 +47,79 @@ declare(strict_types=1);
 
 use yii\db\Migration;
 
-class m241214_100000_create_source_attempts_table extends Migration
+final class m241214_100000_create_example_table extends Migration
 {
     public function safeUp(): bool
     {
-        $this->createTable('{{%source_attempts}}', [
+        $this->createTable('{{%example}}', [
             'id' => $this->primaryKey(),
-            // columns...
-            'created_at' => $this->timestamp()->notNull()->defaultExpression('CURRENT_TIMESTAMP'),
+            'name' => $this->string()->notNull(),
+            'created_at' => $this->timestamp()
+                ->notNull()
+                ->defaultExpression('CURRENT_TIMESTAMP'),
         ]);
-        
-        // indexes...
-        
+
+        $this->createIndex('idx_example_name', '{{%example}}', 'name');
+
         return true;
     }
 
     public function safeDown(): bool
     {
-        $this->dropTable('{{%source_attempts}}');
+        $this->dropTable('{{%example}}');
+
         return true;
     }
 }
 ```
 
-## Collection Module Tables
+- Use `{{%table_name}}` for every table reference.
+- Choose column types, nullability, defaults, indexes, and foreign keys from
+  actual access and integrity requirements.
+- Make `safeDown()` reverse `safeUp()` in dependency-safe order. If reversal
+  would destroy data or cannot be made safe, stop and obtain explicit approval
+  for the non-reversible design instead of pretending rollback is supported.
+- Do not put runtime credentials or environment-specific database names in a
+  migration.
 
-### source_attempts
+## Model and Test Completeness
 
-Logs every HTTP request made during collection.
+For every newly created table, include in the same approved change:
 
-```php
-public function safeUp(): bool
-{
-    $this->createTable('{{%source_attempts}}', [
-        'id' => $this->primaryKey(),
-        'datapack_id' => $this->string(36)->notNull(),
-        'provider_id' => $this->string(50)->notNull(),
-        'url' => $this->text()->notNull(),
-        'status' => $this->string(20)->notNull(),         // success, failed, skipped
-        'error_reason' => $this->string(50)->null(),      // http_4xx, timeout, etc.
-        'response_code' => $this->smallInteger()->null(),
-        'response_time_ms' => $this->integer()->null(),
-        'attempted_at' => $this->timestamp()->notNull(),
-    ]);
-    
-    $this->createIndex('idx_source_attempts_datapack', '{{%source_attempts}}', 'datapack_id');
-    $this->createIndex('idx_source_attempts_provider', '{{%source_attempts}}', 'provider_id');
-    $this->createIndex('idx_source_attempts_status', '{{%source_attempts}}', 'status');
-    
-    return true;
-}
-```
+1. A final ActiveRecord model in `yii/src/models/` with typed PHPDoc properties,
+   validation rules, `{{%table_name}}`, relations, and a typed `find()` method.
+2. Its corresponding `ActiveQuery` class in `yii/src/queries/`.
+3. Mapped unit tests under `yii/tests/unit/models/` and
+   `yii/tests/unit/queries/`, plus tests for schema-dependent logic.
 
-### rate_limit_state
+For an existing table change, update its model, query behavior, and affected
+tests whenever the schema change alters their contract. Follow
+`.claude/rules/architecture.md` for the canonical structures.
 
-Tracks rate limiting state per domain.
+## Validation Order
 
-```php
-public function safeUp(): bool
-{
-    $this->createTable('{{%rate_limit_state}}', [
-        'id' => $this->primaryKey(),
-        'domain' => $this->string(255)->notNull()->unique(),
-        'request_count' => $this->integer()->notNull()->defaultValue(0),
-        'window_start' => $this->timestamp()->notNull(),
-        'last_request_at' => $this->timestamp()->null(),
-        'backoff_until' => $this->timestamp()->null(),
-        'backoff_level' => $this->smallInteger()->notNull()->defaultValue(0),
-    ]);
-    
-    $this->createIndex('idx_rate_limit_domain', '{{%rate_limit_state}}', 'domain');
-    
-    return true;
-}
-```
+1. Review the complete migration, model, query, and test diff.
+2. Capture complete application and test migration histories and recovery
+   anchors using `.claude/config/project.md`.
+3. Apply and read back the migration on the isolated test schema first.
+4. Run the mapped tests.
+5. Apply to the approved application schema only after test-schema validation
+   succeeds, then read back its complete history.
 
-### collection_jobs
-
-Queue for collection jobs (if using database queue driver).
-
-```php
-public function safeUp(): bool
-{
-    $this->createTable('{{%collection_jobs}}', [
-        'id' => $this->primaryKey(),
-        'industry_id' => $this->string(50)->notNull(),
-        'status' => $this->string(20)->notNull()->defaultValue('pending'),
-        'datapack_id' => $this->string(36)->null(),
-        'started_at' => $this->timestamp()->null(),
-        'completed_at' => $this->timestamp()->null(),
-        'error_message' => $this->text()->null(),
-        'created_at' => $this->timestamp()->notNull()->defaultExpression('CURRENT_TIMESTAMP'),
-    ]);
-    
-    $this->createIndex('idx_collection_jobs_status', '{{%collection_jobs}}', 'status');
-    $this->createIndex('idx_collection_jobs_industry', '{{%collection_jobs}}', 'industry_id');
-    
-    return true;
-}
-```
-
-### datapack_metadata
-
-Metadata about generated datapacks (the JSON files themselves live in runtime/).
-
-```php
-public function safeUp(): bool
-{
-    $this->createTable('{{%datapack_metadata}}', [
-        'id' => $this->primaryKey(),
-        'datapack_id' => $this->string(36)->notNull()->unique(),
-        'industry_id' => $this->string(50)->notNull(),
-        'status' => $this->string(20)->notNull(),         // complete, partial, failed
-        'companies_count' => $this->smallInteger()->notNull(),
-        'datapoints_found' => $this->integer()->notNull(),
-        'datapoints_missing' => $this->integer()->notNull(),
-        'gate_passed' => $this->boolean()->notNull(),
-        'gate_errors' => $this->json()->null(),
-        'gate_warnings' => $this->json()->null(),
-        'file_path' => $this->string(500)->notNull(),
-        'file_size_bytes' => $this->integer()->notNull(),
-        'collected_at' => $this->timestamp()->notNull(),
-        'created_at' => $this->timestamp()->notNull()->defaultExpression('CURRENT_TIMESTAMP'),
-    ]);
-    
-    $this->createIndex('idx_datapack_meta_industry', '{{%datapack_metadata}}', 'industry_id');
-    $this->createIndex('idx_datapack_meta_status', '{{%datapack_metadata}}', 'status');
-    $this->createIndex('idx_datapack_meta_collected', '{{%datapack_metadata}}', 'collected_at');
-    
-    return true;
-}
-```
-
-## Running Migrations
-
-See `.claude/config/project.md` for all database commands.
-
-```bash
-# Capture both histories before either schema is changed
-docker exec aimm_yii vendor/bin/yii migrate/history
-docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history
-
-# Validate on the isolated test schema first
-docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/up --interactive=0
-docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history
-
-# Only after test validation succeeds, apply to the approved application schema
-docker exec aimm_yii vendor/bin/yii migrate/up --interactive=0
-docker exec aimm_yii vendor/bin/yii migrate/history
-```
-
-Before the first command, record the resolved application and test database
-names through the maintainer's approved environment-management channel, verify
-that they are distinct, and record a recovery anchor for each. Stop before the
-application command if test migration or readback fails.
-
-Do not roll back a shared or production schema merely to test `safeDown()`.
-Exercise rollback only against an explicitly approved disposable test schema,
-then reapply and read back the final state.
+Do not roll back a shared or production schema merely to exercise `safeDown()`.
+Test rollback only on an explicitly approved disposable schema, then reapply
+and verify the final state.
 
 ## Definition of Done
 
-- [ ] Migration file created in `yii/migrations/`
-- [ ] `safeUp()` creates table with all columns and indexes
-- [ ] `safeDown()` properly rolls back (drops table)
-- [ ] Column types appropriate for data
-- [ ] Indexes on foreign keys and frequently queried columns
-- [ ] Table prefix `{{%` used for all table names
-- [ ] Application and test schema targets captured before mutation
-- [ ] Migration runs without errors on the isolated test schema
-- [ ] Migration runs without errors on the application schema after test validation
-- [ ] `safeDown()` is validated only on an approved disposable schema
-- [ ] Both final migration histories are read back and recorded
-
-## Naming Conventions
-
-| Action | Pattern | Example |
-|--------|---------|---------|
-| New table | `create_<table>_table` | `create_source_attempts_table` |
-| Add column | `add_<column>_to_<table>` | `add_response_time_to_source_attempts` |
-| Add index | `add_<index>_index_to_<table>` | `add_status_index_to_collection_jobs` |
-| Drop table | `drop_<table>_table` | `drop_legacy_logs_table` |
-
-## Common Column Types
-
-```php
-$this->primaryKey()                    // Auto-increment integer
-$this->string(36)                      // UUID
-$this->string(50)                      // Short identifier
-$this->string(255)                     // Standard string
-$this->text()                          // Long text (URLs, messages)
-$this->json()                          // JSON data
-$this->integer()                       // Numbers
-$this->smallInteger()                  // Small numbers (counts, codes)
-$this->boolean()                       // True/false
-$this->timestamp()                     // Datetime
-$this->decimal(10, 2)                  // Money/precise decimals
-```
-
-## Database Configuration
-
-Use the existing `yii/config/db.php` environment-variable contract. Refer to
-`DB_HOST`, `DB_DATABASE`, `DB_DATABASE_TEST`, `DB_USER`, and `DB_PASSWORD` by
-name only; never place credential literals in tracked instructions, commands,
-logs, or evidence.
+- [ ] Migration is minimal, strictly typed, correctly named, and uses table prefixes
+- [ ] `safeUp()` includes the required columns, constraints, indexes, and foreign keys
+- [ ] `safeDown()` safely reverses the change, or the approved non-reversible exception is documented
+- [ ] Every new table has its ActiveRecord model and corresponding ActiveQuery class
+- [ ] Existing models and queries reflect any changed table contract
+- [ ] Mapped model, query, and schema-dependent tests are included
+- [ ] Application and test targets, complete histories, and recovery anchors are recorded
+- [ ] Migration and rollback validation succeed on an approved disposable test schema
+- [ ] Relevant tests succeed in the supported runtime
+- [ ] Application migration is applied only after approval and successful test validation
+- [ ] Final application and test histories are read back and recorded

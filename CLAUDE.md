@@ -102,6 +102,6 @@ For detailed review criteria, see `.claude/skills/review-changes.md`.
 - Checked skills index for applicable skills
 - Used approved folder taxonomy
 - Added tests for new logic
-- Ran applicable validation in a supported runtime, or recorded the exact maintainer handoff
-- Ran linter before commit (`/finalize-changes`)
+- Ran applicable linter, tests, and documentation validation in a supported
+  runtime, or recorded the exact maintainer handoff (`/finalize-changes`)
 - Commit message follows format

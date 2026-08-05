@@ -12,19 +12,10 @@
 
 ## Execution Environments
 
-### AIMM host agent
-
-The host worktree is normally `/opt/dev/aim/aimm`. Before using Docker, confirm
-the active worktree and that the named container exists. Run PHP, migrations,
-PHP CS Fixer, and Codeception through the supported commands in
-`.claude/config/project.md`; do not invent substitute entrypoints.
-
-### PromptManager runner
-
-PromptManager project 33 resolves the requested hostroot `/opt/dev/aim/aimm` to
-the runnerroot `/projects/aim/aimm`. Confirm that mapping and `realpath` before
-writing. The runner has no Docker access and its local PHP runtime does not meet
-AIMM's PHP >=8.5 requirement.
+Resolve all environment paths, capabilities, container names, and executable
+commands from `.claude/config/project.md`. Confirm the active worktree and
+required capabilities before using an environment-specific command; do not
+invent substitute entrypoints.
 
 In the PromptManager runner:
 
@@ -55,15 +46,8 @@ In the PromptManager runner:
   schema. Record the exact targets before applying either migration.
 - Read complete command output and exit status. A partial tail or a passing line
   from one suite does not establish that another suite passed.
-- When the PromptManager runner cannot validate AIMM, hand off at least:
-
-  ```bash
-  cd /opt/dev/aim/aimm/yii
-  ../php-cs-fixer fix --dry-run --diff --using-cache=no --config=.php-cs-fixer.dist.php src
-  cd ..
-  docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit
-  npm run docs:build
-  ```
+- When the PromptManager runner cannot validate AIMM, provide the exact
+  applicable host commands from `.claude/config/project.md`.
 
 ## Mutations and Recovery
 

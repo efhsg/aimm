@@ -27,7 +27,9 @@ AIMM uses PHP for orchestration and Gotenberg for PDF rendering.
   },
   "require-dev": {
     "codeception/codeception": "^5.0",
-    "codeception/module-asserts": "^3.0"
+    "codeception/module-asserts": "^3.0",
+    "codeception/module-yii2": "^1.1",
+    "friendsofphp/php-cs-fixer": "^3.65"
   }
 }
 ```
@@ -43,6 +45,8 @@ AIMM uses PHP for orchestration and Gotenberg for PDF rendering.
 | `ramsey/uuid` | UUID generation for artifact folders |
 | `guzzlehttp/guzzle` | HTTP client for external services |
 | `codeception/codeception` | Unit and integration testing |
+| `codeception/module-yii2` | Yii 2 integration for Codeception |
+| `friendsofphp/php-cs-fixer` | PHP coding-style validation and formatting |
 
 ## Gotenberg
 

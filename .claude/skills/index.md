@@ -13,7 +13,7 @@ For commands, paths, and environment: `.claude/config/project.md`
 
 | Skill | File | Use When |
 |-------|------|----------|
-| Access Database | `access-database-from-host.md` | Read-only host query with maintainer-injected credentials |
+| Access Database | `access-database-from-host.md` | Read-only host query through a maintainer-provisioned option file |
 | Commit and Push | `../commands/cp.md` | Explicitly approved scoped commit and optional push |
 | Create Migration | `create-migration.md` | Schema change validated on application and test schemas |
 | Finalize Changes | `../commands/finalize-changes.md` | Environment-aware validation, handoff, and scoped staging |

@@ -1,83 +1,71 @@
 ---
 name: access-database-from-host
-description: Query the `aimm` database read-only from an AIMM host using maintainer-injected runtime variables and the selection logic from `yii/config/db.php`, without reading or exposing credentials.
+description: Query an approved AIMM database read-only from a host through a maintainer-provisioned MySQL option file, without reading, serializing, or exposing credentials.
 ---
 
-# AccessDatabaseFromHost
+# Access Database from Host
 
-Access the AIMM database from the host machine using the same database selection
-logic as `yii/config/db.php`, without opening `.env` or exposing secrets in shell
-history, process arguments, logs, or evidence.
+Run bounded read-only diagnostics against an explicitly approved AIMM database.
+The agent must never construct a credential file from raw values: MySQL option
+files have their own quoting, comment, and escape rules, so shell interpolation
+is not a safe serialization mechanism.
 
-## When to Use
+## Environment Boundary
 
-- You need to query AIMM tables from an explicitly approved AIMM host.
-- You need to inspect collection logs (`collection_run`, `collection_error`) to debug a failed collection.
+- Use only on an AIMM host with the `mysql` client.
+- Do not use in the PromptManager runner. It has no approved database credential
+  channel; provide a maintainer handoff instead.
+- Stop if the target database, purpose, or allowed query scope is not explicit.
 
-Do not use this skill in the PromptManager runner. That environment has neither
-an approved database credential channel nor authority to improvise one; provide
-a maintainer handoff instead.
+## Required Maintainer Input
 
-## Inputs
+The maintainer provisions a dedicated MySQL option file through the approved
+secret-management channel and injects only its absolute path as:
 
-The maintainer injects these variables into the process environment without
-showing their values to the agent:
+```text
+AIMM_DB_READONLY_DEFAULTS_FILE
+```
 
-- `DB_PORT` (published port on host)
-- `DB_DATABASE` (default database)
-- `DB_DATABASE_TEST` (used when `YII_ENV=test`, matching `yii/config/db.php`)
-- `DB_READONLY_USER`
-- `DB_READONLY_PASSWORD`
+The option file must:
 
-`DB_READONLY_USER` must be a dedicated account whose database grants permit
-only the required reads. Generic application or administrative credentials are
-not accepted by this skill.
+- be a regular, non-symlink file owned by the invoking account with mode `0600`;
+- contain the exact approved host, port, database, and dedicated read-only
+  account in a `[client]` group;
+- be created and escaped by the maintainer's credential tooling, not by the
+  agent or a shell heredoc;
+- have a maintainer-owned expiry and removal path.
 
-From the read-only contract in `yii/config/db.php`:
+The maintainer must verify the account's current grants allow only the required
+reads. Application or administrative credentials are not accepted.
 
-- Database selection rule: if `YII_ENV=test` then use `DB_DATABASE_TEST`, else use `DB_DATABASE`.
-- No table prefix is configured, so Yii table `{{%collection_run}}` resolves to
-  `collection_run`.
+## Connection Preflight
 
-## Procedure (Host Only, No Secrets in argv)
-
-Use a temporary MySQL defaults file so credentials do not appear in `ps` output.
-Do not print the file or its variables:
+Do not open, print, copy, edit, or delete the option file. Validate only its path
+and filesystem boundary, then let the MySQL client parse it:
 
 ```bash
 set -euo pipefail
 
-: "${DB_PORT:?DB_PORT must be injected by the maintainer}"
-: "${DB_DATABASE:?DB_DATABASE must be injected by the maintainer}"
-: "${DB_READONLY_USER:?DB_READONLY_USER must be injected by the maintainer}"
-: "${DB_READONLY_PASSWORD:?DB_READONLY_PASSWORD must be injected by the maintainer}"
+: "${AIMM_DB_READONLY_DEFAULTS_FILE:?maintainer must inject the approved option-file path}"
 
-db="${DB_DATABASE}"
-if [ "${YII_ENV:-}" = "test" ]; then
-  : "${DB_DATABASE_TEST:?DB_DATABASE_TEST must be injected for YII_ENV=test}"
-  db="${DB_DATABASE_TEST}"
-fi
+case "$AIMM_DB_READONLY_DEFAULTS_FILE" in
+  /*) ;;
+  *) echo "AIMM_DB_READONLY_DEFAULTS_FILE must be absolute" >&2; exit 1 ;;
+esac
 
-tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
-chmod 600 "$tmp"
-cat >"$tmp" <<EOF
-[client]
-host=127.0.0.1
-port=${DB_PORT}
-user=${DB_READONLY_USER}
-password=${DB_READONLY_PASSWORD}
-database=${db}
-EOF
+test -f "$AIMM_DB_READONLY_DEFAULTS_FILE"
+test ! -L "$AIMM_DB_READONLY_DEFAULTS_FILE"
+test "$(stat -c '%u' "$AIMM_DB_READONLY_DEFAULTS_FILE")" = "$(id -u)"
+test "$(stat -c '%a' "$AIMM_DB_READONLY_DEFAULTS_FILE")" = "600"
 
-mysql --defaults-extra-file="$tmp" --batch --raw -e "SELECT 1 AS ok;"
+mysql --defaults-file="$AIMM_DB_READONLY_DEFAULTS_FILE" \
+  --batch --raw \
+  -e "SELECT DATABASE() AS database_name, CURRENT_USER() AS database_user;"
 ```
 
-### Notes
-
-- Do not use `DB_HOST` from `.env` for host queries. `DB_HOST=aimm_mysql` is a Docker network hostname and typically does not resolve on the host.
-- Do not open, source, copy, or print `.env`; runtime injection is the maintainer's responsibility.
-- Do not pass passwords via `mysql -p...` in automation; it leaks via process arguments and may end up in logs.
+Confirm the returned database and account match the approved target before any
+diagnostic query. Pass no host, port, database, username, or password overrides
+on the command line.
 
 ## Common Queries
 
@@ -104,7 +92,7 @@ ORDER BY started_at DESC
 LIMIT 5;
 ```
 
-Error summary for a run:
+Error summary for an approved run:
 
 ```sql
 SELECT severity, error_code, COUNT(*) AS cnt
@@ -114,27 +102,31 @@ GROUP BY severity, error_code
 ORDER BY severity, cnt DESC, error_code ASC;
 ```
 
-Error details for a run:
+Error details for an approved run:
 
 ```sql
 SELECT severity, error_code, ticker, error_path, error_message, created_at
 FROM collection_error
 WHERE collection_run_id = 123
-ORDER BY ticker ASC, severity ASC, error_code ASC, error_path ASC;
+ORDER BY ticker ASC, severity ASC, error_code ASC, error_path ASC
+LIMIT 200;
 ```
 
-## Security / Guardrails
+## Guardrails
 
-- Require the maintainer to verify the dedicated account's read-only grants
-  before injecting it; stop if that verification is missing or stale.
-- Never paste runtime variable values into chat or logs; use variable names only.
-- Avoid querying more than needed; always `LIMIT` and/or filter by `industry_id` / `collection_run_id`.
-- Never use this read-only skill as a mutation path.
+- Read only the columns and rows needed for the diagnosis; always use an
+  approved identifier and a practical `LIMIT` for detail queries.
+- Never place credential values or option-file contents in chat, commands,
+  process arguments, logs, or evidence.
+- Never use this skill for mutation, schema inspection beyond the approved
+  scope, or privilege changes.
+- Stop on an unexpected target, unexpected account, permission error, or query
+  result outside the approved scope.
 
 ## Definition of Done
 
-- Can run a host-only `mysql` query through verified read-only credentials
-  without credential leakage.
-- Agent can retrieve latest runs and related `collection_error` rows for a specific industry/run id.
-- Temporary defaults file is removed by the exit trap on success and failure.
-- Query target, filters, row count, and readback are recorded without secret values.
+- The maintainer-provisioned file and read-only grants passed preflight.
+- The returned database and account matched the approved target.
+- Only approved, bounded read queries ran.
+- Target, filters, row count, and result summary were recorded without secrets.
+- The maintainer retained responsibility for option-file expiry and removal.

@@ -40,61 +40,43 @@ Read the rules and verify changed files comply:
 | Any `.php` file | coding-standards.md → "PHP" section |
 | Any new folder | architecture.md → "Banned for New Code" |
 
-**Automated checks (all should return empty for compliant code):**
+**Runner-safe inventory and whitespace checks:**
 ```bash
-# Missing strict_types
-grep -rL "declare(strict_types=1)" yii/src/**/*.php
-
-# Banned folders exist
-ls -d yii/src/services yii/src/helpers yii/src/utils yii/src/misc 2>/dev/null
-
-# Raw SQL in Query classes
-grep -l "yii\\\\db\\\\Connection" yii/src/queries/*.php
-
-# Query classes not extending ActiveQuery
-grep -L "extends ActiveQuery" yii/src/queries/*.php
-
-# DTOs not readonly
-grep -L "readonly class" yii/src/dto/**/*.php 2>/dev/null
+git diff --check
+git diff --name-only --diff-filter=ACMR HEAD -- yii/src yii/migrations yii/tests
+git ls-files --others --exclude-standard -- yii/src yii/migrations yii/tests
 ```
 
-Report any violations found.
+Read every listed PHP file and apply the file-type checks above. In particular:
+
+- require `declare(strict_types=1)` in each changed PHP file;
+- classify changed files in `queries/` before checking them: model queries must
+  extend `ActiveQuery`; documented read-only reporting queries may use the
+  architecture rule's raw-SQL exception;
+- require changed DTO classes to be `readonly`;
+- for each new table migration, verify the corresponding ActiveRecord model,
+  ActiveQuery class, and mapped unit tests are included in the approved scope;
+- inspect only new folder paths for banned taxonomy names.
+
+Report violations without treating unchanged legacy files as findings.
 
 ### 3. Run linter
 
-On an AIMM host, use the canonical wrapper from `yii/`:
-
-```bash
-../php-cs-fixer fix --dry-run --diff --using-cache=no --config=.php-cs-fixer.dist.php src
-```
-
-In the PromptManager runner, do not run AIMM PHP. Record the missing PHP >=8.5
-and Docker capabilities and add the command above to the maintainer handoff.
+On an AIMM host, run the canonical non-mutating source check under **Linter** in
+`.claude/config/project.md`. In the PromptManager runner, follow
+`.claude/rules/workflow.md` and hand that exact command to the maintainer.
 
 ### 4. Run relevant tests
 
-On an AIMM host, use `.claude/config/project.md` for test path mappings.
-
-Map changed source files to test files by replacing `src` with `tests/unit`.
-
-```bash
-# Run all unit tests
-docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit
-
-# Run specific test file
-docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit tests/unit/path/FooTest.php
-
-# Run test directory
-docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit tests/unit/handlers/foo/
-```
-
-**Note:** Codeception accepts only one test path per command. Run separate commands for multiple paths.
+On an AIMM host, map changed source files with the table in
+`.claude/config/project.md` and run the canonical relevant test command from
+that file. Run separate commands sequentially when multiple paths are needed.
 
 If tests fail, stop and report.
 
-In the PromptManager runner, do not call local Codeception and do not simulate a
-passing result. Add the exact relevant command or full unit command to the
-maintainer handoff and mark runtime validation pending.
+In the PromptManager runner, follow `.claude/rules/workflow.md`. Add the exact
+relevant command from `.claude/config/project.md` to the maintainer handoff and
+mark runtime validation pending.
 
 ### 5. Check documentation
 
@@ -108,8 +90,10 @@ Review changes and determine if site documentation (`site/`) needs updating:
 
 If documentation updates are needed:
 1. Make the updates
-2. On the host, rebuild docs: `npm run docs:build`
-3. In the PromptManager runner, hand off that command without claiming it ran
+2. On the host, run the canonical documentation build in
+   `.claude/config/project.md`
+3. In the PromptManager runner, use the documentation-build handoff from
+   `.claude/config/project.md` without claiming it ran
 
 ### 6. Prepare commit
 

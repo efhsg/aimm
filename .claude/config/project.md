@@ -75,16 +75,16 @@ next test command.
 
 ```bash
 # Capture both histories before mutation
-docker exec aimm_yii vendor/bin/yii migrate/history
-docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history
+docker exec aimm_yii vendor/bin/yii migrate/history all
+docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history all
 
 # Validate migrations on the isolated test schema first
 docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/up --interactive=0
-docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history
+docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history all
 
 # Apply only after test validation succeeds and the application target is approved
 docker exec aimm_yii vendor/bin/yii migrate/up --interactive=0
-docker exec aimm_yii vendor/bin/yii migrate/history
+docker exec aimm_yii vendor/bin/yii migrate/history all
 
 # Create new migration
 docker exec aimm_yii vendor/bin/yii migrate/create migration_name
