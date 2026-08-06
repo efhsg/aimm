@@ -80,7 +80,9 @@ Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI 
 
 - `/audit-config` — Audit AIMM agent configuration without changing files
 - `/finalize-changes` — Validate changes, run linter and tests, prepare commit
+- `/new-spec` — Create one non-overwriting AIMM-PRD-1 functional spec
 - `/review-changes` — Review code changes for correctness, style, and project compliance
+- `/validate-spec` — Validate AIMM specs mechanically against R1-R12
 - `/new-branch` — Create a new feature or fix branch
 - `/cp` — Commit and push only when explicitly requested
 - `/squash-migrations` — Exceptional migration maintenance; never a default workflow

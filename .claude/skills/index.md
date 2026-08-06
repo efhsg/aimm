@@ -20,8 +20,10 @@ For commands, paths, and environment: `.claude/config/project.md`
 | Finalize Changes | `../commands/finalize-changes.md` | Environment-aware validation, handoff, and scoped staging |
 | Frontend Design | `frontend-design.md` | Building/modifying UI across admin, docs, or PDF reports |
 | New Branch | `new-branch.md` | Starting work on a new feature or fix branch |
+| New Spec | `new-spec.md` | Creating one non-overwriting AIMM-PRD-1 functional spec |
 | Review Changes | `review-changes.md` | Code review, PRs, pre-commit checks |
 | Squash Migrations | `squash-migrations.md` | Exceptional, separately approved squash with restore proof |
+| Validate Spec | `validate-spec.md` | Read-only R1-R12 validation of AIMM functional specs |
 
 ## Reference Documentation
 
