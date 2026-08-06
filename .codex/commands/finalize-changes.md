@@ -1,1 +1,1 @@
-.claude/commands/finalize-changes.md
+../../.claude/commands/finalize-changes.md

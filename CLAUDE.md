@@ -78,6 +78,7 @@ Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI 
 
 ## Slash Commands
 
+- `/audit-config` — Audit AIMM agent configuration without changing files
 - `/finalize-changes` — Validate changes, run linter and tests, prepare commit
 - `/review-changes` — Review code changes for correctness, style, and project compliance
 - `/new-branch` — Create a new feature or fix branch
