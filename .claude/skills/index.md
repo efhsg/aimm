@@ -17,12 +17,13 @@ For commands, paths, and environment: `.claude/config/project.md`
 | Audit Configuration | `../commands/audit-config.md` | Read-only audit of AIMM agent instructions, registrations, and runtime claims |
 | Commit and Push | `../commands/cp.md` | Explicitly approved scoped commit and optional push |
 | Create Migration | `create-migration.md` | Schema change validated on application and test schemas |
-| Finalize Changes | `../commands/finalize-changes.md` | Environment-aware validation, handoff, and scoped staging |
+| Evaluate Skill | `evaluate-skill.md` | Read-only semantic evaluation and optional AIMM transfer-fit advice |
+| Finalize Changes | `finalize-changes.md` | Fail-closed validation, host handoff, and exact-path staging |
 | Frontend Design | `frontend-design.md` | Building/modifying UI across admin, docs, or PDF reports |
-| New Branch | `new-branch.md` | Starting work on a new feature or fix branch |
+| New Branch | `new-branch.md` | Creating a confirmed local task branch without implicit network actions |
 | New Spec | `new-spec.md` | Creating one non-overwriting AIMM-PRD-1 functional spec |
 | Preflight Workflow | `preflight-workflow.md` | Clarifying ambiguous or risky AIMM work into a read-only scope decision |
-| Review Changes | `review-changes.md` | Code review, PRs, pre-commit checks |
+| Review Changes | `review-changes.md` | Evidence-based full-file review before finalization |
 | Review Spec | `review-spec.md` | Advising section by section on a mechanically valid AIMM spec |
 | Squash Migrations | `squash-migrations.md` | Exceptional, separately approved squash with restore proof |
 | Validate Spec | `validate-spec.md` | Read-only R1-R12 validation of AIMM functional specs |
