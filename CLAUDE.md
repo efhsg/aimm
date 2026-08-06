@@ -81,7 +81,9 @@ Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI 
 - `/audit-config` — Audit AIMM agent configuration without changing files
 - `/finalize-changes` — Validate changes, run linter and tests, prepare commit
 - `/new-spec` — Create one non-overwriting AIMM-PRD-1 functional spec
+- `/preflight-workflow` — Clarify ambiguous or risky AIMM work before specification or implementation
 - `/review-changes` — Review code changes for correctness, style, and project compliance
+- `/review-spec` — Review a mechanically valid AIMM spec section by section
 - `/validate-spec` — Validate AIMM specs mechanically against R1-R12
 - `/new-branch` — Create a new feature or fix branch
 - `/cp` — Commit and push only when explicitly requested

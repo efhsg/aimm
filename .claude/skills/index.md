@@ -21,7 +21,9 @@ For commands, paths, and environment: `.claude/config/project.md`
 | Frontend Design | `frontend-design.md` | Building/modifying UI across admin, docs, or PDF reports |
 | New Branch | `new-branch.md` | Starting work on a new feature or fix branch |
 | New Spec | `new-spec.md` | Creating one non-overwriting AIMM-PRD-1 functional spec |
+| Preflight Workflow | `preflight-workflow.md` | Clarifying ambiguous or risky AIMM work into a read-only scope decision |
 | Review Changes | `review-changes.md` | Code review, PRs, pre-commit checks |
+| Review Spec | `review-spec.md` | Advising section by section on a mechanically valid AIMM spec |
 | Squash Migrations | `squash-migrations.md` | Exceptional, separately approved squash with restore proof |
 | Validate Spec | `validate-spec.md` | Read-only R1-R12 validation of AIMM functional specs |
 
