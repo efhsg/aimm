@@ -79,6 +79,7 @@ Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI 
 ## Slash Commands
 
 - `/audit-config` — Audit AIMM agent configuration without changing files
+- `/audit-skills` — Audit the registered AIMM skill ecosystem without changing files
 - `/evaluate-skill` — Evaluate one AIMM skill or external candidate without changing files
 - `/finalize-changes` — Validate changes, run linter and tests, prepare commit
 - `/new-spec` — Create one non-overwriting AIMM-PRD-1 functional spec
