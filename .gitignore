@@ -27,3 +27,4 @@ __pycache__/
 /.ai/**/code-review_[0-9]*/
 /.ai/features/**/proposals/
 /.ai/bugfix/**/proposals/
+/.ai/features/**/spec.gaps.md
