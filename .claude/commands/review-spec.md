@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Glob, Grep, Bash(git rev-parse --show-toplevel), Bash(realpath:*), Bash(test:*)
+allowed-tools: Read, Glob, Grep, Bash(grep:*), Bash(git rev-parse --show-toplevel), Bash(realpath:*), Bash(test:*)
 description: Review one mechanically valid AIMM spec section by section without changing it or issuing an approval verdict
 label: Review AIMM Spec
 min_level: standard
@@ -14,6 +14,6 @@ Load and follow `.claude/skills/review-spec.md`.
 
 Semantically review this AIMM spec: $ARGUMENTS
 
-Accept exactly one `.ai/features/{name}/spec.md` path. Apply `/validate-spec` to
-the same file first. The review is read-only, on-demand, and advisory: never
-change status or content and never issue a pass/fail or approval verdict.
+Accept exactly one `.ai/features/{name}/spec.md` path, and apply `/validate-spec`
+to the same file first. The skill owns the read-only boundary and the rule that
+this review issues no approval verdict.

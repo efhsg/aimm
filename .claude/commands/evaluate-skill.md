@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Glob, Grep
+allowed-tools: Read, Glob, Grep, Bash(grep:*)
 description: Evaluate one AIMM skill or external candidate semantically without changing files
 label: Evaluate AIMM Skill
 min_level: standard

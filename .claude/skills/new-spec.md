@@ -157,3 +157,7 @@ When generation stops before writing, end with:
 ```text
 Invoer herstellen / Opnieuw uitvoeren / Stoppen?
 ```
+
+Then wait. `Spec invullen` is author work and `Valideren` starts `/validate-spec`
+as a separate action; generation never fills the visible gaps itself and never
+overwrites an existing spec on a rerun.

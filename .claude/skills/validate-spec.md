@@ -170,3 +170,7 @@ Review starten / Opnieuw valideren / Stoppen?
 ```
 
 For a passing template, replace `Review starten` with `Specs valideren`.
+
+Then wait. `Spec herstellen` and `Review starten` name work that runs outside
+this capability: validation never edits a spec, never changes its status, and
+never continues into semantic review by itself.

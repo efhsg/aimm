@@ -73,16 +73,19 @@ review evidence is unavailable, perform the same scoped defect checks or stop
 and direct the requester to `/review-changes`. Concrete counterevidence is
 required for a dismissal.
 
-For approved PHP scope, explicitly verify the existing AIMM gates:
+For approved PHP scope, verify the existing AIMM gates against their owning
+rule, which stays authoritative when this list and the rule disagree:
 
-- every changed PHP file has `declare(strict_types=1)` and follows its file-type
-  rule;
-- a model query extends `ActiveQuery`; only a documented read-only reporting
-  query may use the raw-SQL exception;
-- changed DTO classes are `readonly`;
-- every new-table migration includes its model, query, and mapped tests in scope;
-- only newly introduced folders are checked against banned taxonomy names;
-- mapped tests cover changed behavior and critical failure paths.
+- `declare(strict_types=1)` and file-type formatting — `rules/coding-standards.md`;
+- `ActiveQuery` extension and the documented read-only raw-SQL exception —
+  `rules/architecture.md`;
+- `readonly` DTO classes — `rules/architecture.md`;
+- model, query, and mapped tests in scope for every new-table migration —
+  `rules/architecture.md` and `rules/testing.md`;
+- banned taxonomy names, checked only for newly introduced folders —
+  `rules/architecture.md`;
+- mapped tests for changed behavior and critical failure paths —
+  `rules/testing.md`.
 
 Determine documentation impact without editing automatically: new features,
 CLI commands, configuration, architecture, or dependencies require their
@@ -102,18 +105,16 @@ git diff --check
 jq empty .claude/settings.json
 ```
 
-Do not run local AIMM PHP or simulate Docker. For PHP changes, hand off the exact
-host commands from project configuration:
+Do not run local AIMM PHP or simulate Docker. For PHP changes, hand off the
+linter and Codeception commands exactly as written in
+`.claude/config/project.md` § Commands. Quote them verbatim from that file at
+handoff time; never reproduce a remembered or adapted variant here, because
+project configuration owns those commands and this skill drifts the moment it
+keeps its own copy.
 
-```bash
-# From the AIMM yii/ directory
-../php-cs-fixer fix --dry-run --diff --using-cache=no --config=.php-cs-fixer.dist.php src
-docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit
-```
-
-Use the narrower mapped test commands from `.claude/config/project.md` when the
-approved source scope permits them; run multiple test paths sequentially. For a
-site-documentation change, use the documented host `npm run docs:build` handoff.
+Use the narrower mapped test commands from the same section when the approved
+source scope permits them; run multiple test paths sequentially. For a
+site-documentation change, use the documented host documentation-build handoff.
 For a migration change, require the exact maintainer validation and readback
 from project configuration; do not apply a migration from this skill.
 
@@ -173,6 +174,11 @@ End a successfully staged result with:
 ```text
 Committen / Diff bekijken / Stoppen?
 ```
+
+Then wait. Only `Committen` authorizes starting `/cp` as a separate approved
+action, and only `Bewijs aanleveren` authorizes rerunning the blocked validation
+with maintainer evidence. This skill never commits, pushes, or stages beyond the
+approved paths, whichever option the user selects.
 
 ## Completion
 

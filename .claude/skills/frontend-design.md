@@ -1,3 +1,16 @@
+---
+name: frontend-design
+description: Build or modify AIMM admin UI, VitePress documentation, and PDF report interfaces against the institutional design system, using existing tokens, BEM naming, and the documented per-context constraints
+area: frontend
+provides:
+  - frontend_implementation
+depends_on:
+  - rules/coding-standards.md
+  - rules/architecture.md
+  - rules/security.md
+  - config/project.md
+---
+
 # Frontend Design
 
 Create production-grade frontend interfaces following AIMM's institutional finance design system. Use this skill when building or modifying UI components, views, or styles across admin UI, documentation site, or PDF reports.
@@ -57,8 +70,13 @@ Before creating any UI:
 
 ## Color Palette
 
-| Token | Value | Use For |
-|-------|-------|---------|
+`yii/web/css/tokens.css` is the source of truth. The values below are the light
+theme only; `--text-primary`, `--text-secondary`, `--bg-page`, and `--bg-surface`
+are overridden in the dark theme. Read the token file before relying on a value,
+and never hardcode one of these hex codes in a stylesheet or template.
+
+| Token | Value (light) | Use For |
+|-------|---------------|---------|
 | `--brand-primary` | `#1a4a55` | Headings, primary actions, links |
 | `--brand-accent` | `#A68248` | Premium CTAs, emphasis, gold highlights |
 | `--color-success` | `#3b755f` | Valid states, positive changes |

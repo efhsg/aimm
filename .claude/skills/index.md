@@ -18,9 +18,11 @@ For commands, paths, and environment: `.claude/config/project.md`
 | Audit Skills | `audit-skills.md` | Read-only ecosystem audit of skill registration, routing, dependencies, overlap, and safety |
 | Commit and Push | `../commands/cp.md` | Explicitly approved scoped commit and optional push |
 | Create Migration | `create-migration.md` | Schema change validated on application and test schemas |
+| Custom Buttons | `custom-buttons.md` | Writing or reviewing a stop point that must end with a choice line and a wait instruction |
 | Evaluate Skill | `evaluate-skill.md` | Read-only semantic evaluation and optional AIMM transfer-fit advice |
 | Finalize Changes | `finalize-changes.md` | Fail-closed validation, host handoff, and exact-path staging |
 | Frontend Design | `frontend-design.md` | Building/modifying UI across admin, docs, or PDF reports |
+| Improve Prompt | `improve-prompt.md` | Analyzing and, after approval, improving one AIMM agent-instruction file |
 | New Branch | `new-branch.md` | Creating a confirmed local task branch without implicit network actions |
 | New Spec | `new-spec.md` | Creating one non-overwriting AIMM-PRD-1 functional spec |
 | Preflight Workflow | `preflight-workflow.md` | Clarifying ambiguous or risky AIMM work into a read-only scope decision |

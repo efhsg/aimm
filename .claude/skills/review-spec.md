@@ -161,6 +161,10 @@ Without material findings, end with:
 Review bespreken / Stoppen?
 ```
 
+Then wait. `Spec aanpassen` names an edit that runs outside this capability;
+this review never changes spec content or status, and never converts a selected
+option into a file mutation.
+
 ## Completion
 
 - The current file passed R1–R12 before semantic review.

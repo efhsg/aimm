@@ -73,22 +73,31 @@ next test command.
 
 ### Database
 
+Use the application console entrypoint `yii/yii`, invoked as `php yii` from the
+container working directory (`/var/www/html/yii`). Never use `vendor/bin/yii`:
+that is Composer's proxy to the framework's generic console bootstrap, which does
+not load `yii/config/console.php` and therefore has no `db` component, no
+`app\commands` controllers, and the wrong migration path.
+
 ```bash
 # Capture both histories before mutation
-docker exec aimm_yii vendor/bin/yii migrate/history all
-docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history all
+docker exec aimm_yii php yii migrate/history all
+docker exec -e YII_ENV=test aimm_yii php yii migrate/history all
 
 # Validate migrations on the isolated test schema first
-docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/up --interactive=0
-docker exec -e YII_ENV=test aimm_yii vendor/bin/yii migrate/history all
+docker exec -e YII_ENV=test aimm_yii php yii migrate/up --interactive=0
+docker exec -e YII_ENV=test aimm_yii php yii migrate/history all
 
 # Apply only after test validation succeeds and the application target is approved
-docker exec aimm_yii vendor/bin/yii migrate/up --interactive=0
-docker exec aimm_yii vendor/bin/yii migrate/history all
+docker exec aimm_yii php yii migrate/up --interactive=0
+docker exec aimm_yii php yii migrate/history all
 
 # Create new migration
-docker exec aimm_yii vendor/bin/yii migrate/create migration_name
+docker exec aimm_yii php yii migrate/create migration_name
 ```
+
+The destructive console actions `migrate/fresh`, `migrate/down`, and `db/reset`
+are denied in `.claude/settings.json` and require the approved maintainer flow.
 
 Before applying a migration, record the resolved application and test database
 names through the approved environment-management channel, verify that they are
@@ -116,12 +125,44 @@ npm run docs:build
 ```bash
 git status --short
 git diff --check
+git ls-files
+git check-ignore -v <path>
+grep -rlE "[[:blank:]]+$" <paths>
 jq empty .claude/settings.json
 ```
 
 Do not use local PHP for AIMM in the PromptManager runner. Hand off the linter,
 Codeception, migrations, and documentation build to an AIMM maintainer with the
 host commands above.
+
+## Agent File Contracts
+
+### Command frontmatter — `.claude/commands/*.md`
+
+| Key | Required | Value |
+|-----|----------|-------|
+| `allowed-tools` | yes | Only the tools the body uses, in the narrowest form. Prefer `Bash(git commit -m:*)` over `Bash(git commit:*)`, and a literal command when the body runs exactly one. |
+| `description` | yes | One imperative line that names the boundary, such as read-only or approval-gated. |
+| `label` | yes | Short human-readable title. |
+| `min_level` | yes | Expected reasoning budget: `standard`, or `heavy` for a workflow that reads many files in full or spans multiple approval gates. |
+| `argument-hint` | yes | Quoted argument shape: `{...}` required, `[...]` optional, ` \| ` between mutually exclusive forms. |
+
+A wrapper body stays thin: one skill reference, `$ARGUMENTS` under `## Task`,
+and the scope or mutation boundary. A standalone command owns its own algorithm.
+
+### Skill frontmatter — `.claude/skills/*.md`
+
+| Key | Required | Value |
+|-----|----------|-------|
+| `name` | yes | kebab-case, identical to the filename stem |
+| `description` | yes | One sentence stating goal and boundary |
+| `area` | yes | `workflow`, `validation`, `database`, or `frontend` |
+| `provides` | yes | List of capability identifiers |
+| `depends_on` | yes | List of paths relative to `.claude/`; `[]` when there are none |
+
+Every skill file needs a row in `.claude/skills/index.md`. Every stop point
+follows `.claude/skills/custom-buttons.md`. `/audit-config` check M8 verifies
+this contract; `index.md` is excluded because it is a registry, not a skill.
 
 ## File Structure
 

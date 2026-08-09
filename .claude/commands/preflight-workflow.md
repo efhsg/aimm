@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Glob, Grep, Bash(grep:*), AskUserQuestion
 description: Clarify an ambiguous AIMM task into a read-only scope decision before specification or implementation
 label: Clarify AIMM Workflow Scope
 min_level: standard

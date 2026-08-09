@@ -1,6 +1,12 @@
 ---
 name: access-database-from-host
 description: Query an approved AIMM database read-only from a host through a maintainer-provisioned MySQL option file, without reading, serializing, or exposing credentials.
+area: database
+provides:
+  - host_readonly_database_access
+depends_on:
+  - rules/security.md
+  - config/project.md
 ---
 
 # Access Database from Host

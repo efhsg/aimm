@@ -1,6 +1,13 @@
 ---
 name: create-migration
 description: Create or modify Yii2 schema migrations with reversible changes, complete ActiveRecord coverage, and isolated test-schema validation. Use for database schema work, not runtime datapacks or report artifacts.
+area: database
+provides:
+  - schema_migration
+depends_on:
+  - rules/architecture.md
+  - rules/testing.md
+  - config/project.md
 ---
 
 # Create Migration

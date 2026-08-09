@@ -46,6 +46,11 @@ In the PromptManager runner:
   schema. Record the exact targets before applying either migration.
 - Read complete command output and exit status. A partial tail or a passing line
   from one suite does not establish that another suite passed.
+- For a repository-wide search check, use the `Grep` tool. When `Grep` is
+  unavailable in the active runtime, use the runner-safe `grep` form in
+  `.claude/config/project.md`. When neither is available, report the check as
+  `maintainer handoff required` with the exact command; never report it as
+  passed or silently skip it.
 - When the PromptManager runner cannot validate AIMM, provide the exact
   applicable host commands from `.claude/config/project.md`.
 
@@ -65,11 +70,5 @@ In the PromptManager runner:
 
 ## Secrets and Provenance
 
-- Never place credentials, tokens, private keys, connection secrets, or local
-  machine exceptions in tracked agent configuration or evidence artifacts.
-- Use named runtime environment variables or clearly non-secret placeholders in
-  examples.
-- Preserve source URL, retrieval time, reporting period, unit, transformation,
-  and validation outcome for every financial datapoint.
-- Report missing or conflicting provenance; never fabricate a value to complete
-  an analysis.
+See `.claude/rules/security.md`, which owns the secret-handling and
+data-provenance rules for every AIMM workflow.

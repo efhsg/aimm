@@ -161,6 +161,11 @@ When Phase 1 is clean, end with:
 Finaliseren / Designreview / Stoppen?
 ```
 
+Then wait. Only `Designreview` authorizes Phase 2 inside this skill;
+`Finaliseren` starts `/finalize-changes` and `Bevindingen herstellen` starts a
+separate implementation action. The review itself never repairs a finding, and
+never stages, commits, or pushes.
+
 ## Completion
 
 - Every in-scope changed file was inventoried and read completely.

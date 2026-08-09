@@ -1,6 +1,9 @@
 ---
-allowed-tools: Bash, Read
+allowed-tools: Read, Bash(git status --short), Bash(git diff --staged:*), Bash(git branch --show-current), Bash(git remote -v), Bash(git rev-parse --show-toplevel), Bash(git log -1:*), Bash(git commit -m:*), Bash(git push origin HEAD)
 description: Commit scoped staged changes and push only when explicitly requested
+label: Commit and Push
+min_level: standard
+argument-hint: '[commit message]'
 ---
 
 # Commit and Push
@@ -36,6 +39,14 @@ Never run `git add -A`; never stage unrelated tracked or untracked files.
 Read the complete staged diff even when the user supplied a commit message or a
 message was suggested earlier in the conversation.
 
+When this step stops, report the exact staged and unstaged paths and end with:
+
+```text
+Scope aanpassen / Stoppen?
+```
+
+**Wait for user input. Do not stage files on the user's behalf.**
+
 ### 2. Determine commit message
 
 Follow this order:
@@ -67,7 +78,16 @@ Record the commit hash and read `git status --short` back.
 
 ### 4. Push only when explicitly approved
 
-If push was not explicitly requested, stop after reporting the local commit.
+If push was not explicitly requested, report the local commit hash, branch, and
+remote target, then end with:
+
+```text
+Publiceren / Lokaal houden / Stoppen?
+```
+
+**Wait for user input. Do not push before the user answers.**
+
+After explicit push approval:
 
 ```bash
 git push origin HEAD
@@ -77,6 +97,13 @@ git push origin HEAD
 - Report the complete error and stop.
 - Do not pull, rebase, merge, force-push, or retry automatically.
 - Preserve the local commit as the recovery anchor.
+- End with:
+
+```text
+Fout onderzoeken / Lokaal houden / Stoppen?
+```
+
+**Wait for user input. Do not resolve the remote divergence automatically.**
 
 Report the commit hash, branch, push target, and final status.
 

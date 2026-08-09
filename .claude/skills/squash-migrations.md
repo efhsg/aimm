@@ -2,6 +2,11 @@
 name: squash-migrations
 description: Plan an exceptional migration squash with explicit environment, backup, readback, and recovery approval. Never use as a routine implementation step.
 area: database
+provides:
+  - migration_squash_plan
+depends_on:
+  - rules/workflow.md
+  - config/project.md
 ---
 
 # SquashMigrations
@@ -19,6 +24,15 @@ alone is not authorization to run this workflow.
   or migration deletion.
 - Treat production as a separate change boundary with an owner-approved
   maintenance window, backup, restore proof, and rollback decision.
+
+The agent never executes a step of this workflow itself.
+`.claude/settings.json` denies `migrate/fresh`, `migrate/down`, `db/reset`, and
+the squash console action, and `.claude/commands/squash-migrations.md` grants no
+execution tools. Every Docker, database, migration, backup, and cleanup command
+below is therefore a maintainer handoff: state the exact command, the evidence
+the maintainer must return, and the readback that closes the step. Never report
+a handed-off step as executed, verified, or passed, and never substitute an
+alternative entrypoint to work around the denial.
 
 ## Required Inputs and Approvals
 
@@ -62,9 +76,20 @@ runtime variables and the approved secret manager.
   a disposable target.
 - Stop if another actor changed HEAD, migration files, schema, or data counts.
 
+Present the captured pre-state, the exact file set to archive, the two expected
+output files, and the backup and restore evidence, then end with:
+
+```text
+Generatie aanvragen / Plan aanpassen / Stoppen?
+```
+
+**Wait for user input. Do not request or perform generation before the user
+answers.**
+
 ### 2. Generate only
 
-After the first approval gate, an AIMM maintainer may run:
+After the first approval gate, an AIMM maintainer runs the command below and
+returns its complete output. The agent requests it and waits; it does not run it.
 
 ```bash
 docker exec aimm_yii php yii squash-migrations --archive --with-seed
@@ -93,7 +118,13 @@ record their hashes, and compare the exact file set with the approved target.
 
 Present the generation diff, schema comparison, reference-data comparison,
 restore proof, remaining risks, exact apply target, and exact recovery action.
-Do not proceed without a separate explicit owner decision.
+Do not proceed without a separate explicit owner decision. End with:
+
+```text
+Toepassing op {exact doel} aanvragen / Plan aanpassen / Stoppen?
+```
+
+**Wait for user input. A first approval never carries over to this gate.**
 
 ### 5. Apply or recover
 
@@ -121,4 +152,6 @@ Do not proceed without a separate explicit owner decision.
 - [ ] Second approval obtained before any apply or cleanup
 - [ ] Final apply or recovery read back completely
 - [ ] Original migrations and backup retained until the approved retention point
+- [ ] Every Docker, database, and cleanup step recorded as a maintainer handoff
+      with the exact command and the evidence returned, never as agent-executed
 - [ ] Result reported as `SUCCESS`, `FAILED`, or `RECOVERED`, with evidence

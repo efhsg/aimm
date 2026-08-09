@@ -1,8 +1,8 @@
 ---
-allowed-tools: Bash(git rev-parse --show-toplevel), Bash(git status --short), Bash(git diff --check), Bash(jq empty .claude/settings.json), Bash(readlink:*), Bash(test:*), Read, Grep, Glob
+allowed-tools: Bash(git rev-parse --show-toplevel), Bash(git status --short), Bash(git diff --check), Bash(git check-ignore:*), Bash(jq empty .claude/settings.json), Bash(grep:*), Bash(readlink:*), Bash(test:*), Read, Grep, Glob
 description: Audit AIMM agent configuration for missing, stale, or conflicting instructions without changing files
 label: Audit AIMM Configuration
-min_level: standard
+min_level: heavy
 argument-hint: '[baseline=<report-path>]'
 ---
 
@@ -99,11 +99,20 @@ Run each check once and keep registry parity in one report section:
 | M5 | Runtime contract | A documented command or capability conflicts with `.claude/config/project.md` or `.claude/rules/workflow.md` |
 | M6 | Provider target | `readlink` or `test -e` shows that a provider wrapper or symlink points to a missing file |
 | M7 | Shared JSON and whitespace | JSON is invalid, a tracked diff has whitespace errors, or any discovered tracked/untracked config file has trailing whitespace |
+| M8 | Frontmatter contract | A command or skill file misses a required frontmatter key, declares an unused tool permission, or instructs a command its permissions forbid |
 
-For M7, run `jq empty .claude/settings.json` and `git diff --check`, then use
-`Grep` with the trailing-whitespace pattern `[[:blank:]]+$` over every discovered
-canonical source, command, skill, and shared settings file. The `Grep` pass is
-mandatory because `git diff --check` does not inspect untracked files.
+For M7, run `jq empty .claude/settings.json` and `git diff --check`, then search
+for the trailing-whitespace pattern `[[:blank:]]+$` over every discovered
+canonical source, command, skill, and shared settings file. This pass is
+mandatory because `git diff --check` does not inspect untracked files. Apply the
+search-tool and fail-closed rule in `.claude/rules/workflow.md`; never report M7
+as passed when no search tool ran.
+
+For M8, compare the frontmatter of every command and skill file with the
+contract in `.claude/config/project.md`. Report a missing required key, an
+unknown key, an `allowed-tools` entry the file body never uses, and a body
+command the frontmatter or `.claude/settings.json` forbids without a documented
+handoff.
 
 Never run AIMM PHP, Docker, migrations, tests, the documentation build, or other
 host-only commands from the PromptManager runner. If verifying a claim requires

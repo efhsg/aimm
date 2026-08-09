@@ -72,24 +72,25 @@ See `.claude/rules/architecture.md` for complete folder taxonomy and patterns.
 ## Commits
 
 Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI attribution):
-- Let Claude Code stage changes (`git add`)
-- Make the commit manually: `git commit -m "TYPE(scope): description"`
-- Or use `/finalize-changes` which suggests a commit message without committing
+- Use `/cp`, which commits the approved staged scope without adding attribution
+- Or use `/finalize-changes`, which stages approved paths and suggests a commit message without committing
+- Or let Claude Code stage changes (`git add`) and commit manually: `git commit -m "TYPE(scope): description"`
 
 ## Slash Commands
 
 - `/audit-config` — Audit AIMM agent configuration without changing files
 - `/audit-skills` — Audit the registered AIMM skill ecosystem without changing files
+- `/cp` — Commit and push only when explicitly requested
 - `/evaluate-skill` — Evaluate one AIMM skill or external candidate without changing files
 - `/finalize-changes` — Validate changes, run linter and tests, prepare commit
+- `/improve-prompt` — Analyze one AIMM agent-instruction file and apply only approved improvements
+- `/new-branch` — Create a new feature or fix branch
 - `/new-spec` — Create one non-overwriting AIMM-PRD-1 functional spec
 - `/preflight-workflow` — Clarify ambiguous or risky AIMM work before specification or implementation
 - `/review-changes` — Review code changes for correctness, style, and project compliance
 - `/review-spec` — Review a mechanically valid AIMM spec section by section
-- `/validate-spec` — Validate AIMM specs mechanically against R1-R12
-- `/new-branch` — Create a new feature or fix branch
-- `/cp` — Commit and push only when explicitly requested
 - `/squash-migrations` — Exceptional migration maintenance; never a default workflow
+- `/validate-spec` — Validate AIMM specs mechanically against R1-R12
 
 ## Skills
 
@@ -100,7 +101,9 @@ Check `.claude/skills/index.md` for reusable task patterns. When working:
 
 ## Code Review
 
-Before finalizing, run `/finalize-changes` which verifies rules compliance, linter, and tests.
+Before finalizing, run `/finalize-changes`, which verifies rules compliance and
+runs the linter and tests in a supported runtime, or records the exact maintainer
+handoff when the active runtime cannot run them.
 For detailed review criteria, see `.claude/skills/review-changes.md`.
 
 ## Definition of Done

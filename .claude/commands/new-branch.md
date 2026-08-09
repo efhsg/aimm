@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash, AskUserQuestion
+allowed-tools: AskUserQuestion, Bash(git rev-parse:*), Bash(git branch --show-current), Bash(git status --short), Bash(git remote), Bash(git for-each-ref:*), Bash(git switch -c:*), Bash(git fetch:*), Bash(git push -u:*)
 description: Create a local AIMM task branch from an explicitly confirmed base without implicit network operations
 label: Create AIMM Branch
 min_level: standard
@@ -14,5 +14,5 @@ Load and follow `.claude/skills/new-branch.md`.
 
 Create an AIMM task branch for: $ARGUMENTS
 
-Valid types are `feature`, `fix`, `refactor`, and `chore`. Fetch and remote
-publication require separate explicit choices; never pull, merge, or rebase.
+The skill owns the valid branch types, the naming rules, and the separate
+authorization required for every network action.
