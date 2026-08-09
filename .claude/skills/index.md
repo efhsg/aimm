@@ -16,7 +16,7 @@ For commands, paths, and environment: `.claude/config/project.md`
 | Access Database | `access-database-from-host.md` | Read-only host query through a maintainer-provisioned option file |
 | Audit Configuration | `../commands/audit-config.md` | Read-only audit of AIMM agent instructions, registrations, and runtime claims |
 | Audit Skills | `audit-skills.md` | Read-only ecosystem audit of skill registration, routing, dependencies, overlap, and safety |
-| Commit and Push | `../commands/cp.md` | Explicitly approved scoped commit and optional push |
+| Commit and Push | `../commands/cp.md` | Committing the approved staged scope and pushing it to the remote |
 | Create Migration | `create-migration.md` | Schema change validated on application and test schemas |
 | Custom Buttons | `custom-buttons.md` | Writing or reviewing a stop point that must end with a choice line and a wait instruction |
 | Evaluate Skill | `evaluate-skill.md` | Read-only semantic evaluation and optional AIMM transfer-fit advice |

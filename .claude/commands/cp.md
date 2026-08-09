@@ -1,6 +1,6 @@
 ---
 allowed-tools: Read, Bash(git status --short), Bash(git diff --staged:*), Bash(git branch --show-current), Bash(git remote -v), Bash(git rev-parse --show-toplevel), Bash(git log -1:*), Bash(git commit -m:*), Bash(git push origin HEAD)
-description: Commit scoped staged changes and push only when explicitly requested
+description: Commit the approved staged scope and push it to the remote
 label: Commit and Push
 min_level: standard
 argument-hint: '[commit message]'
@@ -8,16 +8,19 @@ argument-hint: '[commit message]'
 
 # Commit and Push
 
-Commit only the approved staged scope. Commit and push are separate external
-mutations and each requires an explicit request from the user.
+Commit only the approved staged scope, then push it. Invoking this command is
+the explicit approval for both mutations; no separate push confirmation is
+required.
 
 ## Preconditions
 
 - Read `CLAUDE.md`, `.claude/rules/workflow.md`, and
   `.claude/rules/commits.md`.
 - Confirm the active worktree, branch, and remote target.
-- Stop if commit was not explicitly requested.
-- Do not push unless the current request explicitly includes push approval.
+- Stop if the staged content was not approved, or if it contains a path outside
+  the approved scope. Approval covers what is staged, not whatever happens to be
+  in the worktree.
+- Commit without pushing only when the request says so explicitly.
 
 ## Steps
 
@@ -76,22 +79,22 @@ an unapproved path.
 
 Record the commit hash and read `git status --short` back.
 
-### 4. Push only when explicitly approved
+### 4. Push
 
-If push was not explicitly requested, report the local commit hash, branch, and
-remote target, then end with:
+Report the commit hash, branch, and remote target, then push:
+
+```bash
+git push origin HEAD
+```
+
+When the request asked for a commit without a push, stop here instead and end
+with:
 
 ```text
 Publiceren / Lokaal houden / Stoppen?
 ```
 
 **Wait for user input. Do not push before the user answers.**
-
-After explicit push approval:
-
-```bash
-git push origin HEAD
-```
 
 **If push fails:**
 - Report the complete error and stop.

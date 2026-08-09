@@ -72,7 +72,7 @@ See `.claude/rules/architecture.md` for complete folder taxonomy and patterns.
 ## Commits
 
 Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI attribution):
-- Use `/cp`, which commits the approved staged scope without adding attribution
+- Use `/cp`, which commits the approved staged scope and pushes it, without adding attribution
 - Or use `/finalize-changes`, which stages approved paths and suggests a commit message without committing
 - Or let Claude Code stage changes (`git add`) and commit manually: `git commit -m "TYPE(scope): description"`
 
@@ -80,7 +80,7 @@ Claude Code adds `Co-Authored-By` automatically. To follow project rules (no AI 
 
 - `/audit-config` — Audit AIMM agent configuration without changing files
 - `/audit-skills` — Audit the registered AIMM skill ecosystem without changing files
-- `/cp` — Commit and push only when explicitly requested
+- `/cp` — Commit the approved staged scope and push it to the remote
 - `/evaluate-skill` — Evaluate one AIMM skill or external candidate without changing files
 - `/finalize-changes` — Validate changes, run linter and tests, prepare commit
 - `/improve-prompt` — Analyze one AIMM agent-instruction file and apply only approved improvements
