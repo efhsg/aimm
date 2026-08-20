@@ -23,6 +23,7 @@ For commands, paths, and environment: `.claude/config/project.md`
 | Finalize Changes | `finalize-changes.md` | Fail-closed validation, host handoff, and exact-path staging |
 | Frontend Design | `frontend-design.md` | Building/modifying UI across admin, docs, or PDF reports |
 | Improve Prompt | `improve-prompt.md` | Analyzing and, after approval, improving one AIMM agent-instruction file |
+| Local Web Access | `local-web-access.md` | Reading two project-33 PromptManager metadata routes through runner `web-fetch` |
 | New Branch | `new-branch.md` | Creating a confirmed local task branch without implicit network actions |
 | New Spec | `new-spec.md` | Creating one non-overwriting AIMM-PRD-1 functional spec |
 | Preflight Workflow | `preflight-workflow.md` | Clarifying ambiguous or risky AIMM work into a read-only scope decision |

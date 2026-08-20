@@ -14,6 +14,14 @@ Single source of truth for project-specific operations.
 | PromptManager runner root | `/projects/aim/aimm` |
 | Host/runner mapping | `/opt/dev` → `/projects` |
 
+## PromptManager Tool Contracts
+
+See `.claude/config/custom-tools.md` for the consumer contracts of
+PromptManager-provided runner tools and pre-dispatch `SYS:{{...}}` placeholders.
+Load it only when the active task exposes one of those tools, contains a SYS
+placeholder, or explicitly audits the documented PromptManager tool and runtime
+contracts.
+
 ## Execution Environments
 
 ### AIMM host agent
@@ -55,6 +63,9 @@ Codeception requires `register_argc_argv=1` (not set in container's php.ini).
 ```bash
 # Run all unit tests
 docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit
+
+# Run all integration tests
+docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run integration
 
 # Run single test file
 docker exec aimm_yii php -d register_argc_argv=1 vendor/bin/codecept run unit tests/unit/path/FooTest.php
@@ -217,8 +228,8 @@ Source files map to test files by replacing `src` with `tests/unit`:
 | Bloomberg | Financial news | `BloombergAdapter` |
 | Reuters | Market data | `ReutersAdapter` |
 | ECB | Exchange rates | `EcbAdapter` |
-| EIA | Energy data | `EiaAdapter` |
-| Baker Hughes | Rig counts | `BakerHughesAdapter` |
+| EIA | Energy data | `EiaInventoryAdapter` |
+| Baker Hughes | Rig counts | `BakerHughesRigCountAdapter` |
 
 ## Key Domain Concepts
 
