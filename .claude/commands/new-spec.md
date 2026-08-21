@@ -1,7 +1,7 @@
 ---
 allowed-tools: Read, Write, Glob, Grep, Bash(grep:*), AskUserQuestion, Bash(git rev-parse --show-toplevel), Bash(realpath:*), Bash(test:*), Bash(mkdir:*)
 description: Create one AIMM-PRD-1 spec from a feature name or Markdown source
-label: Create AIMM Spec
+label: Create Spec
 min_level: standard
 argument-hint: '{name} [--from {path}]'
 ---

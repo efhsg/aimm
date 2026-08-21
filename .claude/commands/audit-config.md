@@ -1,7 +1,7 @@
 ---
 allowed-tools: Bash(git rev-parse --show-toplevel), Bash(git status --short), Bash(git diff --check), Bash(jq empty .claude/settings.json), Bash(grep:*), Bash(readlink:*), Bash(test:*), Read, Grep, Glob
 description: Audit AIMM agent configuration for missing, stale, or conflicting instructions without changing files
-label: Audit AIMM Configuration
+label: Audit Configuration
 min_level: heavy
 argument-hint: '[baseline=<report-path>]'
 ---

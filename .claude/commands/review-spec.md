@@ -1,7 +1,7 @@
 ---
 allowed-tools: Read, Glob, Grep, Bash(grep:*), Bash(git rev-parse --show-toplevel), Bash(realpath:*), Bash(test:*)
 description: Review one mechanically valid AIMM spec section by section without changing it or issuing an approval verdict
-label: Review AIMM Spec
+label: Review Spec
 min_level: standard
 argument-hint: '{path}'
 ---

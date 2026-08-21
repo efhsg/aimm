@@ -1,7 +1,7 @@
 ---
 allowed-tools: Read, Glob, Grep, Bash(grep:*), Bash(git status:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git diff:*), Bash(ls:*), Bash(test:*)
 description: Plan an exceptional migration squash behind explicit safety approvals
-label: Squash AIMM Migrations
+label: Squash Migrations
 min_level: heavy
 argument-hint: '[environment and approval context]'
 ---

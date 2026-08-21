@@ -1,7 +1,7 @@
 ---
 allowed-tools: Read, Glob, Grep, Bash(grep:*), Bash(git rev-parse --show-toplevel), Bash(git status --short), Bash(realpath:*), Bash(test:*)
 description: Audit the registered AIMM skill ecosystem for drift, conflicts, overlap, and unsafe workflow contracts without changing files
-label: Audit AIMM Skills
+label: Audit Skills
 min_level: heavy
 argument-hint: '[baseline=<report-path>]'
 ---

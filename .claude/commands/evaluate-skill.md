@@ -1,7 +1,7 @@
 ---
 allowed-tools: Read, Glob, Grep, Bash(grep:*)
 description: Evaluate one AIMM skill or external candidate semantically without changing files
-label: Evaluate AIMM Skill
+label: Evaluate Skill
 min_level: standard
 argument-hint: '{name-or-path} [transfer]'
 ---

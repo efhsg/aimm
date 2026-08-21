@@ -1,7 +1,7 @@
 ---
 allowed-tools: Read, Glob, Grep, Edit, AskUserQuestion, Bash(git rev-parse --show-toplevel), Bash(git status --short), Bash(test:*)
 description: Analyze one AIMM agent-instruction file and apply only explicitly approved improvements
-label: Improve AIMM Prompt
+label: Improve Prompt
 min_level: heavy
 argument-hint: '{name-or-path} [analyze]'
 ---

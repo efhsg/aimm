@@ -1,7 +1,7 @@
 ---
 allowed-tools: Read, Glob, Grep, Bash(grep:*), Bash(git rev-parse --show-toplevel), Bash(realpath:*), Bash(test:*)
 description: Validate AIMM specs mechanically against the AIMM-PRD-1 R1-R12 contract
-label: Validate AIMM Spec
+label: Validate Spec
 min_level: standard
 argument-hint: '{path} | --all'
 ---
